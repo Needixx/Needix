@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { height: 100%; }
+
+:target {
+  scroll-margin-top: 4rem; /* ~64px header */
+}
