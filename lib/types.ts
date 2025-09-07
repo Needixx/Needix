@@ -13,3 +13,13 @@ export interface Subscription {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ReorderItem {
+  id: string;
+  productName: string;
+  productUrl?: string;
+  vendor: string;
+  frequencyDays: number;
+  nextOrder: string;
+  priceCeiling: number;
+}

@@ -26,6 +26,29 @@ export const demoSubscriptions: Subscription[] = [
   },
 ];
 
+// Add the missing ReorderItem interface and demo data
+export interface ReorderItem {
+  id: string;
+  productName: string;
+  productUrl?: string;
+  vendor: string;
+  frequencyDays: number;
+  nextOrder: string;
+  priceCeiling: number;
+}
+
+export const demoReorders: ReorderItem[] = [
+  { 
+    id: 'r1', 
+    productName: 'Coffee beans', 
+    productUrl: 'https://amazon.com', 
+    vendor: 'Amazon', 
+    frequencyDays: 30, 
+    nextOrder: '2025-09-06', 
+    priceCeiling: 15 
+  },
+];
+
 // Helper function
 export function daysUntil(dateISO: string): number {
   const now = new Date();
