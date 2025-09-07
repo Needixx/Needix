@@ -8,7 +8,7 @@ export const {
   signOut,
   handlers: { GET, POST },
 } = NextAuth({
-  trustHost: true, // This is important for Vercel
+  trustHost: true,
   session: { strategy: "jwt" },
   providers: [
     Google({
@@ -16,5 +16,16 @@ export const {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-  pages: { signIn: "/signin" },
+  pages: { 
+    signIn: "/signin",
+    error: "/signin" // Redirect errors back to signin
+  },
+  callbacks: {
+    async session({ session, token }) {
+      return session;
+    },
+    async jwt({ token, account, profile }) {
+      return token;
+    },
+  },
 });
