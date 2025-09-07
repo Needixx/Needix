@@ -6,7 +6,7 @@ import type { ReorderItem } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 
 export default function ReorderList() {
-  const [items, setItems] = useState<ReorderItem[]>(demoReorders);
+  const [items] = useState<ReorderItem[]>(demoReorders); // Removed setItems since it's not used
   
   return (
     <div className="grid gap-4">

@@ -6,7 +6,7 @@ import type { Subscription } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 
 export default function SubscriptionList() {
-  const [items, setItems] = useState<Subscription[]>(demoSubscriptions);
+  const [items] = useState<Subscription[]>(demoSubscriptions); // Removed setItems since it's not used
   const total = useMemo(() => items.reduce((acc, i) => acc + i.price, 0), [items]);
 
   return (
