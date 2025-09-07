@@ -1,7 +1,7 @@
 // components/DashboardClient.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
@@ -16,7 +16,7 @@ import UpgradeButton from "@/components/UpgradeButton";
 import { Button } from "@/components/ui/Button";
 import type { Subscription } from "@/lib/types";
 
-export default function DashboardClient() {
+function DashboardContent() {
   const { items, add, remove, update, importMany, totals } = useSubscriptions();
   const { isPro, canAddSubscription, maxSubscriptions, updateSubscriptionCount } = useSubscriptionLimit();
   const searchParams = useSearchParams();
@@ -61,7 +61,7 @@ export default function DashboardClient() {
 
   function handleAdd(data: SubscriptionFormData) {
     if (!canAddSubscription) {
-      alert(`You've reached the limit of ${maxSubscriptions} subscriptions. Upgrade to Pro for unlimited subscriptions!`);
+      alert(`Free plan is limited to ${maxSubscriptions} subscriptions. Upgrade to Pro for unlimited tracking!`);
       return;
     }
     add(data);
@@ -88,22 +88,28 @@ export default function DashboardClient() {
 
       {/* Upgrade Banner for Free Users */}
       {!isPro && (
-        <div className="mb-6 rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 backdrop-blur-sm p-6">
+        <div className="mb-6 rounded-2xl border border-purple-500/50 bg-gradient-to-r from-purple-500/10 to-pink-500/10 backdrop-blur-sm p-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                🚀 Unlock Full Potential with Needix Pro
+              <h3 className="text-lg font-semibold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+                🚀 You&apos;re on the Free Plan
               </h3>
-              <p className="text-white/70">
-                Get unlimited subscriptions, smart reminders, price alerts, and detailed analytics.
+              <p className="text-white/80 mb-2">
+                Track up to 2 subscriptions with basic features.
               </p>
-              <div className="mt-2 text-sm text-white/60">
-                Currently using {items.length} of {maxSubscriptions} free subscriptions
+              <div className="text-sm text-white/60 mb-3">
+                Currently using <span className="font-semibold text-purple-300">{items.length} of {maxSubscriptions}</span> free subscriptions
+              </div>
+              <div className="text-sm text-purple-300">
+                ⭐ Upgrade for unlimited subscriptions, smart reminders, price alerts & more!
               </div>
             </div>
-            <UpgradeButton 
-              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-semibold"
-            />
+            <div className="flex flex-col gap-2">
+              <UpgradeButton 
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-semibold transform hover:scale-105 transition-all"
+              />
+              <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
+            </div>
           </div>
         </div>
       )}
@@ -134,23 +140,25 @@ export default function DashboardClient() {
           <div className="flex items-center gap-2">
             <Button 
               disabled 
-              className="opacity-50 cursor-not-allowed"
-              title={`Upgrade to Pro for unlimited subscriptions`}
+              className="opacity-50 cursor-not-allowed bg-gray-600"
+              title="Free plan limit reached - upgrade to Pro for unlimited subscriptions"
             >
-              Add subscription (Limit reached)
+              Add Subscription (Limit Reached)
             </Button>
-            <UpgradeButton size="sm" variant="secondary">
-              Upgrade for unlimited
+            <UpgradeButton variant="secondary">
+              Upgrade to Pro
             </UpgradeButton>
           </div>
         )}
         
-        {isPro && <ImportCsv onImport={importMany} />}
-        {!isPro && (
+        {isPro ? (
+          <ImportCsv onImport={importMany} />
+        ) : (
           <div className="flex items-center gap-2">
-            <Button disabled className="opacity-50 cursor-not-allowed">
-              Import CSV (Pro only)
+            <Button disabled className="opacity-50 cursor-not-allowed bg-gray-600">
+              Import CSV
             </Button>
+            <span className="text-xs text-white/50">(Pro only)</span>
           </div>
         )}
       </div>
@@ -179,5 +187,17 @@ export default function DashboardClient() {
         />
       )}
     </>
+  );
+}
+
+export default function DashboardClient() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[200px]">
+        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }

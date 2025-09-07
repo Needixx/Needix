@@ -3,7 +3,6 @@
 
 import { useSession } from "next-auth/react";
 import { useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
 
 interface UserSubscription {
   isPro: boolean;
@@ -14,9 +13,21 @@ interface UserSubscription {
   hasPriceAlerts: boolean;
 }
 
+function useSearchParamsSafe() {
+  const [params, setParams] = useState<URLSearchParams | null>(null);
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setParams(new URLSearchParams(window.location.search));
+    }
+  }, []);
+  
+  return params;
+}
+
 export function useSubscriptionLimit() {
-  const { data: session } = useSession();
-  const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
+  const searchParams = useSearchParamsSafe();
   const [subscription, setSubscription] = useState<UserSubscription>({
     isPro: false,
     subscriptionCount: 0,
@@ -27,16 +38,33 @@ export function useSubscriptionLimit() {
   });
 
   useEffect(() => {
-    // Check if user just completed a successful payment
-    if (searchParams.get('success') === 'true') {
-      // Set pro status in localStorage
-      localStorage.setItem('needix_pro_status', 'true');
-      // Clear the URL parameter
-      window.history.replaceState({}, '', '/app');
+    if (status === 'loading' || !session?.user?.email) {
+      setSubscription(prev => ({
+        ...prev,
+        isPro: false,
+        maxSubscriptions: 2,
+        hasReminders: false,
+        hasAnalytics: false,
+        hasPriceAlerts: false,
+      }));
+      return;
     }
 
-    // Check pro status from localStorage
-    const proStatus = localStorage.getItem('needix_pro_status');
+    const userEmail = session.user.email;
+    
+    // Check if user just completed a successful payment
+    if (searchParams?.get('success') === 'true') {
+      localStorage.setItem(`needix_pro_status_${userEmail}`, 'true');
+      localStorage.setItem(`needix_pro_date_${userEmail}`, new Date().toISOString());
+      
+      // Clear the URL parameter
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/app');
+      }
+    }
+
+    // Check pro status for this specific user
+    const proStatus = localStorage.getItem(`needix_pro_status_${userEmail}`);
     const isPro = proStatus === 'true';
     
     setSubscription(prev => ({
@@ -47,7 +75,7 @@ export function useSubscriptionLimit() {
       hasAnalytics: isPro,
       hasPriceAlerts: isPro,
     }));
-  }, [session, searchParams]);
+  }, [session, searchParams, status]);
 
   const updateSubscriptionCount = useCallback((count: number) => {
     setSubscription(prev => ({ ...prev, subscriptionCount: count }));

@@ -23,6 +23,8 @@ export default function UpgradeButton({
     setLoading(true);
     
     try {
+      console.log('Starting upgrade process...');
+      
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
@@ -34,26 +36,48 @@ export default function UpgradeButton({
         }),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
       if (!response.ok) {
-        throw new Error('Failed to create checkout session');
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        throw new Error(errorData.error || 'Failed to create checkout session');
       }
 
       const { sessionId } = await response.json();
+      console.log('Session ID received:', sessionId);
+      
+      if (!sessionId) {
+        throw new Error('No session ID received');
+      }
+      
+      // Check if we have the Stripe publishable key
+      const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+      if (!publishableKey) {
+        throw new Error('Stripe publishable key not configured');
+      }
       
       // Dynamically import Stripe to avoid SSR issues
       const { loadStripe } = await import('@stripe/stripe-js');
-      const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+      const stripe = await loadStripe(publishableKey);
       
-      if (stripe) {
-        const { error } = await stripe.redirectToCheckout({ sessionId });
-        if (error) {
-          console.error('Stripe checkout error:', error);
-          alert('Something went wrong. Please try again.');
-        }
+      if (!stripe) {
+        throw new Error('Failed to load Stripe');
       }
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Something went wrong. Please try again.');
+      
+      console.log('Redirecting to Stripe checkout...');
+      const { error } = await stripe.redirectToCheckout({ sessionId });
+      
+      if (error) {
+        console.error('Stripe checkout error:', error);
+        throw new Error(error.message || 'Stripe checkout failed');
+      }
+      
+    } catch (error: unknown) {
+      console.error('Upgrade error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Upgrade failed: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

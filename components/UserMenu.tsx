@@ -4,10 +4,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import { Button } from "@/components/ui/Button";
 
 export default function UserMenu() {
   const { data: session, status } = useSession();
+  const { isPro } = useSubscriptionLimit();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -24,7 +26,7 @@ export default function UserMenu() {
 
   if (status === "loading") return null;
 
-  // Not signed in → show “Sign in” button that goes to Google and returns to /app
+  // Not signed in → show "Sign in" button that goes to Google and returns to /app
   if (!session?.user) {
     return (
       <Button onClick={() => signIn("google", { callbackUrl: "/app" })}>
@@ -37,10 +39,18 @@ export default function UserMenu() {
 
   return (
     <div ref={boxRef} className="flex items-center gap-3">
-      {/* Status pill with green dot + email/name */}
+      {/* Status pill - only show Pro status if user actually has Pro */}
       <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1">
-        <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-        <span className="text-sm text-white/80">{userLabel}</span>
+        <span className={`inline-block h-2 w-2 rounded-full ${isPro ? 'bg-cyan-400' : 'bg-green-500'}`} />
+        <span className="text-sm text-white/80">
+          {isPro ? (
+            <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent font-medium">
+              Pro
+            </span>
+          ) : (
+            userLabel
+          )}
+        </span>
       </div>
 
       {/* Simple dropdown */}
@@ -49,8 +59,12 @@ export default function UserMenu() {
           Menu ▾
         </Button>
         {open && (
-          <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-white/10 bg-black/95 p-1 shadow-lg">
+          <div className="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-white/10 bg-black/95 p-1 shadow-lg">
             <MenuItem onClick={() => router.push("/app")} label="Dashboard" />
+            <MenuItem onClick={() => router.push("/billing")} label="💳 Billing" />
+            {!isPro && (
+              <MenuItem onClick={() => router.push("/#pricing")} label="⭐ Upgrade to Pro" />
+            )}
             <MenuItem onClick={() => router.push("/settings")} label="Settings" />
             <Divider />
             <MenuItem onClick={() => router.push("/#features")} label="Features" />
