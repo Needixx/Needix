@@ -57,3 +57,23 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+model SubscriptionEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  userEmail String
+  event     String   // 'subscribed', 'cancelled', 'renewed', 'failed_payment'
+  timestamp DateTime @default(now())
+  metadata  Json?    // Store additional data like plan type, amount, etc.
+}
+
+model UserActivity {
+  id             String   @id @default(cuid())
+  userId         String
+  subscriptionsCount Int
+  lastActiveDate DateTime
+  totalSpent     Float    @default(0)
+  planType       String   // 'free' or 'pro'
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

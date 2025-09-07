@@ -14,6 +14,13 @@ export default function UserMenu() {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
+    // components/UserMenu.tsx (add this to the dropdown menu)
+  {session?.user?.email === 'needix2025@gmail.com' && (
+    <>
+      <MenuItem onClick={() => router.push("/analytics")} label="📊 Analytics" />
+      <Divider />
+    </>
+  )}
   // close on outside click
   useEffect(() => {
     function onClick(e: MouseEvent) {

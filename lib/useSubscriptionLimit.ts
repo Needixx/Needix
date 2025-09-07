@@ -37,6 +37,36 @@ export function useSubscriptionLimit() {
     hasPriceAlerts: false,
   });
 
+  // Function to check subscription status with Stripe
+  const checkSubscriptionStatus = useCallback(async (userEmail: string) => {
+    try {
+      const response = await fetch('/api/check-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail }),
+      });
+
+      if (response.ok) {
+        const { isPro } = await response.json();
+        
+        // Update localStorage with current status
+        if (isPro) {
+          localStorage.setItem(`needix_pro_status_${userEmail}`, 'true');
+        } else {
+          localStorage.removeItem(`needix_pro_status_${userEmail}`);
+          localStorage.removeItem(`needix_pro_date_${userEmail}`);
+        }
+        
+        return isPro;
+      }
+    } catch (error) {
+      console.error('Error checking subscription status:', error);
+    }
+    
+    // Fallback to localStorage
+    return localStorage.getItem(`needix_pro_status_${userEmail}`) === 'true';
+  }, []);
+
   useEffect(() => {
     if (status === 'loading' || !session?.user?.email) {
       setSubscription(prev => ({
@@ -57,25 +87,32 @@ export function useSubscriptionLimit() {
       localStorage.setItem(`needix_pro_status_${userEmail}`, 'true');
       localStorage.setItem(`needix_pro_date_${userEmail}`, new Date().toISOString());
       
-      // Clear the URL parameter
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, '', '/app');
       }
     }
 
-    // Check pro status for this specific user
-    const proStatus = localStorage.getItem(`needix_pro_status_${userEmail}`);
-    const isPro = proStatus === 'true';
+    // Check subscription status (both localStorage and Stripe)
+    const checkStatus = async () => {
+      const isPro = await checkSubscriptionStatus(userEmail);
+      
+      setSubscription(prev => ({
+        ...prev,
+        isPro,
+        maxSubscriptions: isPro ? Infinity : 2,
+        hasReminders: isPro,
+        hasAnalytics: isPro,
+        hasPriceAlerts: isPro,
+      }));
+    };
+
+    checkStatus();
+
+    // Check subscription status every 5 minutes
+    const interval = setInterval(checkStatus, 5 * 60 * 1000);
     
-    setSubscription(prev => ({
-      ...prev,
-      isPro,
-      maxSubscriptions: isPro ? Infinity : 2,
-      hasReminders: isPro,
-      hasAnalytics: isPro,
-      hasPriceAlerts: isPro,
-    }));
-  }, [session, searchParams, status]);
+    return () => clearInterval(interval);
+  }, [session, searchParams, status, checkSubscriptionStatus]);
 
   const updateSubscriptionCount = useCallback((count: number) => {
     setSubscription(prev => ({ ...prev, subscriptionCount: count }));
