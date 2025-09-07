@@ -1,3 +1,4 @@
+// app/layout.tsx
 import type { ReactNode } from "react";
 import "./globals.css";
 import SessionProvider from "@/components/SessionProvider";
@@ -10,8 +11,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-screen bg-black text-white antialiased">
         <SessionProvider>
           <Navbar />
-          {/* spacer equal to navbar height (adjust if you tweak Navbar padding) */}
-          <div className="h-14" />
+          {/* Remove the spacer div since navbar is now sticky */}
           {children}
           <Footer />
         </SessionProvider>

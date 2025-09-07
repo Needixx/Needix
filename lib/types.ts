@@ -1,12 +1,13 @@
+// lib/types.ts
 export type BillingPeriod = "monthly" | "yearly" | "weekly" | "custom";
 
 export interface Subscription {
   id: string;
   name: string;
   price: number;
-  currency: string;           // keep for now (we use "USD")
+  currency: string;
   period: BillingPeriod;
-  nextBillingDate?: string;   // ISO YYYY-MM-DD
+  nextBillingDate?: string;
   category?: string;
   notes?: string;
   createdAt: string;

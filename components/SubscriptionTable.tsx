@@ -1,3 +1,4 @@
+// components/SubscriptionTable.tsx
 "use client";
 
 import type { Subscription } from "@/lib/types";
@@ -8,11 +9,13 @@ export default function SubscriptionTable({
   onDelete,
   onUpdate,
   onEdit,
+  isPro = false,
 }: {
   items: Subscription[];
   onDelete: (id: string) => void;
-  onUpdate: (id: string, patch: Partial<Subscription>) => void; // kept for any inline actions you may add later
-  onEdit?: (sub: Subscription) => void; // NEW: opens the unified dialog
+  onUpdate: (id: string, patch: Partial<Subscription>) => void;
+  onEdit?: (sub: Subscription) => void;
+  isPro?: boolean;
 }) {
   if (!items.length) {
     return (
@@ -85,6 +88,7 @@ export default function SubscriptionTable({
 function Th({ children }: { children: React.ReactNode }) {
   return <th className="px-3 py-2 text-left font-normal">{children}</th>;
 }
+
 function Td({
   children,
   className = "",
