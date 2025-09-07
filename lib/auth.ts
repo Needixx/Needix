@@ -6,9 +6,9 @@ export const {
   auth,
   signIn,
   signOut,
-  handlers: { GET, POST },  // ← export GET/POST from handlers here
+  handlers: { GET, POST },
 } = NextAuth({
-  trustHost: true,
+  trustHost: true, // This is important for Vercel
   session: { strategy: "jwt" },
   providers: [
     Google({
