@@ -1,6 +1,4 @@
-// File location: app/(marketing)/page.tsx
-// Action: Replace entire file
-
+// app/page.tsx (create this file in the app directory root)
 import Hero from '@/components/Hero';
 import FeatureGrid from '@/components/FeatureGrid';
 import CompareTable from '@/components/CompareTable';
