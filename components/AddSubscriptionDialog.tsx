@@ -1,3 +1,5 @@
+// components/AddSubscriptionDialog.tsx
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -75,10 +77,9 @@ function SubscriptionDialog({
   const [pricePick, setPricePick] = useState<number>(initialPrice);
   const [priceCustom, setPriceCustom] = useState<string>(
     typeof initial?.price === "number" && !(POPULAR_PRICES as readonly number[]).includes(Number(initial.price.toFixed(2)))
-      ? String(Number(initial.price.toFixed(2)))
+      ? String(initial.price)
       : ""
   );
-
   const [period, setPeriod] = useState<BillingPeriod>(initial?.period ?? "monthly");
   const [category, setCategory] = useState<string>(initial?.category ?? "");
   const [notes, setNotes] = useState<string>(initial?.notes ?? "");
@@ -88,40 +89,38 @@ function SubscriptionDialog({
   const minYear = now.getFullYear();
   const minMonth = now.getMonth();
 
-  // If there's an initial nextBillingDate, start the calendar there (clamped to today-or-future for safety)
-  const initDate = initial?.nextBillingDate ? new Date(initial.nextBillingDate) : now;
-  const startDate = initDate < now ? now : initDate;
+  const [calYear, setCalYear] = useState<number>(minYear);
+  const [calMonth, setCalMonth] = useState<number>(minMonth);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  const [calYear, setCalYear] = useState<number>(startDate.getFullYear());
-  const [calMonth, setCalMonth] = useState<number>(startDate.getMonth());
-  const [selectedDay, setSelectedDay] = useState<number | null>(
-    initial?.nextBillingDate ? new Date(initial.nextBillingDate).getDate() : null
-  );
-
-  // When dialog opens in edit mode, rehydrate with the latest initial data
+  // Reset form when dialog opens or mode/initial changes
   useEffect(() => {
-    if (!open) return;
-    if (mode === "edit" && initial) {
-      setName(initial.name ?? "");
-      const rounded = typeof initial.price === "number" ? Number(initial.price.toFixed(2)) : undefined;
-      if (typeof rounded === "number" && (POPULAR_PRICES as readonly number[]).includes(rounded)) {
+    if (open) {
+      setName(initial?.name ?? "");
+      if (typeof initial?.price === "number") {
+        const rounded = Number(initial.price.toFixed(2));
+        if ((POPULAR_PRICES as readonly number[]).includes(rounded)) {
+          setPriceMode("pick");
+          setPricePick(rounded);
+          setPriceCustom("");
+        } else {
+          setPriceMode("custom");
+          setPriceCustom(String(rounded));
+          setPricePick(POPULAR_PRICES.includes(9.99) ? 9.99 : DEFAULT_PRICE);
+        }
+      } else {
         setPriceMode("pick");
-        setPricePick(rounded);
-        setPriceCustom("");
-      } else if (typeof rounded === "number") {
-        setPriceMode("custom");
-        setPriceCustom(String(rounded));
         setPricePick(POPULAR_PRICES.includes(9.99) ? 9.99 : DEFAULT_PRICE);
       }
-      setPeriod(initial.period ?? "monthly");
-      setCategory(initial.category ?? "");
-      setNotes(initial.notes ?? "");
+      setPeriod(initial?.period ?? "monthly");
+      setCategory(initial?.category ?? "");
+      setNotes(initial?.notes ?? "");
 
-      const d = initial.nextBillingDate ? new Date(initial.nextBillingDate) : now;
+      const d = initial?.nextBillingDate ? new Date(initial.nextBillingDate) : now;
       const base = d < now ? now : d;
       setCalYear(base.getFullYear());
       setCalMonth(base.getMonth());
-      setSelectedDay(initial.nextBillingDate ? d.getDate() : null);
+      setSelectedDay(initial?.nextBillingDate ? d.getDate() : null);
     }
   }, [open, mode, initial]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -224,11 +223,11 @@ function SubscriptionDialog({
         aria-hidden="true"
       />
 
-      {/* Centered panel */}
-      <div className="absolute inset-0 grid place-items-center p-4">
-        <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-neutral-900 shadow-2xl">
+      {/* Centered panel - Mobile optimized */}
+      <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4">
+        <div className="w-full max-w-md sm:max-w-3xl max-h-[95vh] overflow-y-auto rounded-2xl border border-white/10 bg-neutral-900 shadow-2xl">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 bg-neutral-900 px-6 py-4">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-neutral-900 px-4 sm:px-6 py-4">
             <div>
               <h3 className="text-lg font-semibold">
                 {mode === "add" ? "🧾 Add subscription" : "🧾 Edit subscription"}
@@ -246,15 +245,16 @@ function SubscriptionDialog({
             </button>
           </div>
 
-          {/* Body */}
-          <div className="grid gap-6 p-6 lg:grid-cols-2">
-            {/* Left: Form */}
+          {/* Body - Mobile-first layout */}
+          <div className="p-4 sm:p-6">
             <div className="space-y-5">
-              {/* Presets */}
+              {/* Presets - Enhanced mobile visibility */}
               <label className="block">
-                <div className="mb-1 text-sm text-white/80">⚡ Quick presets</div>
+                <div className="mb-2 text-sm font-medium text-white/80">⚡ Quick presets</div>
                 <select
-                  className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none"
+                  className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none text-base"
+                  aria-label="Quick presets for popular services"
+                  title="Select a preset to auto-fill subscription details"
                   onChange={(e) => {
                     const idx = Number(e.target.value);
                     if (!Number.isNaN(idx) && PRESETS[idx]) applyPreset(PRESETS[idx]);
@@ -272,65 +272,64 @@ function SubscriptionDialog({
 
               {/* Name */}
               <label className="block">
-                <div className="mb-1 text-sm text-white/80">Name</div>
+                <div className="mb-2 text-sm font-medium text-white/80">Name</div>
                 <input
-                  className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none placeholder:text-white/50"
+                  className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none placeholder:text-white/50 text-base"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g., Netflix"
                 />
               </label>
 
-              {/* Price (popular / custom) */}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="block">
-                  <div className="mb-1 text-sm text-white/80">💵 Price (USD)</div>
-                  <div className="flex gap-2">
-                    <select
-                      className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none disabled:opacity-60"
-                      disabled={priceMode !== "pick"}
-                      value={pricePick}
-                      onChange={(e) => setPricePick(Number(e.target.value))}
-                    >
-                      {(POPULAR_PRICES as readonly number[]).map((n) => (
-                        <option key={n} value={n}>
-                          ${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() =>
-                        setPriceMode(priceMode === "pick" ? "custom" : "pick")
-                      }
-                      className="whitespace-nowrap rounded-xl border border-white/10 px-3 py-2 text-sm text-white hover:bg-white/10"
-                      type="button"
-                    >
-                      {priceMode === "pick" ? "Custom" : "Popular"}
-                    </button>
-                  </div>
-                </label>
-
-                {priceMode === "custom" && (
-                  <label className="block">
-                    <div className="mb-1 text-sm text-white/80">Custom price ($)</div>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none placeholder:text-white/50"
-                      value={priceCustom}
-                      onChange={(e) => setPriceCustom(e.target.value)}
-                      placeholder="e.g., 12.34"
-                    />
-                  </label>
+              {/* Price */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-white/80">💵 Price (USD)</div>
+                  <button
+                    onClick={() =>
+                      setPriceMode(priceMode === "pick" ? "custom" : "pick")
+                    }
+                    className="rounded-lg border border-white/10 px-3 py-1 text-sm text-white hover:bg-white/10"
+                    type="button"
+                  >
+                    {priceMode === "pick" ? "Custom" : "Popular"}
+                  </button>
+                </div>
+                
+                {priceMode === "pick" ? (
+                  <select
+                    className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none text-base"
+                    aria-label="Select popular price"
+                    title="Choose from popular subscription prices"
+                    value={pricePick}
+                    onChange={(e) => setPricePick(Number(e.target.value))}
+                  >
+                    {(POPULAR_PRICES as readonly number[]).map((n) => (
+                      <option key={n} value={n}>
+                        ${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none placeholder:text-white/50 text-base"
+                    value={priceCustom}
+                    onChange={(e) => setPriceCustom(e.target.value)}
+                    placeholder="e.g., 12.34"
+                  />
                 )}
               </div>
 
               {/* Period & Category */}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4">
                 <label className="block">
-                  <div className="mb-1 text-sm text-white/80">Billing period</div>
+                  <div className="mb-2 text-sm font-medium text-white/80">Billing period</div>
                   <select
-                    className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none"
+                    className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none text-base"
+                    aria-label="Select billing period"
+                    title="Choose how often you're billed"
                     value={period}
                     onChange={(e) => setPeriod(e.target.value as BillingPeriod)}
                   >
@@ -342,9 +341,9 @@ function SubscriptionDialog({
                 </label>
 
                 <label className="block">
-                  <div className="mb-1 text-sm text-white/80">🗂️ Category (optional)</div>
+                  <div className="mb-2 text-sm font-medium text-white/80">🗂️ Category (optional)</div>
                   <input
-                    className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none placeholder:text-white/50"
+                    className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none placeholder:text-white/50 text-base"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     placeholder="e.g., Streaming"
@@ -354,60 +353,63 @@ function SubscriptionDialog({
 
               {/* Notes */}
               <label className="block">
-                <div className="mb-1 text-sm text-white/80">📝 Notes</div>
-                <input
-                  className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none placeholder:text-white/50"
+                <div className="mb-2 text-sm font-medium text-white/80">📝 Notes</div>
+                <textarea
+                  className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none placeholder:text-white/50 resize-none text-base"
+                  rows={3}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Optional details"
                 />
               </label>
-            </div>
 
-            {/* Right: Inline Calendar */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-neutral-800 px-3 py-2">
-                <button
-                  className={`rounded-lg px-2 py-1 text-white/85 hover:bg-white/10 hover:text-white ${
-                    !canGoPrevMonth ? "cursor-not-allowed opacity-40 hover:bg-transparent" : ""
-                  }`}
-                  onClick={goPrevMonth}
-                  disabled={!canGoPrevMonth}
-                >
-                  ←
-                </button>
-                <div className="text-sm font-medium">{monthLabel}</div>
-                <button
-                  className="rounded-lg px-2 py-1 text-white/85 hover:bg-white/10 hover:text-white"
-                  onClick={goNextMonth}
-                >
-                  →
-                </button>
-              </div>
+              {/* Calendar - Mobile optimized */}
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-white/80">📅 Next billing date (optional)</div>
+                
+                {/* Month navigation */}
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={goPrevMonth}
+                    disabled={!canGoPrevMonth}
+                    className={`rounded-lg px-3 py-2 text-sm ${
+                      canGoPrevMonth ? "text-white hover:bg-white/10" : "text-white/30 cursor-not-allowed"
+                    }`}
+                  >
+                    ←
+                  </button>
+                  <div className="text-center font-medium">{monthLabel}</div>
+                  <button
+                    onClick={goNextMonth}
+                    className="rounded-lg px-3 py-2 text-sm text-white hover:bg-white/10"
+                  >
+                    →
+                  </button>
+                </div>
 
-              <div className="rounded-2xl border border-white/10 bg-neutral-800 p-3">
-                <div className="grid grid-cols-7 gap-1 text-center text-xs text-white/70">
+                {/* Calendar grid */}
+                <div className="grid grid-cols-7 gap-1 text-center text-sm">
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                    <div key={d} className="py-1">
+                    <div key={d} className="py-2 text-white/60 font-medium">
                       {d}
                     </div>
                   ))}
-                </div>
 
-                <div className="mt-1 grid grid-cols-7 gap-1">
-                  {Array.from({ length: start }).map((_, i) => (
-                    <div key={`blank-${i}`} />
+                  {Array.from({ length: start }, (_, i) => (
+                    <div key={`empty-${i}`} />
                   ))}
-                  {Array.from({ length: totalDays }).map((_, i) => {
+
+                  {Array.from({ length: totalDays }, (_, i) => {
                     const day = i + 1;
+                    const selected = day === selectedDay;
                     const disabled = isDisabled(day);
-                    const selected = selectedDay === day;
+
                     return (
                       <button
                         key={day}
-                        onClick={() => !disabled && setSelectedDay(day)}
+                        onClick={() => setSelectedDay(disabled ? null : day)}
                         className={[
-                          "aspect-square rounded-lg text-sm",
+                          "aspect-square rounded-lg text-sm transition-colors",
                           disabled
                             ? "cursor-not-allowed text-white/30"
                             : "text-white hover:bg-white/10",
@@ -421,7 +423,7 @@ function SubscriptionDialog({
                   })}
                 </div>
 
-                <div className="mt-3 text-xs text-white/70">
+                <div className="text-xs text-white/70 text-center">
                   {selectedDay
                     ? `📅 Next billing date: ${new Date(
                         calYear,
@@ -434,12 +436,14 @@ function SubscriptionDialog({
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-3 border-t border-white/10 bg-neutral-900 px-6 py-4">
-            <Button variant="ghost" onClick={handleClose}>
+          {/* Footer - Sticky on mobile */}
+          <div className="sticky bottom-0 z-10 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 border-t border-white/10 bg-neutral-900 p-4 sm:px-6">
+            <Button variant="ghost" onClick={handleClose} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button onClick={handleSave}>{mode === "add" ? "Save" : "Update"}</Button>
+            <Button onClick={handleSave} className="w-full sm:w-auto">
+              {mode === "add" ? "Save" : "Update"}
+            </Button>
           </div>
         </div>
       </div>
@@ -488,24 +492,6 @@ export default function AddSubscriptionDialog({
  * - Controlled wrapper for editing.
  * - You control `open` and pass `initial` values (including optional `id`).
  * - Calls `onUpdate` with the updated payload (including `id` if provided).
- *
- * Example usage from your dashboard:
- * 
- * <EditSubscriptionDialog
- *   open={isEditOpen}
- *   onOpenChange={setIsEditOpen}
- *   initial={{
- *     id: sub.id,
- *     name: sub.name,
- *     price: sub.price,
- *     period: sub.period,
- *     nextBillingDate: sub.nextBillingDate, // "YYYY-MM-DD"
- *     category: sub.category,
- *     notes: sub.notes,
- *     currency: "USD",
- *   }}
- *   onUpdate={(data) => updateSubscriptionOnServer(data)}
- * />
  */
 export function EditSubscriptionDialog({
   open,
@@ -515,7 +501,7 @@ export function EditSubscriptionDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initial: InitialData;
+  initial?: InitialData;
   onUpdate: (data: SubscriptionFormData & { id?: string }) => void;
 }) {
   return (

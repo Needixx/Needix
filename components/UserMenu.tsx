@@ -1,4 +1,5 @@
 // components/UserMenu.tsx
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -14,13 +15,6 @@ export default function UserMenu() {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-    // components/UserMenu.tsx (add this to the dropdown menu)
-  {session?.user?.email === 'needix2025@gmail.com' && (
-    <>
-      <MenuItem onClick={() => router.push("/analytics")} label="📊 Analytics" />
-      <Divider />
-    </>
-  )}
   // close on outside click
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -46,17 +40,11 @@ export default function UserMenu() {
 
   return (
     <div ref={boxRef} className="flex items-center gap-3">
-      {/* Status pill - only show Pro status if user actually has Pro */}
+      {/* Status pill - Show username/email when logged in */}
       <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1">
         <span className={`inline-block h-2 w-2 rounded-full ${isPro ? 'bg-cyan-400' : 'bg-green-500'}`} />
         <span className="text-sm text-white/80">
-          {isPro ? (
-            <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent font-medium">
-              Pro
-            </span>
-          ) : (
-            userLabel
-          )}
+          {userLabel}
         </span>
       </div>
 
@@ -71,6 +59,13 @@ export default function UserMenu() {
             <MenuItem onClick={() => router.push("/billing")} label="💳 Billing" />
             {!isPro && (
               <MenuItem onClick={() => router.push("/#pricing")} label="⭐ Upgrade to Pro" />
+            )}
+            {/* Admin link for specific admin email */}
+            {session?.user?.email === 'needix2025@gmail.com' && (
+              <>
+                <MenuItem onClick={() => router.push("/analytics")} label="📊 Analytics" />
+                <Divider />
+              </>
             )}
             <MenuItem onClick={() => router.push("/settings")} label="Settings" />
             <Divider />
