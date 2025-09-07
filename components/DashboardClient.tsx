@@ -18,7 +18,7 @@ import type { Subscription } from "@/lib/types";
 
 export default function DashboardClient() {
   const { items, add, remove, update, importMany, totals } = useSubscriptions();
-  const { isPro, canAddSubscription, isAtLimit, maxSubscriptions, updateSubscriptionCount } = useSubscriptionLimit();
+  const { isPro, canAddSubscription, maxSubscriptions, updateSubscriptionCount } = useSubscriptionLimit();
   const searchParams = useSearchParams();
 
   // Edit dialog state
@@ -158,9 +158,7 @@ export default function DashboardClient() {
       <SubscriptionTable
         items={items}
         onDelete={remove}
-        onUpdate={update}
         onEdit={handleStartEdit}
-        isPro={isPro}
       />
 
       {editingSub && (

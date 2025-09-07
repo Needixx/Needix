@@ -7,15 +7,11 @@ import { fmtCurrency } from "@/lib/format";
 export default function SubscriptionTable({
   items,
   onDelete,
-  onUpdate,
   onEdit,
-  isPro = false,
 }: {
   items: Subscription[];
   onDelete: (id: string) => void;
-  onUpdate: (id: string, patch: Partial<Subscription>) => void;
   onEdit?: (sub: Subscription) => void;
-  isPro?: boolean;
 }) {
   if (!items.length) {
     return (

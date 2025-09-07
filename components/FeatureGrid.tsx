@@ -28,7 +28,7 @@ export default function FeatureGrid() {
   return (
     <Section id="features" title="Stop Wasting Money on Forgotten Subscriptions" subtitle="Take back control with smart tracking and instant cancellation.">
       <div className="grid gap-6 md:grid-cols-2">
-        {features.map((f, index) => (
+        {features.map((f) => (
           <div 
             key={f.title} 
             className="group rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-8 transition-all duration-300 hover:border-cyan-500/30 hover:bg-white/10 animate-slide-up"
