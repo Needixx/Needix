@@ -13,7 +13,7 @@ export default function PrivacyPolicy() {
         <section className="mb-8">
           <h2 className="text-2xl font-semibold mb-4">Introduction</h2>
           <p className="text-gray-300 leading-relaxed">
-            Welcome to Needix ("we," "our," or "us"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our subscription tracking application and website.
+            Welcome to Needix (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our subscription tracking application and website.
           </p>
         </section>
 
@@ -63,17 +63,17 @@ export default function PrivacyPolicy() {
           
           <h3 className="text-xl font-medium mb-3 text-cyan-400">Google OAuth</h3>
           <p className="text-gray-300 leading-relaxed mb-4">
-            For secure authentication. Google's privacy policy applies to data they collect.
+            For secure authentication. Google&rsquo;s privacy policy applies to data they collect.
           </p>
 
           <h3 className="text-xl font-medium mb-3 text-cyan-400">Stripe</h3>
           <p className="text-gray-300 leading-relaxed mb-4">
-            For payment processing. Stripe's privacy policy applies to payment data they process.
+            For payment processing. Stripe&rsquo;s privacy policy applies to payment data they process.
           </p>
 
           <h3 className="text-xl font-medium mb-3 text-cyan-400">Vercel</h3>
           <p className="text-gray-300 leading-relaxed">
-            For hosting our application. Vercel's privacy policy applies to hosting data.
+            For hosting our application. Vercel&rsquo;s privacy policy applies to hosting data.
           </p>
         </section>
 
@@ -105,7 +105,7 @@ export default function PrivacyPolicy() {
         </section>
 
         <section className="mb-8">
-          <h2 className="text-2xl font-semibold mb-4">Children's Privacy</h2>
+          <h2 className="text-2xl font-semibold mb-4">Children&rsquo;s Privacy</h2>
           <p className="text-gray-300 leading-relaxed">
             Our service is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us.
           </p>
@@ -121,7 +121,7 @@ export default function PrivacyPolicy() {
         <section className="mb-8">
           <h2 className="text-2xl font-semibold mb-4">Changes to This Privacy Policy</h2>
           <p className="text-gray-300 leading-relaxed">
-            We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date.
+            We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the &ldquo;Last updated&rdquo; date.
           </p>
         </section>
 
