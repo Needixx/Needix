@@ -1,11 +1,11 @@
-// next.config.js
+// next.config.ts
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Remove static export for now to keep API routes working
-  // output: 'export',
+  // Keep API routes working for authentication
+  // output: 'export', // Commented out to allow server-side features
   
-  // Optimize for mobile
+  // Optimize for mobile and web
   images: {
     unoptimized: true
   },
@@ -15,8 +15,21 @@ const nextConfig = {
     optimizeCss: true
   },
   
-  // Build directory
-  distDir: '.next'
+  // Standard build directory
+  distDir: '.next',
+  
+  // Ensure proper asset handling
+  assetPrefix: undefined,
+  
+  // Enable TypeScript strict mode
+  typescript: {
+    ignoreBuildErrors: false
+  },
+  
+  // ESLint configuration
+  eslint: {
+    ignoreDuringBuilds: false
+  }
 }
 
 module.exports = nextConfig
