@@ -6,7 +6,7 @@ import { auth } from '@/lib/auth';
 // PUT - Update subscription
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -15,12 +15,13 @@ export async function PUT(
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await req.json();
     const { name, price, period, nextBillingDate, category, notes } = body;
 
     // In production, update in database
     const updatedSubscription = {
-      id: params.id,
+      id,
       name,
       price: parseFloat(price),
       period,
@@ -41,7 +42,7 @@ export async function PUT(
 // DELETE - Delete subscription
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -49,6 +50,8 @@ export async function DELETE(
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
     }
+
+    const { id } = await params;
 
     // In production, delete from database
     return NextResponse.json({ message: 'Subscription deleted successfully' });

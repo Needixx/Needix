@@ -3,18 +3,25 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.needix.app',
-  appName: 'Needix',
-  webDir: 'dist',
+  appId: 'com.needix.subtracker', // Update this to be unique
+  appName: 'SubTracker',
+  webDir: 'dist', // or 'build' depending on your build output
   server: {
-    androidScheme: 'https',
-    // Point to your deployed website for API routes
-    url: 'https://needix.vercel.app'
+    androidScheme: 'https'
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 0
+      launchShowDuration: 2000,
+      backgroundColor: '#667eea',
+      showSpinner: false
+    },
+    StatusBar: {
+      style: 'DARK'
     }
+  },
+  ios: {
+    scheme: 'SubTracker',
+    backgroundColor: '#667eea'
   }
 };
 
