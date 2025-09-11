@@ -1,6 +1,41 @@
-node_modules
-.next
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Next.js
+/.next/
+/out/
+
+# Production
+/build
+
+# Misc
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
+.env*.local
+.env
+
+# Vercel
 .vercel
-.env*
-*.log
-.env.local
+
+# iOS
+ios/App/Pods/
+ios/App/build/
+ios/App/DerivedData/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
