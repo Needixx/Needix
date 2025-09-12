@@ -9,6 +9,7 @@ node_modules/
 # Next.js
 /.next/
 /out/
+/dist/
 
 # Production
 /build
@@ -34,6 +35,7 @@ yarn-error.log*
 ios/App/Pods/
 ios/App/build/
 ios/App/DerivedData/
+ios/App/App.xcworkspace/xcuserdata/
 
 # Android
 android/.gradle/
