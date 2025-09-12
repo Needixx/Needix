@@ -33,6 +33,12 @@ export default function SignIn() {
     }
   };
 
+  const handleDevLogin = () => {
+    // Set a simple session cookie for development
+    document.cookie = "dev-session=true; path=/";
+    window.location.href = '/app';
+  };
+
   return (
     <main className="mx-auto grid max-w-md gap-4 px-4 py-16 text-center">
       <h1 className="text-2xl font-semibold">Sign in to Needix</h1>
@@ -60,6 +66,14 @@ export default function SignIn() {
               Continue with Google
             </>
           )}
+        </Button>
+
+        {/* Development Login Button */}
+        <Button 
+          onClick={handleDevLogin}
+          className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
+        >
+          Development Login (Local Testing)
         </Button>
 
         <div className="flex items-center gap-4 my-4">

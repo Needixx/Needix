@@ -13,7 +13,7 @@ export default function Navbar({ minimal = false }: { minimal?: boolean }) {
   const { isPro } = useSubscriptionLimit();
 
   return (
-    <nav className="sticky top-0 left-0 right-0 z-50 w-full border-b border-white/10 bg-black/80 backdrop-blur-md supports-[backdrop-filter]:bg-black/70">
+    <nav className="sticky top-0 left-0 right-0 z-50 w-full border-b border-white/10 bg-black/80 backdrop-blur-md supports-[backdrop-filter]:bg-black/70 pt-safe-top">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link href="/" className="text-lg font-semibold">
           Needix

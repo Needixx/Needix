@@ -4,6 +4,7 @@ import "./globals.css";
 import SessionProvider from "@/components/SessionProvider";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import OfflineIndicator from "@/components/OfflineIndicator";
 
 export const metadata = {
   title: "Needix - Track Everything. Waste Nothing.",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body className="min-h-screen bg-black text-white antialiased">
         <SessionProvider>
+          <OfflineIndicator />
           <Navbar />
           {children}
           <Footer />

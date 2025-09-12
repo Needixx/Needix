@@ -18,7 +18,7 @@ export const {
   ],
   pages: { 
     signIn: "/signin",
-    error: "/signin" // Redirect errors back to signin
+    error: "/signin"
   },
   callbacks: {
     async session({ session, token }) {
