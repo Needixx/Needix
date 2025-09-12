@@ -40,4 +40,17 @@ ios/App/App.xcworkspace/xcuserdata/
 # Android
 android/.gradle/
 android/build/
-android/app/build/
+android/app/build/# Node/Next/Vercel
+node_modules/
+.next/
+.vercel/
+out/
+dist/
+
+# OS junk
+.DS_Store
+
+# Env files
+.env
+.env.*
+!.env.example
