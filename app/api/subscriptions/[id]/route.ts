@@ -15,13 +15,14 @@ export async function PUT(
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
     }
 
-    const { id } = await params;
+    const { id: _id } = await params;
+    void _id;
     const body = await req.json();
     const { name, price, period, nextBillingDate, category, notes } = body;
 
     // In production, update in database
     const updatedSubscription = {
-      id,
+      id: _id,
       name,
       price: parseFloat(price),
       period,
@@ -51,7 +52,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
     }
 
-    const { id } = await params;
+    const { id: _id } = await params;
+    void _id;
 
     // In production, delete from database
     return NextResponse.json({ message: 'Subscription deleted successfully' });

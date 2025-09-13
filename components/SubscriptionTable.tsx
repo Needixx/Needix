@@ -47,7 +47,7 @@ export default function SubscriptionTable({
 
               <Td>
                 {s.nextBillingDate
-                  ? new Date(s.nextBillingDate).toLocaleDateString()
+                  ? new Date(`${s.nextBillingDate}T00:00:00`).toLocaleDateString()
                   : "—"}
               </Td>
 

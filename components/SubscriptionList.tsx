@@ -22,7 +22,7 @@ export default function SubscriptionList() {
               <div>
                 <p className="font-medium">{i.name}</p>
                 <p className="text-sm text-white/60">
-                  Renews {i.nextBillingDate ? new Date(i.nextBillingDate).toLocaleDateString() : 'Unknown'}
+                  Renews {i.nextBillingDate ? new Date(`${i.nextBillingDate}T00:00:00`).toLocaleDateString() : 'Unknown'}
                 </p>
               </div>
               <div className="text-right">

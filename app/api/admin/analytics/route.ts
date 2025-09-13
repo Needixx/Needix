@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { stripe } from '@/lib/stripe';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await auth();
     

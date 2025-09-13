@@ -16,36 +16,59 @@ export function useSubscriptions() {
     } catch {}
   }, []);
 
+  // Listen for changes from other hook instances (same tab) and other tabs
+  useEffect(() => {
+    function reload() {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) setItems(JSON.parse(raw));
+      } catch {}
+    }
+    const internal = () => reload();
+    const onStorage = (e: StorageEvent) => { if (e.key === KEY) reload(); };
+    window.addEventListener("needix:subscriptions-changed", internal as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("needix:subscriptions-changed", internal as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(KEY, JSON.stringify(items));
     } catch {}
   }, [items]);
 
+  function persist(next: Subscription[]) {
+    setItems(next);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(next));
+      window.dispatchEvent(new Event("needix:subscriptions-changed"));
+    } catch {}
+  }
+
   function add(sub: Omit<Subscription, "id" | "createdAt" | "updatedAt">) {
-    setItems((prev) => [
-      {
-        ...sub,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    const next: Subscription = {
+      ...sub,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    persist([next, ...items]);
   }
 
   function remove(id: string) {
-    setItems((prev) => prev.filter((s) => s.id !== id));
+    persist(items.filter((s) => s.id !== id));
   }
 
   function update(id: string, patch: Partial<Subscription>) {
-    setItems((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s))
-    );
+    const next = items.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s));
+    persist(next);
   }
 
   function importMany(subs: Subscription[]) {
-    setItems((prev) => [...subs, ...prev]);
+    persist([...subs, ...items]);
   }
 
   const totals = useMemo(() => {

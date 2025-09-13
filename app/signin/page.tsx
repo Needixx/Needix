@@ -33,10 +33,15 @@ export default function SignIn() {
     }
   };
 
-  const handleDevLogin = () => {
-    // Set a simple session cookie for development
-    document.cookie = "dev-session=true; path=/";
-    window.location.href = '/app';
+  const handleDevLogin = async () => {
+    const emailToUse = email || "dev@example.com";
+    setLoading(true);
+    try {
+      await signIn("credentials", { email: emailToUse, name: "Dev User", callbackUrl: "/app", redirect: true });
+    } catch (e) {
+      console.error(e);
+      setLoading(false);
+    }
   };
 
   return (
@@ -68,13 +73,16 @@ export default function SignIn() {
           )}
         </Button>
 
-        {/* Development Login Button */}
-        <Button 
-          onClick={handleDevLogin}
-          className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
-        >
-          Development Login (Local Testing)
-        </Button>
+        {/* Development Login Button (enabled with ENABLE_DEV_AUTH=1) */}
+        {process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH === '1' && (
+          <Button 
+            onClick={handleDevLogin}
+            disabled={loading}
+            className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
+          >
+            Development Login (Local Testing)
+          </Button>
+        )}
 
         <div className="flex items-center gap-4 my-4">
           <div className="h-px bg-white/10 flex-1"></div>

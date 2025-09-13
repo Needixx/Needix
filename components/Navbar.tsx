@@ -7,6 +7,7 @@ import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import DashboardLink from "@/components/DashboardLink";
 import UserMenu from "@/components/UserMenu";
 import UpgradeButton from "@/components/UpgradeButton";
+import NotificationCenter from "@/components/NotificationCenter";
 
 export default function Navbar({ minimal = false }: { minimal?: boolean }) {
   const { data: session } = useSession();
@@ -42,12 +43,8 @@ export default function Navbar({ minimal = false }: { minimal?: boolean }) {
               ⭐ Upgrade
             </UpgradeButton>
           )}
-          {session?.user && isPro && (
-            <div className="hidden md:flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 px-3 py-1">
-              <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
-              <span className="text-sm text-cyan-300 font-medium">Pro Active</span>
-            </div>
-          )}
+          {/* Notification Center visible only when signed in */}
+          {session?.user && <NotificationCenter />}
           <DashboardLink />
           <UserMenu />
         </div>

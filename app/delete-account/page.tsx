@@ -1,7 +1,6 @@
 // app/delete-account/page.tsx
 
 import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 
 export default async function DeleteAccountPage() {
   const session = await auth();

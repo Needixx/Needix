@@ -1,0 +1,2 @@
+regex:(sk_(test|live)_[0-9a-zA-Z]{10,})==>STRIPE_SECRET_KEY_REDACTED
+regex:(whsec_[0-9a-zA-Z]{10,})==>STRIPE_WEBHOOK_SECRET_REDACTED

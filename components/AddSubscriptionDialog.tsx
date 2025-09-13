@@ -59,6 +59,14 @@ type SubscriptionDialogProps = {
 const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
 const startWeekday = (y: number, m: number) => new Date(y, m, 1).getDay(); // 0=Sun..6=Sat
 
+// Format a Date as local YYYY-MM-DD without UTC conversion
+function toLocalYMD(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /* A reusable dialog used by both Add and Edit flows */
 function SubscriptionDialog({
   open,
@@ -116,7 +124,10 @@ function SubscriptionDialog({
       setCategory(initial?.category ?? "");
       setNotes(initial?.notes ?? "");
 
-      const d = initial?.nextBillingDate ? new Date(initial.nextBillingDate) : now;
+      // Parse stored date-only strings as local dates to avoid off-by-one
+      const d = initial?.nextBillingDate
+        ? new Date(`${initial.nextBillingDate}T00:00:00`)
+        : now;
       const base = d < now ? now : d;
       setCalYear(base.getFullYear());
       setCalMonth(base.getMonth());
@@ -195,7 +206,8 @@ function SubscriptionDialog({
 
     let nextBillingDate: string | undefined;
     if (selectedDay) {
-      nextBillingDate = new Date(calYear, calMonth, selectedDay).toISOString().slice(0, 10);
+      // Save as local date string (YYYY-MM-DD) to avoid timezone shifts
+      nextBillingDate = toLocalYMD(new Date(calYear, calMonth, selectedDay));
     }
 
     const payload: SubscriptionFormData & { id?: string } = {

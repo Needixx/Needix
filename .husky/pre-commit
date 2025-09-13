@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Scan only STAGED changes
+# Helper: check staged changes for secrets
 has_secret() { git diff --cached -U0 | grep -E "$1" -q; }
 
 if has_secret 'sk_(test|live)_[0-9A-Za-z]+'; then
@@ -19,5 +19,21 @@ if has_secret 're_[0-9A-Za-z]{20,}'; then
   exit 1
 fi
 
-# All good
+echo "✅ No secrets found."
+
+# Run lint check
+echo "🔍 Running ESLint..."
+npm run lint --silent || {
+  echo "❌ ESLint failed. Fix issues before committing."
+  exit 1
+}
+
+# Run TypeScript check
+echo "🔍 Running TypeScript..."
+npx tsc --noEmit || {
+  echo "❌ TypeScript errors found. Fix them before committing."
+  exit 1
+}
+
+echo "✅ Pre-commit checks passed."
 exit 0
