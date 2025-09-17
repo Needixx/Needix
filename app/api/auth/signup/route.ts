@@ -8,8 +8,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { email, password } = body;
 
+    console.log('Signup attempt for:', email);
+
     // Validation
     if (!email || !password) {
+      console.log('Missing email or password');
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
@@ -17,6 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (password.length < 6) {
+      console.log('Password too short');
       return NextResponse.json(
         { error: 'Password must be at least 6 characters long' },
         { status: 400 }
@@ -24,11 +28,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if user already exists
+    console.log('Checking if user exists...');
     const existingUser = await prisma.user.findUnique({
       where: { email }
     });
 
     if (existingUser) {
+      console.log('User already exists');
       return NextResponse.json(
         { error: 'An account with this email already exists' },
         { status: 400 }
@@ -36,9 +42,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Hash password
+    console.log('Hashing password...');
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
+    console.log('Creating user...');
     const user = await prisma.user.create({
       data: {
         email,
@@ -46,6 +54,8 @@ export async function POST(req: NextRequest) {
         name: email.split('@')[0], // Use email prefix as default name
       }
     });
+
+    console.log('User created successfully:', user.id);
 
     return NextResponse.json({
       message: 'Account created successfully',
@@ -59,7 +69,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
-      { error: 'An error occurred while creating your account' },
+      { error: 'An error occurred while creating your account. Please try again.' },
       { status: 500 }
     );
   }
