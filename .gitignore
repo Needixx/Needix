@@ -1,0 +1,14 @@
+# Node/Next/Vercel
+node_modules/
+.next/
+.vercel/
+out/
+dist/
+
+# OS junk
+.DS_Store
+
+# Env files
+.env
+.env.*
+!.env.example

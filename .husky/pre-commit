@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Helper: check staged changes for secrets
+has_secret() { git diff --cached -U0 | grep -E "$1" -q; }
+
+if has_secret 'sk_(test|live)_[0-9A-Za-z]+'; then
+  echo "❌ ERROR: Found a Stripe secret key in staged changes."
+  exit 1
+fi
+
+if has_secret 'whsec_[0-9A-Za-z]+'; then
+  echo "❌ ERROR: Found a Stripe webhook secret in staged changes."
+  exit 1
+fi
+
+if has_secret 're_[0-9A-Za-z]{20,}'; then
+  echo "❌ ERROR: Found a Resend API key in staged changes."
+  exit 1
+fi
+
+echo "✅ No secrets found."
+
+# Run lint check
+echo "🔍 Running ESLint..."
+npm run lint --silent || {
+  echo "❌ ESLint failed. Fix issues before committing."
+  exit 1
+}
+
+# Run TypeScript check
+echo "🔍 Running TypeScript..."
+npx tsc --noEmit || {
+  echo "❌ TypeScript errors found. Fix them before committing."
+  exit 1
+}
+
+echo "✅ Pre-commit checks passed."
+exit 0
