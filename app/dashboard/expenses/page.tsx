@@ -39,7 +39,6 @@ export default function ExpensesPage() {
 
   // Extract values for easier use
   const isPro = limitData.isPro;
-  const isLoading = limitData.isLoading;
   
   // Check if user can add more expenses
   const canAddExpense = isPro || items.length < 2;

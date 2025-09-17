@@ -3,11 +3,11 @@
 
 import { Button } from "@/components/ui/Button";
 import { signIn } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
-export default function SignIn() {
+function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,7 +21,12 @@ export default function SignIn() {
   useEffect(() => {
     // Check for auth errors in URL
     const errorParam = searchParams.get("error");
-    if (errorParam) {
+    const message = searchParams.get("message");
+    
+    if (message) {
+      // Show success message
+      setError("");
+    } else if (errorParam) {
       switch (errorParam) {
         case "CredentialsSignin":
           setError("Invalid email or password. Please try again.");
@@ -278,5 +283,20 @@ export default function SignIn() {
         </a>
       </div>
     </main>
+  );
+}
+
+export default function SignIn() {
+  return (
+    <Suspense fallback={
+      <main className="mx-auto grid max-w-md gap-6 px-4 py-16 text-center">
+        <div className="flex items-center justify-center gap-2">
+          <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          <span>Loading...</span>
+        </div>
+      </main>
+    }>
+      <SignInForm />
+    </Suspense>
   );
 }
