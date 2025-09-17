@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import DashboardLink from "@/components/DashboardLink";
 import { useEffect, useState } from "react";
@@ -26,11 +26,18 @@ export default function Navbar() {
 function UserStatus() {
   const { data: session } = useSession();
   const { isPro } = useSubscriptionLimit();
+  
   if (!session?.user) {
     return (
-      <button onClick={() => signIn("google", { callbackUrl: "/dashboard" })} className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10">Sign in</button>
+      <Link 
+        href="/signin" 
+        className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10"
+      >
+        Sign in
+      </Link>
     );
   }
+  
   const name = session.user.name || session.user.email || "user";
   return (
     <div className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1 text-sm">
@@ -54,6 +61,12 @@ function MenuSheet() {
     }
   }, [open]);
 
+  const handleSignOut = async () => {
+    setOpen(false);
+    // Use our custom sign out that goes to home page
+    window.location.href = '/api/auth/signout';
+  };
+
   return (
     <>
       <button onClick={() => setOpen(true)} className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10">Menu</button>
@@ -73,7 +86,7 @@ function MenuSheet() {
                 <LinkItem href="/#pricing" label={isPro ? "💎 Pricing" : "⭐ Upgrade to Pro"} onClick={() => setOpen(false)} />
                 <LinkItem href="mailto:needix2025@gmail.com" label="💬 Help / Feedback" onClick={() => setOpen(false)} />
                 {session?.user && (
-                  <button onClick={() => { setOpen(false); signOut({ callbackUrl: "/" }); }} className="rounded-xl border border-white/10 px-3 py-2 text-left text-white/90 hover:bg-white/10">
+                  <button onClick={handleSignOut} className="rounded-xl border border-white/10 px-3 py-2 text-left text-white/90 hover:bg-white/10">
                     🚪 Logout
                   </button>
                 )}

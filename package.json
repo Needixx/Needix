@@ -6,7 +6,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@auth/core": "^0.40.0",
@@ -17,10 +19,14 @@
     "@capacitor/ios": "^7.4.3",
     "@capacitor/local-notifications": "^7.0.3",
     "@capacitor/preferences": "^7.0.2",
+    "@heroicons/react": "^2.2.0",
+    "@prisma/client": "^6.16.2",
     "@stripe/stripe-js": "^7.9.0",
     "@upstash/redis": "^1.35.3",
+    "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "critters": "^0.0.23",
+    "crypto": "^1.0.1",
     "next": "^15.0.0",
     "next-auth": "^5.0.0-beta.29",
     "react": "^18.3.1",
@@ -31,7 +37,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@prisma/client": "^6.16.2",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^24.3.0",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",

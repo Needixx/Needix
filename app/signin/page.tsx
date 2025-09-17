@@ -3,31 +3,107 @@
 
 import { Button } from "@/components/ui/Button";
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const handleGoogleSignIn = async () => {
+  useEffect(() => {
+    // Check for auth errors in URL
+    const errorParam = searchParams.get("error");
+    if (errorParam) {
+      switch (errorParam) {
+        case "CredentialsSignin":
+          setError("Invalid email or password. Please try again.");
+          break;
+        case "AccessDenied":
+          setError("Access denied. Please try again.");
+          break;
+        default:
+          setError("An error occurred during sign in. Please try again.");
+      }
+    }
+  }, [searchParams]);
+
+  const handleCredentialsAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError("Please enter both email and password");
+      return;
+    }
+
     setLoading(true);
+    setError("");
+
     try {
-      await signIn("google", { callbackUrl: "/app" });
+      if (mode === "signup") {
+        // Handle signup
+        const signupResponse = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await signupResponse.json();
+
+        if (!signupResponse.ok) {
+          setError(data.error || "Failed to create account");
+          setLoading(false);
+          return;
+        }
+
+        // After successful signup, sign them in
+        const result = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+        });
+
+        if (result?.error) {
+          setError("Account created but failed to sign in. Please try signing in manually.");
+        } else {
+          router.push("/app");
+        }
+      } else {
+        // Handle signin
+        const result = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+        });
+
+        if (result?.error) {
+          setError("Invalid email or password. Please check your credentials and try again.");
+        } else if (result?.ok) {
+          router.push("/app");
+        }
+      }
     } catch (error) {
-      console.error("Sign in error:", error);
+      console.error("Auth error:", error);
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEmailSignIn = async () => {
-    if (!email) return;
-    
+  const handleGoogleSignIn = async () => {
     setLoading(true);
+    setError("");
     try {
-      await signIn("email", { email, callbackUrl: "/app" });
+      await signIn("google", { callbackUrl: "/app" });
     } catch (error) {
-      console.error("Email sign in error:", error);
+      console.error("Google sign in error:", error);
+      setError("Failed to sign in with Google. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -36,24 +112,46 @@ export default function SignIn() {
   const handleDevLogin = async () => {
     const emailToUse = email || "dev@example.com";
     setLoading(true);
+    setError("");
     try {
-      await signIn("credentials", { email: emailToUse, name: "Dev User", callbackUrl: "/app", redirect: true });
+      await signIn("credentials", { 
+        email: emailToUse, 
+        name: "Dev User", 
+        callbackUrl: "/app", 
+        redirect: true 
+      });
     } catch (e) {
       console.error(e);
+      setError("Dev login failed");
       setLoading(false);
     }
   };
 
   return (
-    <main className="mx-auto grid max-w-md gap-4 px-4 py-16 text-center">
-      <h1 className="text-2xl font-semibold">Sign in to Needix</h1>
-      <p className="text-white/70">Use Google to continue, or sign in with email.</p>
+    <main className="mx-auto grid max-w-md gap-6 px-4 py-16">
+      <div className="text-center">
+        <h1 className="text-2xl font-semibold">
+          {mode === "signin" ? "Sign in to Needix" : "Create your Needix account"}
+        </h1>
+        <p className="text-white/70 mt-2">
+          {mode === "signin" 
+            ? "Welcome back! Sign in to manage your subscriptions." 
+            : "Join thousands of users managing their subscriptions smarter."
+          }
+        </p>
+      </div>
 
-      <div className="grid gap-3">
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
+      <div className="grid gap-4">
         <Button 
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 h-11"
         >
           {loading ? (
             <div className="flex items-center gap-2">
@@ -73,55 +171,103 @@ export default function SignIn() {
           )}
         </Button>
 
-        {/* Development Login Button (enabled with ENABLE_DEV_AUTH=1) */}
-        {process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH === '1' && (
-          <Button 
-            onClick={handleDevLogin}
-            disabled={loading}
-            className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
-          >
-            Development Login (Local Testing)
-          </Button>
-        )}
-
-        <div className="flex items-center gap-4 my-4">
-          <div className="h-px bg-white/10 flex-1"></div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-white/20"></div>
           <span className="text-white/50 text-sm">or</span>
-          <div className="h-px bg-white/10 flex-1"></div>
+          <div className="flex-1 h-px bg-white/20"></div>
         </div>
 
-        {/* Email login option */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-4 text-left">
-          <label className="mb-2 block text-sm text-white/70">Email address</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/50 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all"
-            disabled={loading}
-          />
+        <form onSubmit={handleCredentialsAuth} className="grid gap-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-white/80 mb-2">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="Enter your email"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-white/80 mb-2">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 pr-12 bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80 transition-colors"
+              >
+                {showPassword ? (
+                  <EyeSlashIcon className="w-5 h-5" />
+                ) : (
+                  <EyeIcon className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+          </div>
+
           <Button 
-            className="mt-3 w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700" 
-            onClick={handleEmailSignIn}
-            disabled={loading || !email}
+            type="submit"
+            disabled={loading}
+            className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 h-11"
           >
             {loading ? (
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                Sending...
+                {mode === "signin" ? "Signing in..." : "Creating account..."}
               </div>
             ) : (
-              "Send magic link"
+              mode === "signin" ? "Sign in" : "Create account"
             )}
           </Button>
-          <p className="mt-2 text-xs text-white/50">
-            We&apos;ll send you a secure link to sign in
-          </p>
+        </form>
+
+        <div className="text-center space-y-2">
+          <button
+            onClick={() => router.push("/forgot-password")}
+            className="text-purple-400 hover:text-purple-300 text-sm transition-colors"
+          >
+            Forgot your password?
+          </button>
+          
+          <div className="text-sm text-white/60">
+            {mode === "signin" ? "Don't have an account?" : "Already have an account?"}{" "}
+            <button
+              onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+              className="text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              {mode === "signin" ? "Sign up" : "Sign in"}
+            </button>
+          </div>
         </div>
+
+        {process.env.ENABLE_DEV_AUTH === "1" && (
+          <Button 
+            onClick={handleDevLogin}
+            disabled={loading}
+            className="bg-orange-600 hover:bg-orange-700 h-11"
+          >
+            🔧 Dev Login
+          </Button>
+        )}
       </div>
 
-      <div className="mt-6 text-xs text-white/50">
+      <div className="mt-6 text-xs text-white/50 text-center">
         By signing in, you agree to our{" "}
         <a href="/terms" className="text-purple-400 hover:text-purple-300">
           Terms of Service
