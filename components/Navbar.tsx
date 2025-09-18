@@ -15,11 +15,27 @@ export default function Navbar() {
         <Link href="/" className="text-lg font-semibold">Needix</Link>
         <div className="flex items-center gap-2">
           <DashboardLink />
+          <CalendarLink />
           <UserStatus />
           <MenuSheet />
         </div>
       </div>
     </nav>
+  );
+}
+
+function CalendarLink() {
+  const { data: session } = useSession();
+  
+  if (!session?.user) return null;
+  
+  return (
+    <Link 
+      href="/calendar" 
+      className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 transition-colors"
+    >
+      📅 Calendar
+    </Link>
   );
 }
 
@@ -81,6 +97,7 @@ function MenuSheet() {
               </div>
               <div className="grid gap-2 text-sm">
                 <LinkItem href="/dashboard" label="🏠 Dashboard" onClick={() => setOpen(false)} />
+                <LinkItem href="/calendar" label="📅 Calendar" onClick={() => setOpen(false)} />
                 <LinkItem href="/billing" label="💰 Billing" onClick={() => setOpen(false)} />
                 <LinkItem href="/settings" label="⚙️ Settings" onClick={() => setOpen(false)} />
                 <LinkItem href="/#pricing" label={isPro ? "💎 Pricing" : "⭐ Upgrade to Pro"} onClick={() => setOpen(false)} />
