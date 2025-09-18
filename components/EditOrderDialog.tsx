@@ -1,10 +1,8 @@
-// components/AddOrderDialog.tsx
+// components/EditOrderDialog.tsx
 "use client";
 
-import { useState, useMemo } from "react";
-import { Button } from "@/components/ui/Button";
-import { useOrders } from "@/lib/useOrders";
-import type { OrderType, OrderCadence } from "@/lib/types-orders";
+import { useState, useEffect, useMemo } from "react";
+import type { OrderItem, OrderType, OrderCadence } from "@/lib/types-orders";
 
 const ORDER_CATEGORIES = [
   'Electronics',
@@ -42,19 +40,20 @@ function toLocalYMD(date: Date): string {
 }
 
 interface Props {
-  onClose: () => void;
+  order: OrderItem;
+  onSave: (order: Partial<OrderItem>) => void;
+  onCancel: () => void;
 }
 
-export default function AddOrderDialog({ onClose }: Props) {
-  const { add } = useOrders();
+export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
   const [formData, setFormData] = useState({
-    title: "",
-    type: "recurring" as OrderType,
-    amount: "",
-    retailer: "",
-    category: "Other",
-    cadence: "monthly" as OrderCadence,
-    notes: "",
+    title: order.title,
+    type: order.type,
+    amount: order.amount?.toString() || "",
+    retailer: order.retailer || "",
+    category: order.category || "Other",
+    cadence: order.cadence || "monthly" as OrderCadence,
+    notes: order.notes || "",
   });
 
   // Calendar state
@@ -65,6 +64,19 @@ export default function AddOrderDialog({ onClose }: Props) {
   const [calYear, setCalYear] = useState<number>(minYear);
   const [calMonth, setCalMonth] = useState<number>(minMonth);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
+  // Initialize calendar with existing date
+  useEffect(() => {
+    const existingDate = order.nextDate || order.scheduledDate;
+    if (existingDate) {
+      const d = new Date(`${existingDate}T00:00:00`);
+      if (d >= now) {
+        setCalYear(d.getFullYear());
+        setCalMonth(d.getMonth());
+        setSelectedDay(d.getDate());
+      }
+    }
+  }, [order.nextDate, order.scheduledDate, now]);
 
   const monthLabel = useMemo(
     () =>
@@ -110,35 +122,33 @@ export default function AddOrderDialog({ onClose }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title) {
-      return;
-    }
+    if (!formData.title) return;
 
     let dateField: string | undefined;
     if (selectedDay) {
       dateField = toLocalYMD(new Date(calYear, calMonth, selectedDay));
     }
 
-    add({
+    const updatedOrder: Partial<OrderItem> = {
       title: formData.title,
       type: formData.type,
       amount: formData.amount ? parseFloat(formData.amount) : undefined,
       retailer: formData.retailer || undefined,
       category: formData.category || undefined,
-      status: "active",
       cadence: formData.type === "recurring" ? formData.cadence : undefined,
       nextDate: formData.type === "recurring" ? dateField : undefined,
       scheduledDate: formData.type === "future" ? dateField : undefined,
       notes: formData.notes || undefined,
-    });
+      updatedAt: new Date().toISOString(),
+    };
 
-    onClose();
+    onSave(updatedOrder);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="mb-6 text-2xl font-bold text-white">Add Order</h2>
+        <h2 className="mb-6 text-2xl font-bold text-white">Edit Order</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Item Name */}
@@ -322,7 +332,7 @@ export default function AddOrderDialog({ onClose }: Props) {
           <div className="flex gap-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={onCancel}
               className="flex-1 rounded-xl border border-white/10 py-3 text-white/80 hover:bg-white/5 transition-colors"
             >
               Cancel
@@ -331,7 +341,7 @@ export default function AddOrderDialog({ onClose }: Props) {
               type="submit"
               className="flex-1 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 py-3 font-semibold text-white hover:from-cyan-700 hover:to-blue-700 transition-all transform hover:scale-105"
             >
-              Add Order
+              Save Changes
             </button>
           </div>
         </form>
