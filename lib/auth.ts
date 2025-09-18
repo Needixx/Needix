@@ -80,6 +80,13 @@ export const {
     error: "/signin"
   },
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // Always redirect to dashboard after successful auth
+      if (url.includes('/app') || url === baseUrl) {
+        return `${baseUrl}/dashboard`;
+      }
+      return url.startsWith(baseUrl) ? url : baseUrl;
+    },
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;

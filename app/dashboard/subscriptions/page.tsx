@@ -1,10 +1,214 @@
-import DashboardClient from "@/components/DashboardClient";
+// app/dashboard/subscriptions/page.tsx
+"use client";
 
-export default function SubscriptionsPage() {
+import { useState } from "react";
+import { useSubscriptions } from "@/lib/useSubscriptions";
+import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
+import AddSubscriptionDialog from "@/components/AddSubscriptionDialog";
+import SubscriptionTable from "@/components/SubscriptionTable";
+import ImportCsv from "@/components/ImportCsv";
+import UpgradeButton from "@/components/UpgradeButton";
+import { Button } from "@/components/ui/Button";
+import { fmtCurrency } from "@/lib/format";
+import { EditSubscriptionDialog, type SubscriptionFormData } from "@/components/AddSubscriptionDialog";
+import { useToast } from "@/components/ui/Toast";
+import type { Subscription } from "@/lib/types";
+
+function StatCard({
+  title,
+  value,
+  subtitle,
+  gradient,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  gradient: string;
+}) {
   return (
-    <div>
-      <DashboardClient />
+    <div className={`rounded-2xl border border-white/10 bg-gradient-to-br ${gradient} backdrop-blur-sm p-6`}>
+      <div className="text-sm font-medium text-white/70">{title}</div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-xs text-white/60">{subtitle}</div>
     </div>
   );
 }
 
+export default function SubscriptionsPage() {
+  const { items, add, remove, update, importMany, totals } = useSubscriptions();
+  const { isPro } = useSubscriptionLimit();
+  const toast = useToast();
+
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editing, setEditing] = useState<Subscription | null>(null);
+
+  // Check if user can add more subscriptions
+  const canAddSubscription = isPro || items.length < 2;
+  const subscriptionLimit = isPro ? Infinity : 2;
+
+  const handleEdit = (sub: Subscription) => {
+    setEditing(sub);
+  };
+
+  const handleUpdate = (data: SubscriptionFormData & { id?: string }) => {
+    if (!data.id) return;
+    update(data.id, {
+      name: data.name,
+      price: data.price,
+      period: data.period,
+      nextBillingDate: data.nextBillingDate,
+      category: data.category,
+      notes: data.notes,
+      link: data.link,
+    });
+    setEditing(null);
+    toast(`Updated ${data.name}`, "success");
+  };
+
+  const handleDelete = (id: string) => {
+    const sub = items.find(s => s.id === id);
+    if (sub && confirm(`Delete ${sub.name}?`)) {
+      remove(id);
+      toast(`Deleted ${sub.name}`, "success");
+    }
+  };
+
+  return (
+    <main className="mx-auto max-w-6xl px-4 py-10">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="mb-2 text-3xl font-bold text-white">Your Subscriptions</h1>
+        <p className="text-white/70">
+          Track your recurring subscriptions and manage your spending
+        </p>
+        {!isPro && (
+          <p className="text-green-300 text-sm mt-1">
+            Using {items.length} of {subscriptionLimit} free subscriptions
+          </p>
+        )}
+      </div>
+
+      {/* Upgrade Banner for Free Users */}
+      {!isPro && (
+        <div className="mb-6 rounded-2xl border border-purple-500/50 bg-gradient-to-r from-purple-500/10 to-pink-500/10 backdrop-blur-sm p-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+                📺 Free Plan - Subscription Tracking
+              </h3>
+              <p className="text-white/80 mb-2">
+                Track up to 2 subscriptions with basic features.
+              </p>
+              <div className="text-sm text-white/60 mb-3">
+                Currently using <span className="font-semibold text-purple-300">{items.length} of {subscriptionLimit}</span> free subscription slots
+              </div>
+              <div className="text-sm text-purple-300">
+                ⭐ Upgrade for unlimited subscriptions, price alerts & more!
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <UpgradeButton 
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-semibold transform hover:scale-105 transition-all"
+              />
+              <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stats Cards */}
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Monthly Total"
+          value={fmtCurrency(totals.monthly)}
+          subtitle="Recurring subscriptions"
+          gradient="from-purple-500/20 to-pink-500/10"
+        />
+        <StatCard
+          title="Active Count"
+          value={items.length.toString()}
+          subtitle="Tracked subscriptions"
+          gradient="from-blue-500/20 to-cyan-500/10"
+        />
+        <StatCard
+          title="Average Cost"
+          value={items.length > 0 ? fmtCurrency(totals.monthly / items.length) : fmtCurrency(0)}
+          subtitle="Per subscription"
+          gradient="from-green-500/20 to-emerald-500/10"
+        />
+        <StatCard
+          title="Annual Total"
+          value={fmtCurrency(totals.monthly * 12)}
+          subtitle="Yearly spending"
+          gradient="from-orange-500/20 to-red-500/10"
+        />
+      </div>
+
+      {/* Action Buttons */}
+      <div className="mb-6 flex flex-wrap gap-3">
+        {canAddSubscription ? (
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white shadow-lg hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+          >
+            + Add Subscription
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Button 
+              disabled 
+              className="opacity-50 cursor-not-allowed bg-gray-600"
+              title="Free plan limit reached - upgrade to Pro for unlimited subscriptions"
+            >
+              Add Subscription (Limit Reached)
+            </Button>
+            <UpgradeButton variant="secondary">
+              Upgrade to Pro
+            </UpgradeButton>
+          </div>
+        )}
+
+        {isPro && (
+          <ImportCsv onImport={(subs) => {
+            importMany(subs);
+            toast(`Imported ${subs.length} subscriptions`, "success");
+          }} />
+        )}
+      </div>
+
+      {/* Subscriptions Table */}
+      <SubscriptionTable 
+        items={items}
+        onDelete={handleDelete}
+        onEdit={handleEdit}
+      />
+
+      {/* Add Subscription Dialog */}
+      {showAddDialog && (
+        <AddSubscriptionDialog 
+          onClose={() => setShowAddDialog(false)} 
+        />
+      )}
+
+      {/* Edit Subscription Dialog */}
+      {editing && (
+        <EditSubscriptionDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setEditing(null); }}
+          initial={{
+            id: editing.id,
+            name: editing.name,
+            price: editing.price,
+            period: editing.period,
+            nextBillingDate: editing.nextBillingDate,
+            category: editing.category,
+            notes: editing.notes,
+            link: editing.link,
+            currency: "USD",
+          }}
+          onUpdate={handleUpdate}
+        />
+      )}
+    </main>
+  );
+}

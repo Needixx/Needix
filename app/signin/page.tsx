@@ -77,7 +77,7 @@ function SignInForm() {
         if (result?.error) {
           setError("Account created but failed to sign in. Please try signing in manually.");
         } else {
-          router.push("/app");
+          router.push("/dashboard");
         }
       } else {
         // Handle signin
@@ -90,7 +90,7 @@ function SignInForm() {
         if (result?.error) {
           setError("Invalid email or password. Please check your credentials and try again.");
         } else if (result?.ok) {
-          router.push("/app");
+          router.push("/dashboard");
         }
       }
     } catch (error) {
@@ -105,7 +105,7 @@ function SignInForm() {
     setLoading(true);
     setError("");
     try {
-      await signIn("google", { callbackUrl: "/app" });
+      await signIn("google", { callbackUrl: "/dashboard" });
     } catch (error) {
       console.error("Google sign in error:", error);
       setError("Failed to sign in with Google. Please try again.");
@@ -122,7 +122,7 @@ function SignInForm() {
       await signIn("credentials", { 
         email: emailToUse, 
         name: "Dev User", 
-        callbackUrl: "/app", 
+        callbackUrl: "/dashboard", 
         redirect: true 
       });
     } catch (e) {

@@ -30,7 +30,8 @@ export default function UserMenu() {
   // Not signed in → show "Sign in" button that goes to Google and returns to /app
   if (!session?.user) {
     return (
-      <Button onClick={() => signIn("google", { callbackUrl: "/app" })}>
+      <Button onClick={() => signIn("google", { callbackUrl: "/dashboard" })}> 
+
         Sign in
       </Button>
     );

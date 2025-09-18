@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     // Create portal session with proper typing
     const portalConfig: Stripe.BillingPortal.SessionCreateParams = {
       customer: customer.id,
-      return_url: `${process.env.NEXT_PUBLIC_DOMAIN || 'http://localhost:3000'}/billing`,
+      return_url: `${process.env.NEXT_PUBLIC_DOMAIN || 'http://localhost:3000'}/dashboard`,
     };
 
     const portalSession = await stripe.billingPortal.sessions.create(portalConfig);
