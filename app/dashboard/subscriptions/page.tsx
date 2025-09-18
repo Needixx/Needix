@@ -75,9 +75,12 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Purple/Pink Gradient Background for Subscriptions */}
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-600/20 via-pink-500/10 to-transparent -z-10" />
+      {/* Futuristic Purple/Pink Background - Toned Down */}
+      <div className="fixed inset-0 bg-black -z-10" />
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900 -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-500/8 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-pink-500/8 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-violet-500/4 to-transparent -z-10" />
       
       <main className="relative mx-auto max-w-6xl px-4 py-10">
         {/* Header */}
@@ -95,10 +98,10 @@ export default function SubscriptionsPage() {
 
         {/* Upgrade Banner for Free Users */}
         {!isPro && (
-          <div className="mb-6 rounded-2xl border border-purple-500/50 bg-gradient-to-r from-purple-500/10 to-pink-500/10 backdrop-blur-sm p-6">
+          <div className="mb-6 rounded-2xl border border-purple-400/20 bg-gradient-to-r from-purple-400/8 to-pink-400/8 backdrop-blur-sm p-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+                <h3 className="text-lg font-semibold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent mb-2">
                   📺 Free Plan - Subscription Tracking
                 </h3>
                 <p className="text-white/80 mb-2">
@@ -113,7 +116,7 @@ export default function SubscriptionsPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <UpgradeButton 
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-semibold transform hover:scale-105 transition-all"
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 font-semibold transform hover:scale-105 transition-all"
                 />
                 <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
               </div>
@@ -127,25 +130,25 @@ export default function SubscriptionsPage() {
             title="Monthly Total"
             value={fmtCurrency(totals.monthly)}
             subtitle="Recurring subscriptions"
-            gradient="from-purple-500/30 to-pink-500/20"
+            gradient="from-purple-400/15 to-pink-400/10"
           />
           <StatCard
             title="Active Count"
             value={items.length.toString()}
             subtitle="Tracked subscriptions"
-            gradient="from-blue-500/30 to-cyan-500/20"
+            gradient="from-blue-400/15 to-cyan-400/10"
           />
           <StatCard
             title="Average Cost"
             value={items.length > 0 ? fmtCurrency(totals.monthly / items.length) : fmtCurrency(0)}
             subtitle="Per subscription"
-            gradient="from-green-500/30 to-emerald-500/20"
+            gradient="from-green-400/15 to-emerald-400/10"
           />
           <StatCard
             title="Annual Total"
             value={fmtCurrency(totals.monthly * 12)}
             subtitle="Yearly spending"
-            gradient="from-orange-500/30 to-red-500/20"
+            gradient="from-orange-400/15 to-yellow-400/10"
           />
         </div>
 
@@ -154,7 +157,7 @@ export default function SubscriptionsPage() {
           {canAddSubscription ? (
             <button
               onClick={() => setShowAddDialog(true)}
-              className="rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 font-semibold text-white shadow-lg hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
+              className="rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-semibold text-white shadow-lg hover:from-purple-400 hover:to-pink-400 transition-all transform hover:scale-105"
             >
               + Add Subscription
             </button>

@@ -73,9 +73,12 @@ export default function OrdersPage() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Cyan/Blue Gradient Background for Orders */}
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-cyan-900/30 to-slate-900 -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-cyan-600/20 via-blue-500/10 to-transparent -z-10" />
+      {/* Futuristic Cyan/Blue Background - Toned Down */}
+      <div className="fixed inset-0 bg-black -z-10" />
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900 -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-cyan-500/8 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-500/8 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-indigo-500/4 to-transparent -z-10" />
       
       <main className="relative mx-auto max-w-6xl px-4 py-10">
         {/* Header */}
@@ -93,10 +96,10 @@ export default function OrdersPage() {
 
         {/* Upgrade Banner for Free Users */}
         {!isPro && (
-          <div className="mb-6 rounded-2xl border border-cyan-500/50 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 backdrop-blur-sm p-6">
+          <div className="mb-6 rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-400/8 to-blue-400/8 backdrop-blur-sm p-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-2">
+                <h3 className="text-lg font-semibold bg-gradient-to-r from-cyan-300 to-blue-300 bg-clip-text text-transparent mb-2">
                   📦 Free Plan - Order Tracking
                 </h3>
                 <p className="text-white/80 mb-2">
@@ -111,7 +114,7 @@ export default function OrdersPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <UpgradeButton 
-                  className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 font-semibold transform hover:scale-105 transition-all"
+                  className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 font-semibold transform hover:scale-105 transition-all"
                 />
                 <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
               </div>
@@ -125,25 +128,25 @@ export default function OrdersPage() {
             title="Total Orders"
             value={orders.length.toString()}
             subtitle="Tracked orders"
-            gradient="from-cyan-500/30 to-blue-500/20"
+            gradient="from-cyan-400/15 to-blue-400/10"
           />
           <StatCard
             title="Active Orders"
             value={activeOrders.toString()}
             subtitle="Currently active"
-            gradient="from-green-500/30 to-emerald-500/20"
+            gradient="from-green-400/15 to-emerald-400/10"
           />
           <StatCard
             title="Total Value"
             value={fmtCurrency(totalOrderValue)}
             subtitle="All orders combined"
-            gradient="from-purple-500/30 to-pink-500/20"
+            gradient="from-purple-400/15 to-pink-400/10"
           />
           <StatCard
             title="Average Value"
             value={orders.length > 0 ? fmtCurrency(totalOrderValue / orders.length) : fmtCurrency(0)}
             subtitle="Per order"
-            gradient="from-orange-500/30 to-red-500/20"
+            gradient="from-orange-400/15 to-yellow-400/10"
           />
         </div>
 
@@ -152,7 +155,7 @@ export default function OrdersPage() {
           {canAddOrder ? (
             <button
               onClick={() => setShowAddDialog(true)}
-              className="rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-3 font-semibold text-white shadow-lg hover:from-cyan-700 hover:to-blue-700 transition-all transform hover:scale-105"
+              className="rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-3 font-semibold text-white shadow-lg hover:from-cyan-400 hover:to-blue-400 transition-all transform hover:scale-105"
             >
               + Add Order
             </button>
@@ -179,7 +182,7 @@ export default function OrdersPage() {
                 onClick={() => setFilter(status)}
                 className={`px-3 py-1 rounded-full text-sm transition-colors ${
                   filter === status
-                    ? "bg-cyan-600 text-white"
+                    ? "bg-cyan-500 text-white"
                     : "bg-white/10 text-white/70 hover:bg-white/20"
                 }`}
               >
@@ -205,7 +208,7 @@ export default function OrdersPage() {
             {filter === "all" && canAddOrder && (
               <Button
                 onClick={() => setShowAddDialog(true)}
-                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400"
               >
                 Add Your First Order
               </Button>
@@ -236,10 +239,10 @@ export default function OrdersPage() {
                     <td className="px-4 py-3 capitalize">{order.type}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        order.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                        order.status === 'active' ? 'bg-blue-500/20 text-blue-400' :
-                        order.status === 'paused' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-red-500/20 text-red-400'
+                        order.status === 'completed' ? 'bg-green-400/20 text-green-300' :
+                        order.status === 'active' ? 'bg-blue-400/20 text-blue-300' :
+                        order.status === 'paused' ? 'bg-yellow-400/20 text-yellow-300' :
+                        'bg-red-400/20 text-red-300'
                       }`}>
                         {order.status}
                       </span>
@@ -266,7 +269,7 @@ export default function OrdersPage() {
                           ✏️ Edit
                         </button>
                         <button
-                          className="rounded-lg border border-red-500/30 px-2 py-1 text-red-300 hover:bg-red-500/10"
+                          className="rounded-lg border border-red-400/30 px-2 py-1 text-red-300 hover:bg-red-400/10"
                           onClick={() => handleDelete(order.id)}
                           title="Delete order"
                         >

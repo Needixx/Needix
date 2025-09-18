@@ -58,9 +58,12 @@ export default function ExpensesPage() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Green/Emerald Gradient Background for Expenses */}
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-emerald-900/30 to-slate-900 -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-green-600/20 via-emerald-500/10 to-transparent -z-10" />
+      {/* Futuristic Green/Emerald Background - Toned Down */}
+      <div className="fixed inset-0 bg-black -z-10" />
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900 -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-green-500/8 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-emerald-500/8 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-teal-500/4 to-transparent -z-10" />
       
       <main className="relative mx-auto max-w-6xl px-4 py-10">
         {/* Header */}
@@ -78,10 +81,10 @@ export default function ExpensesPage() {
 
         {/* Upgrade Banner for Free Users */}
         {!isPro && (
-          <div className="mb-6 rounded-2xl border border-green-500/50 bg-gradient-to-r from-green-500/10 to-emerald-500/10 backdrop-blur-sm p-6">
+          <div className="mb-6 rounded-2xl border border-green-400/20 bg-gradient-to-r from-green-400/8 to-emerald-400/8 backdrop-blur-sm p-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-2">
+                <h3 className="text-lg font-semibold bg-gradient-to-r from-green-300 to-emerald-300 bg-clip-text text-transparent mb-2">
                   💰 Free Plan - Expense Tracking
                 </h3>
                 <p className="text-white/80 mb-2">
@@ -96,7 +99,7 @@ export default function ExpensesPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <UpgradeButton 
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 font-semibold transform hover:scale-105 transition-all"
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 font-semibold transform hover:scale-105 transition-all"
                 />
                 <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
               </div>
@@ -110,25 +113,25 @@ export default function ExpensesPage() {
             title="Monthly Total"
             value={fmtCurrency(totals.monthly)}
             subtitle="Recurring expenses"
-            gradient="from-green-500/30 to-emerald-500/20"
+            gradient="from-green-400/15 to-emerald-400/10"
           />
           <StatCard
             title="Essential"
             value={fmtCurrency(totals.essential)}
             subtitle="Must-pay expenses"
-            gradient="from-red-500/30 to-rose-500/20"
+            gradient="from-red-400/15 to-rose-400/10"
           />
           <StatCard
             title="Discretionary"
             value={fmtCurrency(totals.nonEssential)}
             subtitle="Optional expenses"
-            gradient="from-blue-500/30 to-cyan-500/20"
+            gradient="from-blue-400/15 to-cyan-400/10"
           />
           <StatCard
             title="This Month"
             value={fmtCurrency(totals.totalThisMonth)}
             subtitle="Including one-time"
-            gradient="from-purple-500/30 to-pink-500/20"
+            gradient="from-purple-400/15 to-pink-400/10"
           />
         </div>
 
@@ -137,7 +140,7 @@ export default function ExpensesPage() {
           {canAddExpense ? (
             <button
               onClick={() => setIsAddingExpense(true)}
-              className="rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-3 font-semibold text-white shadow-lg hover:from-green-700 hover:to-emerald-700 transition-all transform hover:scale-105"
+              className="rounded-2xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 font-semibold text-white shadow-lg hover:from-green-400 hover:to-emerald-400 transition-all transform hover:scale-105"
             >
               + Add Expense
             </button>
