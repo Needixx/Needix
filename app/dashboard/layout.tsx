@@ -1,11 +1,38 @@
+// app/dashboard/layout.tsx
+"use client";
+
 import { ReactNode } from "react";
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import DashboardTabsBar from "@/components/DashboardTabsBar";
 
-export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const session = await auth();
-  if (!session?.user) redirect("/signin");
+export default function DashboardLayout({ children }: { children: ReactNode }) {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "loading") return; // Still loading
+    if (!session?.user) {
+      router.push("/signin");
+    }
+  }, [session, status, router]);
+
+  if (status === "loading") {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6 text-center">
+        <div className="flex items-center justify-center gap-2">
+          <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          <span>Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session?.user) {
+    return null; // Will redirect
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <DashboardTabsBar />
@@ -13,4 +40,3 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     </div>
   );
 }
-
