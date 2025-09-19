@@ -1,3 +1,4 @@
+// lib/useOrders.ts
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -12,19 +13,35 @@ export function useOrders() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setItems(JSON.parse(raw));
-    } catch {}
+      if (raw) {
+        setItems(JSON.parse(raw));
+      } else {
+        // Start with empty array - no demo data
+        setItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading orders:', error);
+      setItems([]);
+    }
     setLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
-    try { localStorage.setItem(KEY, JSON.stringify(items)); } catch {}
+    try { 
+      localStorage.setItem(KEY, JSON.stringify(items)); 
+    } catch (error) {
+      console.error('Error saving orders:', error);
+    }
   }, [items, loaded]);
 
   function persist(next: OrderItem[]) {
     setItems(next);
-    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
+    try { 
+      localStorage.setItem(KEY, JSON.stringify(next)); 
+    } catch (error) {
+      console.error('Error persisting orders:', error);
+    }
   }
 
   function add(item: Omit<OrderItem, "id" | "createdAt" | "updatedAt">) {
@@ -76,4 +93,3 @@ function advanceByCadence(d: Date, c: OrderCadence) {
   else if (c === "quarterly") d.setMonth(d.getMonth() + 3);
   else if (c === "yearly") d.setFullYear(d.getFullYear() + 1);
 }
-

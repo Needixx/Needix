@@ -1,11 +1,14 @@
 // next.config.ts
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Keep API routes working for authentication
-  // output: 'export', // Commented out to allow server-side features
+import type { NextConfig } from 'next';
+
+const isMobileBuild = process.env.BUILD_TARGET === 'mobile';
+
+const nextConfig: NextConfig = {
+  // For mobile builds, we need static export
+  output: isMobileBuild ? 'export' : undefined,
   
-  // Optimize for mobile and web
+  // Disable image optimization for static export
   images: {
     unoptimized: true
   },
@@ -15,8 +18,8 @@ const nextConfig = {
     optimizeCss: true
   },
   
-  // Standard build directory
-  distDir: '.next',
+  // For static export, use 'out' directory
+  distDir: isMobileBuild ? 'out' : '.next',
   
   // Ensure proper asset handling
   assetPrefix: undefined,
@@ -29,7 +32,25 @@ const nextConfig = {
   // ESLint configuration
   eslint: {
     ignoreDuringBuilds: false
-  }
-}
+  },
+  
+  // Trailing slash for static export compatibility
+  trailingSlash: isMobileBuild,
+  
+  // Webpack configuration for mobile compatibility
+  webpack: (config, { dev, isServer }) => {
+    // Handle capacitor imports
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    
+    return config;
+  },
+};
 
-module.exports = nextConfig
+export default nextConfig;

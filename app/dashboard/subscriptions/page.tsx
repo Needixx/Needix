@@ -35,7 +35,7 @@ function StatCard({
 }
 
 export default function SubscriptionsPage() {
-  const { items, add, remove, update, importMany, totals } = useSubscriptions();
+  const { items, remove, update, importMany, totals } = useSubscriptions();
   const { isPro } = useSubscriptionLimit();
   const toast = useToast();
 

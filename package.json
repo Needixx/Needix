@@ -4,11 +4,17 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:mobile": "bash scripts/build-mobile.sh",
     "start": "next start",
     "lint": "next lint",
     "prepare": "husky",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "mobile:build": "npm run build:mobile && npx cap sync",
+    "mobile:ios": "npm run mobile:build && npx cap run ios",
+    "mobile:android": "npm run mobile:build && npx cap run android",
+    "mobile:open:ios": "npx cap open ios",
+    "mobile:open:android": "npx cap open android"
   },
   "dependencies": {
     "@auth/core": "^0.40.0",

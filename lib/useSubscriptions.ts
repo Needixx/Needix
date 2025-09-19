@@ -13,8 +13,16 @@ export function useSubscriptions() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setItems(JSON.parse(raw));
-    } catch {}
+      if (raw) {
+        setItems(JSON.parse(raw));
+      } else {
+        // Start with empty array instead of demo data
+        setItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading subscriptions:', error);
+      setItems([]);
+    }
     setLoaded(true);
   }, []);
 
@@ -23,8 +31,15 @@ export function useSubscriptions() {
     function reload() {
       try {
         const raw = localStorage.getItem(KEY);
-        if (raw) setItems(JSON.parse(raw));
-      } catch {}
+        if (raw) {
+          setItems(JSON.parse(raw));
+        } else {
+          setItems([]);
+        }
+      } catch (error) {
+        console.error('Error reloading subscriptions:', error);
+        setItems([]);
+      }
     }
     const internal = () => reload();
     const onStorage = (e: StorageEvent) => { if (e.key === KEY) reload(); };
@@ -40,7 +55,9 @@ export function useSubscriptions() {
     if (!loaded) return; // avoid overwriting stored data on first mount
     try {
       localStorage.setItem(KEY, JSON.stringify(items));
-    } catch {}
+    } catch (error) {
+      console.error('Error saving subscriptions:', error);
+    }
   }, [items, loaded]);
 
   function persist(next: Subscription[]) {
@@ -48,7 +65,9 @@ export function useSubscriptions() {
     try {
       localStorage.setItem(KEY, JSON.stringify(next));
       window.dispatchEvent(new Event("needix:subscriptions-changed"));
-    } catch {}
+    } catch (error) {
+      console.error('Error persisting subscriptions:', error);
+    }
   }
 
   function add(sub: Omit<Subscription, "id" | "createdAt" | "updatedAt">) {

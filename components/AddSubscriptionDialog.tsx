@@ -2,9 +2,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Button } from "@/components/ui/Button";
 import { useSubscriptions } from "@/lib/useSubscriptions";
-import type { Subscription, BillingPeriod } from "@/lib/types";
+import type { BillingPeriod } from "@/lib/types";
 
 const SUBSCRIPTION_CATEGORIES = [
   'Streaming',
@@ -354,7 +353,7 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
   const [link, setLink] = useState(initial?.link || "");
 
   // Calendar state
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
   const minYear = now.getFullYear();
   const minMonth = now.getMonth();
 

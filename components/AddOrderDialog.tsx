@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Button } from "@/components/ui/Button";
 import { useOrders } from "@/lib/useOrders";
 import type { OrderType, OrderCadence } from "@/lib/types-orders";
 

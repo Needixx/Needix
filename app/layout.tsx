@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import { ToastProvider } from "@/components/ui/Toast";
+import ClientLayoutWrapper from "@/components/ClientLayoutWrapper";
 
 export const metadata = {
   title: "Needix - Track Everything. Waste Nothing.",
@@ -21,10 +22,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-screen bg-black text-white antialiased">
         <SessionProvider>
           <ToastProvider>
-            <OfflineIndicator />
-            <Navbar />
-            {children}
-            <Footer />
+            <ClientLayoutWrapper>
+              <OfflineIndicator />
+              <Navbar />
+              {children}
+              <Footer />
+            </ClientLayoutWrapper>
           </ToastProvider>
         </SessionProvider>
       </body>

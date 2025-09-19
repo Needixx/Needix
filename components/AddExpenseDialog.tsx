@@ -60,7 +60,7 @@ export default function AddExpenseDialog({
   const [notes, setNotes] = useState("");
 
   // Calendar state
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
   const minYear = now.getFullYear();
   const minMonth = now.getMonth();
 

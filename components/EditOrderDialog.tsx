@@ -57,7 +57,7 @@ export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
   });
 
   // Calendar state
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
   const minYear = now.getFullYear();
   const minMonth = now.getMonth();
 

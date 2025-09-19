@@ -4,77 +4,24 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { Expense, ExpenseTotals } from './types/expenses';
 
-// Demo data for development
-const DEMO_EXPENSES: Expense[] = [
-  {
-    id: '1',
-    name: 'Rent',
-    amount: 1200,
-    currency: 'USD',
-    category: 'Housing',
-    frequency: 'monthly',
-    nextPaymentDate: '2025-10-01',
-    isRecurring: true,
-    isEssential: true,
-    notes: 'Apartment rent',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: '2',
-    name: 'Electric Bill',
-    amount: 85,
-    currency: 'USD',
-    category: 'Utilities',
-    frequency: 'monthly',
-    nextPaymentDate: '2025-10-15',
-    isRecurring: true,
-    isEssential: true,
-    notes: 'Average monthly usage',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: '3',
-    name: 'Car Payment',
-    amount: 350,
-    currency: 'USD',
-    category: 'Transportation',
-    frequency: 'monthly',
-    nextPaymentDate: '2025-10-05',
-    isRecurring: true,
-    isEssential: true,
-    notes: 'Honda Civic lease',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: '4',
-    name: 'Groceries',
-    amount: 400,
-    currency: 'USD',
-    category: 'Food & Groceries',
-    frequency: 'monthly',
-    isRecurring: false,
-    isEssential: true,
-    notes: 'Monthly grocery budget',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
-
 export function useExpenses() {
   const [items, setItems] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // For demo purposes, use local storage
+    // Load from localStorage only - no demo data
     const saved = localStorage.getItem('needix-expenses');
     if (saved) {
-      setItems(JSON.parse(saved));
+      try {
+        setItems(JSON.parse(saved));
+      } catch (error) {
+        console.error('Error parsing saved expenses:', error);
+        setItems([]);
+      }
     } else {
-      setItems(DEMO_EXPENSES);
+      // Start with empty array instead of demo data
+      setItems([]);
     }
     setLoading(false);
   }, []);
