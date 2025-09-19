@@ -20,11 +20,15 @@ export default function MobileNavigation() {
             // Apply mobile-specific styling
             document.body.classList.add('mobile-app');
             
-            // Handle status bar if available
+            // Handle status bar if available - make import conditional
             try {
-              const { StatusBar, Style } = await import('@capacitor/status-bar');
-              await StatusBar.setStyle({ style: Style.Dark });
-              await StatusBar.setBackgroundColor({ color: '#000000' });
+              // Check if status-bar package is available before importing
+              const statusBarModule = await import('@capacitor/status-bar').catch(() => null);
+              if (statusBarModule) {
+                const { StatusBar, Style } = statusBarModule;
+                await StatusBar.setStyle({ style: Style.Dark });
+                await StatusBar.setBackgroundColor({ color: '#000000' });
+              }
             } catch (error) {
               console.log('StatusBar not available:', error);
             }
