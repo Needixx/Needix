@@ -7,7 +7,6 @@ import type { Expense, ExpenseTotals } from './types/expenses';
 export function useExpenses() {
   const [items, setItems] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Load from localStorage only - no demo data
@@ -114,7 +113,6 @@ export function useExpenses() {
     items,
     totals,
     loading,
-    error,
     addExpense,
     updateExpense,
     deleteExpense

@@ -9,8 +9,23 @@ import { useEffect, useState } from "react";
 import Portal from "@/components/ui/Portal";
 
 export default function Navbar() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // Check if running in Capacitor (mobile app)
+    const checkMobile = async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        setIsMobile(Capacitor.isNativePlatform());
+      } catch {
+        setIsMobile(false);
+      }
+    };
+    checkMobile();
+  }, []);
+
   return (
-    <nav className="sticky top-0 left-0 right-0 z-50 w-full border-b border-white/10 bg-black/80 backdrop-blur-md supports-[backdrop-filter]:bg-black/70 pt-safe-top">
+    <nav className={`${isMobile ? 'fixed' : 'sticky'} top-0 left-0 right-0 z-50 w-full border-b border-white/10 bg-black/90 backdrop-blur-md supports-[backdrop-filter]:bg-black/70 ${isMobile ? 'pt-safe-top' : ''}`}>
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link href="/" className="text-lg font-semibold">Needix</Link>
         <div className="flex items-center gap-2">
@@ -32,7 +47,7 @@ function CalendarLink() {
   return (
     <Link 
       href="/calendar" 
-      className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 transition-colors"
+      className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 transition-colors mobile-touch-target"
     >
       📅 Calendar
     </Link>
@@ -47,7 +62,7 @@ function UserStatus() {
     return (
       <Link 
         href="/signin" 
-        className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10"
+        className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
       >
         Sign in
       </Link>
@@ -85,15 +100,20 @@ function MenuSheet() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10">Menu</button>
+      <button 
+        onClick={() => setOpen(true)} 
+        className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
+      >
+        Menu
+      </button>
       {open && (
         <Portal>
           <div className="fixed inset-0 z-[60]">
             <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-0 h-full w-full max-w-sm bg-neutral-900 border-l border-white/10 p-4 overflow-auto">
+            <div className="absolute right-0 top-0 h-full w-full max-w-sm bg-neutral-900 border-l border-white/10 p-4 overflow-auto pt-safe-top">
               <div className="mb-4 flex items-center justify-between">
                 <div className="font-semibold">Menu</div>
-                <button className="rounded px-2 py-1 text-white/80 hover:bg-white/10" onClick={() => setOpen(false)}>✕</button>
+                <button className="rounded px-2 py-1 text-white/80 hover:bg-white/10 mobile-touch-target" onClick={() => setOpen(false)}>✕</button>
               </div>
               <div className="grid gap-2 text-sm">
                 <LinkItem href="/dashboard" label="🏠 Dashboard" onClick={() => setOpen(false)} />
@@ -103,7 +123,7 @@ function MenuSheet() {
                 <LinkItem href="/#pricing" label={isPro ? "💎 Pricing" : "⭐ Upgrade to Pro"} onClick={() => setOpen(false)} />
                 <LinkItem href="mailto:needix2025@gmail.com" label="💬 Help / Feedback" onClick={() => setOpen(false)} />
                 {session?.user && (
-                  <button onClick={handleSignOut} className="rounded-xl border border-white/10 px-3 py-2 text-left text-white/90 hover:bg-white/10">
+                  <button onClick={handleSignOut} className="rounded-xl border border-white/10 px-3 py-2 text-left text-white/90 hover:bg-white/10 mobile-touch-target">
                     🚪 Logout
                   </button>
                 )}
@@ -118,7 +138,7 @@ function MenuSheet() {
 
 function LinkItem({ href, label, onClick }: { href: string; label: string; onClick?: () => void }) {
   return (
-    <Link href={href} onClick={onClick} className="rounded-xl border border-white/10 px-3 py-2 text-white/90 hover:bg-white/10 transition-colors">
+    <Link href={href} onClick={onClick} className="rounded-xl border border-white/10 px-3 py-2 text-white/90 hover:bg-white/10 transition-colors mobile-touch-target">
       {label}
     </Link>
   );

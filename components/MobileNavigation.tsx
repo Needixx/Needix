@@ -29,11 +29,11 @@ export default function MobileNavigation() {
                 await StatusBar.setStyle({ style: Style.Dark });
                 await StatusBar.setBackgroundColor({ color: '#000000' });
               }
-            } catch (error) {
-              console.log('StatusBar not available:', error);
+            } catch {
+              console.log('StatusBar not available');
             }
           }
-        } catch (error) {
+        } catch {
           console.log('Capacitor not available, running in web mode');
           setIsCapacitor(false);
         }

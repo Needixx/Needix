@@ -4,37 +4,37 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.needix.app',
   appName: 'Needix',
-  webDir: 'out',  // Changed to 'out' directory for static export
+  webDir: 'out',
   server: {
-    url: process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : undefined,
-    cleartext: true
-  },
-  plugins: {
-    SplashScreen: {
-      launchShowDuration: 2000,
-      backgroundColor: '#000000',
-      showSpinner: false
-    },
-    StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#000000',
-      overlaysWebView: false
-    },
-    LocalNotifications: {
-      smallIcon: 'ic_stat_icon_config_sample',
-      iconColor: '#06b6d4',
-      sound: 'beep.wav',
-    },
+    androidScheme: 'https',
   },
   ios: {
-    contentInset: 'automatic',
-    scrollEnabled: true,
+    contentInset: 'never',
+    scrollEnabled: false,
     backgroundColor: '#000000',
-    allowsLinkPreview: false
+    preferredContentMode: 'mobile',
   },
   android: {
     backgroundColor: '#000000',
-  }
+    allowMixedContent: true,
+    captureInput: true,
+  },
+  plugins: {
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#000000',
+      overlaysWebView: false,
+    },
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: '#000000',
+      showSpinner: false,
+    },
+    Keyboard: {
+      resize: 'body',
+      style: 'DARK',
+    },
+  },
 };
 
 export default config;

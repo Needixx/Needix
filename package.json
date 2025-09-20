@@ -20,7 +20,6 @@
     "@auth/core": "^0.40.0",
     "@capacitor/android": "^7.4.3",
     "@capacitor/browser": "^7.0.2",
-    "@capacitor/cli": "^7.4.3",
     "@capacitor/core": "^7.4.3",
     "@capacitor/ios": "^7.4.3",
     "@capacitor/local-notifications": "^7.0.3",
@@ -45,6 +44,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^24.3.0",
     "@types/react": "^18.3.5",

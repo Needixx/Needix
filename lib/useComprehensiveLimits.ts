@@ -1,7 +1,7 @@
 // lib/useComprehensiveLimits.ts
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 
 const FREE_PLAN_LIMITS = {

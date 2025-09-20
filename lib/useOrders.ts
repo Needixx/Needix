@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { OrderItem, OrderStatus, OrderCadence } from "@/lib/types-orders";
+import type { OrderItem, OrderCadence } from "@/lib/types-orders";
 
 const KEY = "needix.orders.v1";
 
