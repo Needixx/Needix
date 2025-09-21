@@ -1,17 +1,23 @@
 // prisma/schema.prisma  (FULL FILE — paste & save)
+
 generator client {
   provider = "prisma-client-js"
 }
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/* =========================
+   Stripe / Webhooks / Pro
+   ========================= */
 
 model WebhookEvent {
   id         String   @id            // Stripe event.id
   type       String
   receivedAt DateTime @default(now())
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 /// Stripe subscription lifecycle states we care about.
@@ -26,6 +32,10 @@ enum PlanStatus {
   incomplete_expired
   paused
 }
+
+/* ==============
+   NextAuth core
+   ============== */
 
 model User {
   id                       String    @id @default(cuid())
@@ -50,6 +60,11 @@ model User {
   planStatus           PlanStatus?
   currentPeriodEnd     DateTime?
   cancelAtPeriodEnd    Boolean?    @default(false)
+
+  // 💳 Needix data relations
+  subscriptions Subscription[]
+  orders        Order[]
+  expenses      Expense[]
 }
 
 model Account {
@@ -89,13 +104,19 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+/* =========================
+   Engagement / Telemetry
+   ========================= */
+
 model SubscriptionEvent {
   id        String   @id @default(cuid())
   userId    String
   userEmail String
-  event     String // 'subscribed', 'cancelled', 'renewed', 'failed_payment'
+  event     String   // 'subscribed', 'cancelled', 'renewed', 'failed_payment'
   timestamp DateTime @default(now())
   metadata  Json?
+
+  // (kept as a loose reference; join by userId when needed)
 }
 
 model UserActivity {
@@ -104,8 +125,116 @@ model UserActivity {
   subscriptionsCount Int
   lastActiveDate     DateTime
   totalSpent         Float    @default(0)
-  planType           String // 'free' or 'pro'
+  planType           String   // 'free' or 'pro'
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  // (kept as a loose reference; join by userId when needed)
 }
 
+/* =========================
+   Needix Core Data Models
+   ========================= */
+
+/// Cadences used by subscriptions and expense recurrence.
+/// We allow a shared enum so the API can map cleanly.
+enum Recurrence {
+  none
+  daily
+  weekly
+  monthly
+  yearly
+  custom
+}
+
+/// Subscription lifecycle inside Needix (separate from Stripe planStatus).
+enum SubscriptionStatus {
+  active
+  paused
+  canceled
+}
+
+model Subscription {
+  id            String             @id @default(cuid())
+  userId        String
+  name          String
+  amount        Decimal            @db.Decimal(12, 2)
+  currency      String             @default("USD")
+  interval      Recurrence         @default(monthly) // monthly is the common case
+  nextBillingAt DateTime?
+  notes         String?
+  category      String?
+  vendorUrl     String?
+  status        SubscriptionStatus @default(active)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([status])
+  @@index([interval])
+  @@index([userId, status])
+  @@index([userId, nextBillingAt])
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  userId    String
+  merchant  String
+  total     Decimal  @db.Decimal(12, 2)
+  currency  String   @default("USD")
+  orderDate DateTime @default(now())
+  notes     String?
+  category  String?
+
+  items     OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([orderDate])
+  @@index([merchant])
+  @@index([userId, orderDate])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  name      String
+  qty       Int      @default(1)
+  unitPrice Decimal? @db.Decimal(12, 2)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model Expense {
+  id          String     @id @default(cuid())
+  userId      String
+  description String
+  amount      Decimal     @db.Decimal(12, 2)
+  currency    String      @default("USD")
+  date        DateTime    @default(now())
+  merchant    String?
+  category    String?
+  recurrence  Recurrence  @default(none)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([date])
+  @@index([recurrence])
+  @@index([userId, date])
+}
