@@ -12,3 +12,11 @@ dist/
 .env
 .env.*
 !.env.example
+
+# .eslintignore
+node_modules
+.next
+out
+dist
+coverage
+.vercel
