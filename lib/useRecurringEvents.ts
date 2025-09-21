@@ -14,9 +14,18 @@ export interface CalendarEvent {
   originalId: string;
 }
 
+// Extended types with isEssential property
+interface SubscriptionWithEssential extends Subscription {
+  isEssential?: boolean;
+}
+
+interface OrderWithEssential extends OrderItem {
+  isEssential?: boolean;
+}
+
 export const useRecurringEvents = (
   subscriptions: Subscription[],
-  orders: OrderItem[], // Using OrderItem instead of Order
+  orders: OrderItem[],
   expenses: Expense[],
   startDate: Date,
   endDate: Date
@@ -42,6 +51,7 @@ export const useRecurringEvents = (
     subscriptions.forEach((subscription) => {
       if (!subscription.nextBillingDate) return;
       
+      const subscriptionWithEssential = subscription as SubscriptionWithEssential;
       const nextBilling = new Date(subscription.nextBillingDate);
       let currentDate = new Date(nextBilling);
 
@@ -54,7 +64,7 @@ export const useRecurringEvents = (
             date: new Date(currentDate),
             type: 'subscription',
             category: subscription.category,
-            isEssential: true, // Default to true since Subscription doesn't have isEssential
+            isEssential: subscriptionWithEssential.isEssential ?? false, // Default to false
             originalId: subscription.id
           });
         }
@@ -70,98 +80,60 @@ export const useRecurringEvents = (
           case 'yearly':
             currentDate = addMonths(currentDate, 12);
             break;
-          default: // 'custom' - treat as monthly
+          default:
+            // For custom or unknown periods, add 1 month as fallback
             currentDate = addMonths(currentDate, 1);
             break;
         }
       }
     });
 
-    // Process orders (using OrderItem type)
+    // Process orders
     orders.forEach((order) => {
-      let orderDate: Date | null = null;
+      const orderWithEssential = order as OrderWithEssential;
+      const orderDate = new Date(order.scheduledDate || order.nextDate || new Date());
       
-      // Try to get date from scheduledDate or nextDate
-      if (order.scheduledDate) {
-        orderDate = new Date(order.scheduledDate);
-      } else if (order.nextDate) {
-        orderDate = new Date(order.nextDate);
-      }
-      
-      if (!orderDate || !order.amount) return;
-
-      if (order.type === 'future') {
-        // One-time future order
-        if (orderDate >= startDate && orderDate <= endDate) {
-          events.push({
-            id: `order-${order.id}`,
-            title: order.title, // OrderItem uses 'title' instead of 'name'
-            amount: order.amount,
-            date: orderDate,
-            type: 'order',
-            category: order.category,
-            originalId: order.id
-          });
-        }
-      } else if (order.type === 'recurring') {
-        // Recurring order
-        let currentDate = new Date(orderDate);
+      if (order.type === 'recurring' && order.nextDate) {
+        let currentDate = new Date(order.nextDate);
         
         while (currentDate <= endDate) {
           if (currentDate >= startDate) {
             events.push({
               id: `${order.id}-${currentDate.toISOString()}`,
-              title: order.title, // OrderItem uses 'title' instead of 'name'
-              amount: order.amount,
+              title: order.name,
+              amount: order.amount || 0,
               date: new Date(currentDate),
               type: 'order',
               category: order.category,
+              isEssential: orderWithEssential.isEssential ?? false, // Default to false
               originalId: order.id
             });
           }
 
-          // Calculate next occurrence based on cadence
-          if (order.cadence) {
-            switch (order.cadence) {
-              case 'weekly':
-                currentDate = addDays(currentDate, 7);
-                break;
-              case 'monthly':
-                currentDate = addMonths(currentDate, 1);
-                break;
-              case 'quarterly':
-                currentDate = addMonths(currentDate, 3);
-                break;
-              case 'yearly':
-                currentDate = addMonths(currentDate, 12);
-                break;
-              default:
-                currentDate = addMonths(currentDate, 1);
-                break;
-            }
-          } else {
-            // Default to monthly if no cadence specified
-            currentDate = addMonths(currentDate, 1);
-          }
+          // For recurring orders, assume monthly recurrence if no specific interval is defined
+          currentDate = addMonths(currentDate, 1);
         }
+      } else if (orderDate >= startDate && orderDate <= endDate) {
+        // One-time order
+        events.push({
+          id: `order-${order.id}`,
+          title: order.name,
+          amount: order.amount || 0,
+          date: orderDate,
+          type: 'order',
+          category: order.category,
+          isEssential: orderWithEssential.isEssential ?? false, // Default to false
+          originalId: order.id
+        });
       }
     });
 
     // Process expenses
     expenses.forEach((expense) => {
-      let expenseDate: Date | null = null;
+      const expenseDate = new Date(expense.dueDate || expense.nextPaymentDate || new Date());
       
-      // Try to get date from nextPaymentDate or dueDate
-      if (expense.nextPaymentDate) {
-        expenseDate = new Date(expense.nextPaymentDate);
-      } else if (expense.dueDate) {
-        expenseDate = new Date(expense.dueDate);
-      }
-      
-      if (!expenseDate) return;
-      
-      if (expense.isRecurring) {
-        let currentDate = new Date(expenseDate);
+      if (expense.isRecurring && expense.nextPaymentDate) {
+        let currentDate = new Date(expense.nextPaymentDate);
         
         while (currentDate <= endDate) {
           if (currentDate >= startDate) {

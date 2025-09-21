@@ -10,7 +10,7 @@ import UpgradeButton from "@/components/UpgradeButton";
 import { Button } from "@/components/ui/Button";
 import { fmtCurrency } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
-import type { OrderItem } from "@/lib/types-orders";
+import type { OrderItem, OrderFormData } from "@/lib/types-orders";
 
 function StatCard({
   title,
@@ -33,7 +33,7 @@ function StatCard({
 }
 
 export default function OrdersPage() {
-  const { items: orders, remove, update } = useOrders();
+  const { items: orders, remove, update, add } = useOrders();
   const { isPro } = useSubscriptionLimit();
   const toast = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -56,19 +56,25 @@ export default function OrdersPage() {
     setEditingOrder(order);
   };
 
-  const handleUpdate = (updatedOrder: Partial<OrderItem>) => {
+  const handleUpdate = (updatedOrder: OrderFormData & { id: string }) => {
     if (!editingOrder) return;
     update(editingOrder.id, updatedOrder);
     setEditingOrder(null);
-    toast(`Updated ${updatedOrder.title || editingOrder.title}`, "success");
+    toast(`Updated ${updatedOrder.name || editingOrder.name}`, "success");
   };
 
   const handleDelete = (id: string) => {
     const order = orders.find(o => o.id === id);
-    if (order && confirm(`Delete ${order.title}?`)) {
+    if (order && confirm(`Delete ${order.name}?`)) {
       remove(id);
-      toast(`Deleted ${order.title}`, "success");
+      toast(`Deleted ${order.name}`, "success");
     }
+  };
+
+  const handleAdd = (orderData: OrderFormData) => {
+    add(orderData);
+    setShowAddDialog(false);
+    toast(`Added ${orderData.name}`, "success");
   };
 
   return (
@@ -114,7 +120,7 @@ export default function OrdersPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <UpgradeButton 
-                  className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 font-semibold transform hover:scale-105 transition-all"
+                  className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 font-semibold transform hover:scale-105 transition-all"
                 />
                 <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
               </div>
@@ -122,77 +128,72 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Total Orders"
-            value={orders.length.toString()}
-            subtitle="Tracked orders"
-            gradient="from-cyan-400/15 to-blue-400/10"
-          />
-          <StatCard
-            title="Active Orders"
-            value={activeOrders.toString()}
-            subtitle="Currently active"
-            gradient="from-green-400/15 to-emerald-400/10"
-          />
-          <StatCard
-            title="Total Value"
-            value={fmtCurrency(totalOrderValue)}
-            subtitle="All orders combined"
-            gradient="from-purple-400/15 to-pink-400/10"
-          />
-          <StatCard
-            title="Average Value"
-            value={orders.length > 0 ? fmtCurrency(totalOrderValue / orders.length) : fmtCurrency(0)}
-            subtitle="Per order"
-            gradient="from-orange-400/15 to-yellow-400/10"
-          />
-        </div>
+        {/* Stats Display */}
+        {orders.length > 0 && (
+          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <StatCard
+              title="Total Order Value"
+              value={fmtCurrency(totalOrderValue)}
+              subtitle="All tracked orders"
+              gradient="from-cyan-500/20 to-blue-500/10"
+            />
+            <StatCard
+              title="Active Orders"
+              value={activeOrders.toString()}
+              subtitle="Currently tracking"
+              gradient="from-blue-500/20 to-indigo-500/10"
+            />
+            <StatCard
+              title="This Month"
+              value={orders.length.toString()}
+              subtitle="Orders added"
+              gradient="from-indigo-500/20 to-purple-500/10"
+            />
+          </div>
+        )}
 
         {/* Action Buttons */}
-        <div className="mb-6 flex flex-wrap gap-3">
-          {canAddOrder ? (
-            <button
-              onClick={() => setShowAddDialog(true)}
-              className="rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-3 font-semibold text-white shadow-lg hover:from-cyan-400 hover:to-blue-400 transition-all transform hover:scale-105"
-            >
-              + Add Order
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button 
-                disabled 
-                className="opacity-50 cursor-not-allowed bg-gray-600"
-                title="Free plan limit reached - upgrade to Pro for unlimited orders"
-              >
-                Add Order (Limit Reached)
-              </Button>
-              <UpgradeButton variant="secondary">
-                Upgrade to Pro
-              </UpgradeButton>
+        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold">Your Orders</h2>
+          <div className="flex gap-3">
+            {/* Filter Buttons */}
+            <div className="flex rounded-xl border border-white/10 bg-white/5 p-1">
+              {['all', 'active', 'completed', 'cancelled'].map((filterOption) => (
+                <button
+                  key={filterOption}
+                  onClick={() => setFilter(filterOption)}
+                  className={`px-3 py-1 text-sm rounded-lg transition-colors capitalize ${
+                    filter === filterOption
+                      ? 'bg-cyan-500/20 text-cyan-300'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  {filterOption}
+                </button>
+              ))}
             </div>
-          )}
-
-          {/* Filters */}
-          <div className="flex gap-2 flex-wrap">
-            {["all", "active", "paused", "completed"].map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                  filter === status
-                    ? "bg-cyan-500 text-white"
-                    : "bg-white/10 text-white/70 hover:bg-white/20"
-                }`}
+            
+            {canAddOrder ? (
+              <Button
+                onClick={() => setShowAddDialog(true)}
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400"
               >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
+                Add Order
+              </Button>
+            ) : (
+              <div className="text-center">
+                <p className="text-white/60 text-sm mb-2">
+                  Free plan limit reached ({orders.length}/{orderLimit})
+                </p>
+                <UpgradeButton 
+                  className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
+                />
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Orders Table */}
+        {/* Orders Display */}
         {filteredOrders.length === 0 ? (
           <div className="text-center py-12 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
             <div className="text-6xl mb-4">📦</div>
@@ -231,9 +232,9 @@ export default function OrdersPage() {
                 {filteredOrders.map((order) => (
                   <tr key={order.id} className="border-t border-white/10">
                     <td className="px-4 py-3">
-                      <div className="font-medium">{order.title}</div>
-                      {order.retailer && (
-                        <div className="text-xs text-white/50">{order.retailer}</div>
+                      <div className="font-medium">{order.name}</div>
+                      {order.vendor && (
+                        <div className="text-xs text-white/50">{order.vendor}</div>
                       )}
                     </td>
                     <td className="px-4 py-3 capitalize">{order.type}</td>
@@ -241,8 +242,7 @@ export default function OrdersPage() {
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         order.status === 'completed' ? 'bg-green-400/20 text-green-300' :
                         order.status === 'active' ? 'bg-blue-400/20 text-blue-300' :
-                        order.status === 'paused' ? 'bg-yellow-400/20 text-yellow-300' :
-                        'bg-red-400/20 text-red-300'
+                        order.status === 'cancelled' ? 'bg-red-400/20 text-red-300' : 'bg-gray-400/20 text-gray-300'
                       }`}>
                         {order.status}
                       </span>
@@ -287,16 +287,21 @@ export default function OrdersPage() {
         {/* Add Order Dialog */}
         {showAddDialog && (
           <AddOrderDialog 
-            onClose={() => setShowAddDialog(false)} 
+            open={showAddDialog}
+            onOpenChange={setShowAddDialog}
+            onAdd={handleAdd}
           />
         )}
 
         {/* Edit Order Dialog */}
         {editingOrder && (
           <EditOrderDialog
+            open={!!editingOrder}
+            onOpenChange={(open) => {
+              if (!open) setEditingOrder(null);
+            }}
             order={editingOrder}
-            onSave={handleUpdate}
-            onCancel={() => setEditingOrder(null)}
+            onUpdate={handleUpdate}
           />
         )}
       </main>

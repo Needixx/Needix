@@ -7,6 +7,8 @@ import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import DashboardLink from "@/components/DashboardLink";
 import { useEffect, useState } from "react";
 import Portal from "@/components/ui/Portal";
+import { Button } from "@/components/ui/Button";
+import { useRouter } from "next/navigation";
 
 export default function Navbar() {
   const [isMobile, setIsMobile] = useState(false);
@@ -40,14 +42,18 @@ export default function Navbar() {
 
 function CalendarLink() {
   const { data: session } = useSession();
+  const router = useRouter();
+
   if (!session?.user) return null;
+
+  function go() {
+    router.push("/calendar");
+  }
+
   return (
-    <Link 
-      href="/calendar" 
-      className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 transition-colors mobile-touch-target"
-    >
+    <Button variant="secondary" onClick={go}>
       📅 Calendar
-    </Link>
+    </Button>
   );
 }
 

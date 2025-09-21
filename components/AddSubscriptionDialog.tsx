@@ -1,62 +1,50 @@
 // components/AddSubscriptionDialog.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useSubscriptions } from "@/lib/useSubscriptions";
+import { useState, useMemo, useEffect } from "react";
 import type { BillingPeriod } from "@/lib/types";
 
-const SUBSCRIPTION_CATEGORIES = [
-  'Streaming',
-  'Music',
-  'Software',
-  'Cloud Storage',
-  'News & Media',
-  'Gaming',
+const CATEGORIES = [
+  'Entertainment',
   'Productivity',
-  'Design Tools',
-  'VPN & Security',
-  'Communication',
+  'News & Media',
+  'Business',
+  'Health & Fitness',
   'Education',
-  'Fitness',
-  'Finance',
+  'Gaming',
   'Other'
-];
+] as const;
 
-const BILLING_PERIODS: BillingPeriod[] = [
-  'monthly',
-  'yearly',
-  'weekly',
-  'custom'
-];
+export type SubscriptionFormData = {
+  name: string;
+  price: number;
+  currency: "USD";
+  period: BillingPeriod;
+  nextBillingDate?: string;
+  category?: string;
+  link?: string;
+  notes?: string;
+  isEssential?: boolean;
+};
 
-/* Calendar helper functions */
-const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
-const startWeekday = (y: number, m: number) => new Date(y, m, 1).getDay(); // 0=Sun..6=Sat
-
-// Format a Date as local YYYY-MM-DD without UTC conversion
-function toLocalYMD(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+interface AddProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAdd: (data: SubscriptionFormData) => void;
 }
 
-export default function AddSubscriptionDialog({
-  onClose,
-}: {
-  onClose: () => void;
-}) {
-  const { add } = useSubscriptions();
+export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: AddProps) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [currency, _setCurrency] = useState("USD");
+  const [_currency, _setCurrency] = useState("USD");
   const [category, setCategory] = useState('Other');
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [notes, setNotes] = useState("");
   const [link, setLink] = useState("");
+  const [isEssential, setIsEssential] = useState(false);
 
   // Calendar state
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
   const minYear = now.getFullYear();
   const minMonth = now.getMonth();
 
@@ -81,7 +69,6 @@ export default function AddSubscriptionDialog({
     d.setMonth(d.getMonth() - 1);
     setCalYear(d.getFullYear());
     setCalMonth(d.getMonth());
-    setSelectedDay(null);
   };
 
   const goNextMonth = () => {
@@ -89,46 +76,65 @@ export default function AddSubscriptionDialog({
     d.setMonth(d.getMonth() + 1);
     setCalYear(d.getFullYear());
     setCalMonth(d.getMonth());
-    setSelectedDay(null);
   };
 
-  const totalDays = daysInMonth(calYear, calMonth);
-  const start = startWeekday(calYear, calMonth);
-  const todayY = now.getFullYear();
-  const todayM = now.getMonth();
-  const todayD = now.getDate();
+  const totalDays = new Date(calYear, calMonth + 1, 0).getDate();
+  const start = new Date(calYear, calMonth, 1).getDay();
 
-  function isDisabled(day: number) {
-    if (calYear < todayY) return true;
-    if (calYear === todayY && calMonth < todayM) return true;
-    if (calYear === todayY && calMonth === todayM && day < todayD) return true;
-    return false;
-  }
+  const isDisabled = (day: number) => {
+    const date = new Date(calYear, calMonth, day);
+    return date < now;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!name.trim() || !price.trim()) return;
-
-    let nextBillingDate: string | undefined;
+    let nextBillingDate: string | undefined = undefined;
     if (selectedDay) {
-      nextBillingDate = toLocalYMD(new Date(calYear, calMonth, selectedDay));
+      nextBillingDate = new Date(calYear, calMonth, selectedDay).toISOString().split('T')[0];
     }
 
-    const subscriptionData = {
-      name: name.trim(),
+    onAdd({
+      name,
       price: parseFloat(price),
-      currency,
+      currency: "USD",
       period,
       nextBillingDate,
-      category: category || undefined,
-      notes: notes.trim() || undefined,
-      link: link.trim() || undefined,
-    };
+      category: category,
+      notes,
+      link,
+      isEssential,
+    });
 
-    add(subscriptionData);
-    onClose();
+    // Reset form
+    setName("");
+    setPrice("");
+    setCategory('Other');
+    setPeriod('monthly');
+    setNotes("");
+    setLink("");
+    setIsEssential(false);
+    setSelectedDay(null);
+    setCalYear(minYear);
+    setCalMonth(minMonth);
   };
+
+  const onClose = () => {
+    onOpenChange(false);
+    // Reset form when closing
+    setName("");
+    setPrice("");
+    setCategory('Other');
+    setPeriod('monthly');
+    setNotes("");
+    setLink("");
+    setIsEssential(false);
+    setSelectedDay(null);
+    setCalYear(minYear);
+    setCalMonth(minMonth);
+  };
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -177,11 +183,10 @@ export default function AddSubscriptionDialog({
               value={period}
               onChange={(e) => setPeriod(e.target.value as BillingPeriod)}
             >
-              {BILLING_PERIODS.map(p => (
-                <option key={p} value={p}>
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
-                </option>
-              ))}
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+              <option value="weekly">Weekly</option>
+              <option value="custom">Custom</option>
             </select>
           </label>
 
@@ -193,7 +198,7 @@ export default function AddSubscriptionDialog({
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
-              {SUBSCRIPTION_CATEGORIES.map(cat => (
+              {CATEGORIES.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -276,6 +281,19 @@ export default function AddSubscriptionDialog({
             </div>
           </div>
 
+          {/* Essential Toggle */}
+          <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-neutral-800/50">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isEssential}
+                onChange={(e) => setIsEssential(e.target.checked)}
+                className="w-4 h-4 rounded border-white/20 bg-neutral-700 text-purple-500 focus:ring-purple-500/50"
+              />
+              <span className="text-white/80">🔴 Essential subscription (cannot live without)</span>
+            </label>
+          </div>
+
           {/* Cancellation Link */}
           <label className="block">
             <div className="mb-2 text-sm font-medium text-white/80">🔗 Cancellation Link (optional)</div>
@@ -323,17 +341,6 @@ export default function AddSubscriptionDialog({
 }
 
 // EditSubscriptionDialog component (updated with new design)
-export type SubscriptionFormData = {
-  name: string;
-  price: number;
-  currency: "USD";
-  period: BillingPeriod;
-  nextBillingDate?: string;
-  category?: string;
-  link?: string;
-  notes?: string;
-};
-
 type InitialData = Partial<SubscriptionFormData> & { id?: string };
 
 interface EditProps {
@@ -351,6 +358,7 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
   const [period, setPeriod] = useState<BillingPeriod>(initial?.period || 'monthly');
   const [notes, setNotes] = useState(initial?.notes || "");
   const [link, setLink] = useState(initial?.link || "");
+  const [isEssential, setIsEssential] = useState(initial?.isEssential || false);
 
   // Calendar state
   const now = useMemo(() => new Date(), []);
@@ -390,7 +398,6 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
     d.setMonth(d.getMonth() - 1);
     setCalYear(d.getFullYear());
     setCalMonth(d.getMonth());
-    setSelectedDay(null);
   };
 
   const goNextMonth = () => {
@@ -398,45 +405,36 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
     d.setMonth(d.getMonth() + 1);
     setCalYear(d.getFullYear());
     setCalMonth(d.getMonth());
-    setSelectedDay(null);
   };
 
-  const totalDays = daysInMonth(calYear, calMonth);
-  const start = startWeekday(calYear, calMonth);
-  const todayY = now.getFullYear();
-  const todayM = now.getMonth();
-  const todayD = now.getDate();
+  const totalDays = new Date(calYear, calMonth + 1, 0).getDate();
+  const start = new Date(calYear, calMonth, 1).getDay();
 
-  function isDisabled(day: number) {
-    if (calYear < todayY) return true;
-    if (calYear === todayY && calMonth < todayM) return true;
-    if (calYear === todayY && calMonth === todayM && day < todayD) return true;
-    return false;
-  }
+  const isDisabled = (day: number) => {
+    const date = new Date(calYear, calMonth, day);
+    return date < now;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!name.trim() || !price.trim()) return;
-
-    let nextBillingDate: string | undefined;
+    let nextBillingDate: string | undefined = undefined;
     if (selectedDay) {
-      nextBillingDate = toLocalYMD(new Date(calYear, calMonth, selectedDay));
+      nextBillingDate = new Date(calYear, calMonth, selectedDay).toISOString().split('T')[0];
     }
 
     onUpdate({
       id: initial?.id,
-      name: name.trim(),
+      name,
       price: parseFloat(price),
       currency: "USD",
       period,
       nextBillingDate,
-      category: category || undefined,
-      notes: notes.trim() || undefined,
-      link: link.trim() || undefined,
+      category: category,
+      notes,
+      link,
+      isEssential,
     });
-
-    onOpenChange(false);
   };
 
   if (!open) return null;
@@ -488,11 +486,10 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
               value={period}
               onChange={(e) => setPeriod(e.target.value as BillingPeriod)}
             >
-              {BILLING_PERIODS.map(p => (
-                <option key={p} value={p}>
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
-                </option>
-              ))}
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+              <option value="weekly">Weekly</option>
+              <option value="custom">Custom</option>
             </select>
           </label>
 
@@ -504,7 +501,7 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
-              {SUBSCRIPTION_CATEGORIES.map(cat => (
+              {CATEGORIES.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -587,6 +584,19 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
             </div>
           </div>
 
+          {/* Essential Toggle */}
+          <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-neutral-800/50">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isEssential}
+                onChange={(e) => setIsEssential(e.target.checked)}
+                className="w-4 h-4 rounded border-white/20 bg-neutral-700 text-purple-500 focus:ring-purple-500/50"
+              />
+              <span className="text-white/80">🔴 Essential subscription (cannot live without)</span>
+            </label>
+          </div>
+
           {/* Cancellation Link */}
           <label className="block">
             <div className="mb-2 text-sm font-medium text-white/80">🔗 Cancellation Link (optional)</div>
@@ -624,7 +634,7 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
               type="submit"
               className="flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 py-3 font-semibold text-white hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105"
             >
-              Save Changes
+              Update Subscription
             </button>
           </div>
         </form>

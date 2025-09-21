@@ -35,7 +35,7 @@ function StatCard({
 }
 
 export default function SubscriptionsPage() {
-  const { items, remove, update, importMany, totals } = useSubscriptions();
+  const { items, remove, update, add, importMany, totals } = useSubscriptions();
   const { isPro } = useSubscriptionLimit();
   const toast = useToast();
 
@@ -60,6 +60,7 @@ export default function SubscriptionsPage() {
       category: data.category,
       notes: data.notes,
       link: data.link,
+      isEssential: data.isEssential,
     });
     setEditing(null);
     toast(`Updated ${data.name}`, "success");
@@ -73,13 +74,19 @@ export default function SubscriptionsPage() {
     }
   };
 
+  const handleAdd = (data: SubscriptionFormData) => {
+    add(data);
+    setShowAddDialog(false);
+    toast(`Added ${data.name}`, "success");
+  };
+
   return (
     <div className="relative min-h-screen">
       {/* Futuristic Purple/Pink Background - Toned Down */}
       <div className="fixed inset-0 bg-black -z-10" />
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900 -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-500/8 via-transparent to-transparent -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-pink-500/8 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-purple-500/8 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-pink-500/8 via-transparent to-transparent -z-10" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-violet-500/4 to-transparent -z-10" />
       
       <main className="relative mx-auto max-w-6xl px-4 py-10">
@@ -87,7 +94,7 @@ export default function SubscriptionsPage() {
         <div className="mb-8">
           <h1 className="mb-2 text-3xl font-bold text-white">Your Subscriptions</h1>
           <p className="text-white/70">
-            Track your recurring subscriptions and manage your spending
+            Track and manage all your recurring payments
           </p>
           {!isPro && (
             <p className="text-purple-300 text-sm mt-1">
@@ -116,7 +123,7 @@ export default function SubscriptionsPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <UpgradeButton 
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 font-semibold transform hover:scale-105 transition-all"
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-semibold transform hover:scale-105 transition-all"
                 />
                 <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
               </div>
@@ -124,33 +131,35 @@ export default function SubscriptionsPage() {
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Monthly Total"
-            value={fmtCurrency(totals.monthly)}
-            subtitle="Recurring subscriptions"
-            gradient="from-purple-400/15 to-pink-400/10"
-          />
-          <StatCard
-            title="Active Count"
-            value={items.length.toString()}
-            subtitle="Tracked subscriptions"
-            gradient="from-blue-400/15 to-cyan-400/10"
-          />
-          <StatCard
-            title="Average Cost"
-            value={items.length > 0 ? fmtCurrency(totals.monthly / items.length) : fmtCurrency(0)}
-            subtitle="Per subscription"
-            gradient="from-green-400/15 to-emerald-400/10"
-          />
-          <StatCard
-            title="Annual Total"
-            value={fmtCurrency(totals.monthly * 12)}
-            subtitle="Yearly spending"
-            gradient="from-orange-400/15 to-yellow-400/10"
-          />
-        </div>
+        {/* Stats Display */}
+        {items.length > 0 && (
+          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="Monthly Total"
+              value={fmtCurrency(totals.monthly)}
+              subtitle="Recurring payments"
+              gradient="from-purple-500/20 to-pink-500/10"
+            />
+            <StatCard
+              title="Active Count"
+              value={items.length.toString()}
+              subtitle="Tracked subscriptions"
+              gradient="from-pink-500/20 to-rose-500/10"
+            />
+            <StatCard
+              title="Average Cost"
+              value={items.length > 0 ? fmtCurrency(totals.monthly / items.length) : fmtCurrency(0)}
+              subtitle="Per subscription"
+              gradient="from-green-400/15 to-emerald-400/10"
+            />
+            <StatCard
+              title="Annual Total"
+              value={fmtCurrency(totals.monthly * 12)}
+              subtitle="Yearly spending"
+              gradient="from-orange-400/15 to-yellow-400/10"
+            />
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="mb-6 flex flex-wrap gap-3">
@@ -196,7 +205,9 @@ export default function SubscriptionsPage() {
         {/* Add Subscription Dialog */}
         {showAddDialog && (
           <AddSubscriptionDialog 
-            onClose={() => setShowAddDialog(false)} 
+            open={showAddDialog}
+            onOpenChange={setShowAddDialog}
+            onAdd={handleAdd}
           />
         )}
 
@@ -214,6 +225,7 @@ export default function SubscriptionsPage() {
               category: editing.category,
               notes: editing.notes,
               link: editing.link,
+              isEssential: editing.isEssential,
               currency: "USD",
             }}
             onUpdate={handleUpdate}

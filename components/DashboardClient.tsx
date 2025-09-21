@@ -14,7 +14,7 @@ import { useToast } from "@/components/ui/Toast";
 import type { Subscription } from "@/lib/types";
 
 export default function DashboardClient() {
-  const { items: subscriptions, remove: deleteSubscription, update, totals } = useSubscriptions();
+  const { items: subscriptions, remove: deleteSubscription, update, add, totals } = useSubscriptions();
   const { isPro } = useSubscriptionLimit();
   const toast = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -38,6 +38,7 @@ export default function DashboardClient() {
       category: data.category,
       notes: data.notes,
       link: data.link,
+      isEssential: data.isEssential,
     });
     setEditing(null);
     toast(`Updated ${data.name}`, "success");
@@ -49,6 +50,12 @@ export default function DashboardClient() {
       deleteSubscription(id);
       toast(`Deleted ${sub.name}`, "success");
     }
+  };
+
+  const handleAdd = (data: SubscriptionFormData) => {
+    add(data);
+    setShowAddDialog(false);
+    toast(`Added ${data.name}`, "success");
   };
 
   return (
@@ -165,7 +172,9 @@ export default function DashboardClient() {
       {/* Add Subscription Dialog */}
       {showAddDialog && (
         <AddSubscriptionDialog 
-          onClose={() => setShowAddDialog(false)} 
+          open={showAddDialog}
+          onOpenChange={setShowAddDialog}
+          onAdd={handleAdd}
         />
       )}
 
@@ -183,6 +192,7 @@ export default function DashboardClient() {
             category: editing.category,
             notes: editing.notes,
             link: editing.link,
+            isEssential: editing.isEssential,
             currency: "USD",
           }}
           onUpdate={handleUpdate}

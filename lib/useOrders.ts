@@ -1,12 +1,76 @@
+// lib/useOrders.ts
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { OrderItem, OrderCadence } from "@/lib/types-orders";
+import type { OrderItem, OrderCadence, OrderFormData } from "@/lib/types-orders";
 
 const KEY = "needix.orders.v1";
 
 function isOrderArray(x: unknown): x is OrderItem[] {
   return Array.isArray(x);
+}
+
+// Define legacy order type for migration
+interface LegacyOrderItem {
+  id: string;
+  type?: string;
+  title?: string;
+  name?: string;
+  category?: string;
+  retailer?: string;
+  vendor?: string;
+  productUrl?: string;
+  amount?: number;
+  priceCeiling?: number;
+  currentPrice?: number;
+  status?: string;
+  cadence?: OrderCadence;
+  nextDate?: string;
+  scheduledDate?: string;
+  usage?: { packSize?: number; unitsPerDay?: number };
+  leadTimeDays?: number;
+  envelopeId?: string;
+  notes?: string;
+  isEssential?: boolean;
+  currency?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Helper function to migrate old order format to new format
+function migrateOrderItem(item: LegacyOrderItem): OrderItem {
+  return {
+    id: item.id,
+    name: item.name || item.title || "Untitled Order",
+    vendor: item.vendor || item.retailer,
+    type: item.type === "future" ? "one-time" : (item.type as "recurring" | "one-time") || "one-time",
+    status: (item.status as "active" | "paused" | "completed" | "cancelled") || "active",
+    currency: item.currency || "USD",
+    isEssential: item.isEssential ?? false,
+    category: item.category,
+    productUrl: item.productUrl,
+    amount: item.amount,
+    priceCeiling: item.priceCeiling,
+    currentPrice: item.currentPrice,
+    cadence: item.cadence,
+    nextDate: item.nextDate,
+    scheduledDate: item.scheduledDate,
+    usage: item.usage,
+    leadTimeDays: item.leadTimeDays,
+    envelopeId: item.envelopeId,
+    notes: item.notes,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+function isLegacyOrderArray(x: unknown): x is LegacyOrderItem[] {
+  return Array.isArray(x) && x.every(item => 
+    typeof item === 'object' && 
+    item !== null && 
+    'id' in item && 
+    'createdAt' in item
+  );
 }
 
 export function useOrders() {
@@ -18,7 +82,17 @@ export function useOrders() {
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const parsed: unknown = JSON.parse(raw);
-        setItems(isOrderArray(parsed) ? parsed : []);
+        if (isLegacyOrderArray(parsed)) {
+          // Migrate old format to new format
+          const migrated = parsed.map(migrateOrderItem);
+          setItems(migrated);
+          // Save migrated data back to localStorage
+          localStorage.setItem(KEY, JSON.stringify(migrated));
+        } else if (isOrderArray(parsed)) {
+          setItems(parsed);
+        } else {
+          setItems([]);
+        }
       } else {
         setItems([]);
       }
@@ -47,17 +121,34 @@ export function useOrders() {
     }
   }
 
-  function add(item: Omit<OrderItem, "id" | "createdAt" | "updatedAt">) {
+  function add(formData: OrderFormData) {
     const rec: OrderItem = {
-      ...item,
       id: crypto.randomUUID(),
+      name: formData.name,
+      type: formData.type,
+      amount: formData.amount,
+      currency: formData.currency || "USD",
+      status: formData.status || "active",
+      scheduledDate: formData.scheduledDate,
+      nextDate: formData.nextDate,
+      priceCeiling: formData.priceCeiling,
+      currentPrice: formData.currentPrice,
+      vendor: formData.vendor,
+      category: formData.category,
+      notes: formData.notes,
+      isEssential: formData.isEssential ?? false,
+      cadence: formData.cadence,
+      productUrl: formData.productUrl,
+      usage: formData.usage,
+      leadTimeDays: formData.leadTimeDays,
+      envelopeId: formData.envelopeId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     persist([rec, ...items]);
   }
 
-  function update(id: string, patch: Partial<OrderItem>) {
+  function update(id: string, patch: Partial<OrderFormData & { id: string }>) {
     persist(
       items.map((i) =>
         i.id === id ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i,
@@ -97,6 +188,7 @@ export function useOrders() {
       active: items.filter((i) => i.status === "active").length,
       paused: items.filter((i) => i.status === "paused").length,
       completed: items.filter((i) => i.status === "completed").length,
+      cancelled: items.filter((i) => i.status === "cancelled").length,
     }),
     [items],
   );

@@ -1,59 +1,43 @@
 // components/EditOrderDialog.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import type { OrderItem, OrderType, OrderCadence } from "@/lib/types-orders";
+import { useState, useMemo, useEffect } from "react";
+import type { OrderFormData, OrderItem } from "@/lib/types-orders";
 
 const ORDER_CATEGORIES = [
   'Electronics',
-  'Household',
-  'Food & Groceries',
+  'Home & Garden',
+  'Fashion & Apparel',
   'Health & Beauty',
-  'Clothing & Accessories',
+  'Food & Beverages',
   'Books & Media',
   'Sports & Outdoors',
-  'Home & Garden',
-  'Office Supplies',
-  'Pet Supplies',
-  'Auto & Tools',
-  'Baby & Kids',
+  'Business & Office',
   'Other'
-];
+] as const;
 
-const ORDER_CADENCES: OrderCadence[] = [
-  'weekly',
-  'monthly',
-  'quarterly',
-  'yearly'
-];
-
-/* Calendar helper functions */
-const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
-const startWeekday = (y: number, m: number) => new Date(y, m, 1).getDay(); // 0=Sun..6=Sat
-
-// Format a Date as local YYYY-MM-DD without UTC conversion
-function toLocalYMD(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+interface EditOrderDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  order: OrderItem | null;
+  onUpdate: (data: OrderFormData & { id: string }) => void;
 }
 
-interface Props {
-  order: OrderItem;
-  onSave: (order: Partial<OrderItem>) => void;
-  onCancel: () => void;
-}
-
-export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
-  const [formData, setFormData] = useState({
-    title: order.title,
-    type: order.type,
-    amount: order.amount?.toString() || "",
-    retailer: order.retailer || "",
-    category: order.category || "Other",
-    cadence: order.cadence || "monthly" as OrderCadence,
-    notes: order.notes || "",
+export default function EditOrderDialog({ open, onOpenChange, order, onUpdate }: EditOrderDialogProps) {
+  const [formData, setFormData] = useState<OrderFormData>({
+    name: "",
+    type: "one-time",
+    amount: undefined,
+    currency: "USD",
+    status: "active",
+    scheduledDate: undefined,
+    nextDate: undefined,
+    priceCeiling: undefined,
+    currentPrice: undefined,
+    vendor: undefined,
+    category: undefined,
+    notes: undefined,
+    isEssential: false,
   });
 
   // Calendar state
@@ -65,18 +49,37 @@ export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
   const [calMonth, setCalMonth] = useState<number>(minMonth);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  // Initialize calendar with existing date
+  // Initialize form with order data
   useEffect(() => {
-    const existingDate = order.nextDate || order.scheduledDate;
-    if (existingDate) {
-      const d = new Date(`${existingDate}T00:00:00`);
-      if (d >= now) {
-        setCalYear(d.getFullYear());
-        setCalMonth(d.getMonth());
-        setSelectedDay(d.getDate());
+    if (order) {
+      setFormData({
+        name: order.name,
+        type: order.type,
+        amount: order.amount,
+        currency: order.currency,
+        status: order.status,
+        scheduledDate: order.scheduledDate,
+        nextDate: order.nextDate,
+        priceCeiling: order.priceCeiling,
+        currentPrice: order.currentPrice,
+        vendor: order.vendor,
+        category: order.category,
+        notes: order.notes,
+        isEssential: order.isEssential || false,
+      });
+
+      // Initialize calendar with existing date
+      const existingDate = order.type === "recurring" ? order.nextDate : order.scheduledDate;
+      if (existingDate) {
+        const d = new Date(`${existingDate}T00:00:00`);
+        if (d >= now) {
+          setCalYear(d.getFullYear());
+          setCalMonth(d.getMonth());
+          setSelectedDay(d.getDate());
+        }
       }
     }
-  }, [order.nextDate, order.scheduledDate, now]);
+  }, [order, now]);
 
   const monthLabel = useMemo(
     () =>
@@ -95,7 +98,6 @@ export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
     d.setMonth(d.getMonth() - 1);
     setCalYear(d.getFullYear());
     setCalMonth(d.getMonth());
-    setSelectedDay(null);
   };
 
   const goNextMonth = () => {
@@ -103,136 +105,168 @@ export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
     d.setMonth(d.getMonth() + 1);
     setCalYear(d.getFullYear());
     setCalMonth(d.getMonth());
-    setSelectedDay(null);
   };
 
-  const totalDays = daysInMonth(calYear, calMonth);
-  const start = startWeekday(calYear, calMonth);
-  const todayY = now.getFullYear();
-  const todayM = now.getMonth();
-  const todayD = now.getDate();
+  const totalDays = new Date(calYear, calMonth + 1, 0).getDate();
+  const start = new Date(calYear, calMonth, 1).getDay();
 
-  function isDisabled(day: number) {
-    if (calYear < todayY) return true;
-    if (calYear === todayY && calMonth < todayM) return true;
-    if (calYear === todayY && calMonth === todayM && day < todayD) return true;
-    return false;
-  }
+  const isDisabled = (day: number) => {
+    const date = new Date(calYear, calMonth, day);
+    return date < now;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title) return;
+    if (!order) return;
 
-    let dateField: string | undefined;
+    let dateField: string | undefined = undefined;
     if (selectedDay) {
-      dateField = toLocalYMD(new Date(calYear, calMonth, selectedDay));
+      dateField = new Date(calYear, calMonth, selectedDay).toISOString().split('T')[0];
     }
 
-    const updatedOrder: Partial<OrderItem> = {
-      title: formData.title,
-      type: formData.type,
-      amount: formData.amount ? parseFloat(formData.amount) : undefined,
-      retailer: formData.retailer || undefined,
-      category: formData.category || undefined,
-      cadence: formData.type === "recurring" ? formData.cadence : undefined,
-      nextDate: formData.type === "recurring" ? dateField : undefined,
-      scheduledDate: formData.type === "future" ? dateField : undefined,
-      notes: formData.notes || undefined,
-      updatedAt: new Date().toISOString(),
+    const submitData: OrderFormData & { id: string } = {
+      id: order.id,
+      ...formData,
+      amount: formData.amount ? Number(formData.amount) : undefined,
+      priceCeiling: formData.priceCeiling ? Number(formData.priceCeiling) : undefined,
+      currentPrice: formData.currentPrice ? Number(formData.currentPrice) : undefined,
     };
 
-    onSave(updatedOrder);
+    if (formData.type === "recurring") {
+      submitData.nextDate = dateField;
+      submitData.scheduledDate = undefined;
+    } else {
+      submitData.scheduledDate = dateField;
+      submitData.nextDate = undefined;
+    }
+
+    onUpdate(submitData);
   };
+
+  if (!open || !order) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="mb-6 text-2xl font-bold text-white">Edit Order</h2>
+        <h2 className="mb-6 text-2xl font-bold text-white">
+          Edit Order
+        </h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Item Name */}
+          {/* Name */}
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-white/80">📦 Item Name</div>
+            <div className="mb-2 text-sm font-medium text-white/80">📦 Product Name</div>
             <input
               type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-white/50"
-              placeholder="e.g., Paper towels, Dog food, Protein powder"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="e.g., Protein Powder, Office Chair, MacBook Pro"
               required
             />
           </label>
 
-          {/* Order Type */}
+          {/* Type */}
           <label className="block">
             <div className="mb-2 text-sm font-medium text-white/80">🔄 Order Type</div>
             <select
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as OrderType })}
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
+              value={formData.type}
+              onChange={(e) => setFormData({...formData, type: e.target.value as "one-time" | "recurring"})}
             >
-              <option value="recurring">🔁 Recurring Order</option>
-              <option value="future">📅 Future Order</option>
+              <option value="one-time">One-time purchase</option>
+              <option value="recurring">Recurring order</option>
             </select>
           </label>
 
-          {/* Amount and Retailer */}
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <div className="mb-2 text-sm font-medium text-white/80">💰 Amount</div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-neutral-800 pl-8 pr-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-white/50"
-                  placeholder="25.99"
-                />
-              </div>
-            </label>
+          {/* Status */}
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-white/80">📊 Status</div>
+            <select
+              className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
+              value={formData.status}
+              onChange={(e) => setFormData({...formData, status: e.target.value as "active" | "completed" | "cancelled"})}
+            >
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
 
-            <label className="block">
-              <div className="mb-2 text-sm font-medium text-white/80">🏪 Retailer</div>
+          {/* Amount */}
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-white/80">💰 Expected Price (optional)</div>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50">$</span>
               <input
-                type="text"
-                value={formData.retailer}
-                onChange={(e) => setFormData({ ...formData, retailer: e.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-white/50"
-                placeholder="Amazon, Walmart, etc."
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full rounded-xl border border-white/10 bg-neutral-800 pl-8 pr-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-white/50"
+                value={formData.amount || ""}
+                onChange={(e) => setFormData({...formData, amount: e.target.value ? Number(e.target.value) : undefined})}
+                placeholder="199.99"
               />
-            </label>
-          </div>
+            </div>
+          </label>
 
-          {/* Frequency (only for recurring orders) */}
-          {formData.type === "recurring" && (
-            <label className="block">
-              <div className="mb-2 text-sm font-medium text-white/80">⏰ Frequency</div>
-              <select
-                value={formData.cadence}
-                onChange={(e) => setFormData({ ...formData, cadence: e.target.value as OrderCadence })}
-                className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
-              >
-                {ORDER_CADENCES.map(freq => (
-                  <option key={freq} value={freq}>
-                    {freq.charAt(0).toUpperCase() + freq.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          {/* Current Price */}
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-white/80">💵 Current Market Price (optional)</div>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full rounded-xl border border-white/10 bg-neutral-800 pl-8 pr-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-white/50"
+                value={formData.currentPrice || ""}
+                onChange={(e) => setFormData({...formData, currentPrice: e.target.value ? Number(e.target.value) : undefined})}
+                placeholder="179.99"
+              />
+            </div>
+          </label>
+
+          {/* Price Ceiling */}
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-white/80">🚨 Price Alert Ceiling (optional)</div>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full rounded-xl border border-white/10 bg-neutral-800 pl-8 pr-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-white/50"
+                value={formData.priceCeiling || ""}
+                onChange={(e) => setFormData({...formData, priceCeiling: e.target.value ? Number(e.target.value) : undefined})}
+                placeholder="250.00"
+              />
+            </div>
+            <div className="mt-1 text-xs text-white/60">Get notified when price exceeds this amount</div>
+          </label>
+
+          {/* Vendor */}
+          <label className="block">
+            <div className="mb-2 text-sm font-medium text-white/80">🏪 Vendor (optional)</div>
+            <input
+              type="text"
+              className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-white/50"
+              value={formData.vendor || ""}
+              onChange={(e) => setFormData({...formData, vendor: e.target.value || undefined})}
+              placeholder="e.g., Amazon, Best Buy, Local Store"
+            />
+          </label>
 
           {/* Category */}
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-white/80">🏷️ Category</div>
+            <div className="mb-2 text-sm font-medium text-white/80">🏷️ Category (optional)</div>
             <select
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              value={formData.category || ""}
+              onChange={(e) => setFormData({...formData, category: e.target.value || undefined})}
             >
+              <option value="">Select a category</option>
               {ORDER_CATEGORIES.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -316,15 +350,28 @@ export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
             </div>
           </div>
 
+          {/* Essential Toggle */}
+          <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-neutral-800/50">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isEssential || false}
+                onChange={(e) => setFormData({...formData, isEssential: e.target.checked})}
+                className="w-4 h-4 rounded border-white/20 bg-neutral-700 text-cyan-500 focus:ring-cyan-500/50"
+              />
+              <span className="text-white/80">🔴 Essential order (high priority)</span>
+            </label>
+          </div>
+
           {/* Notes */}
           <label className="block">
             <div className="mb-2 text-sm font-medium text-white/80">📝 Notes (optional)</div>
             <textarea
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-white/50 resize-none"
               rows={3}
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Brand preferences, size, special instructions, etc."
+              value={formData.notes || ""}
+              onChange={(e) => setFormData({...formData, notes: e.target.value || undefined})}
+              placeholder="Specific model, size, color preferences, etc."
             />
           </label>
 
@@ -332,7 +379,7 @@ export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
           <div className="flex gap-3 pt-4">
             <button
               type="button"
-              onClick={onCancel}
+              onClick={() => onOpenChange(false)}
               className="flex-1 rounded-xl border border-white/10 py-3 text-white/80 hover:bg-white/5 transition-colors"
             >
               Cancel
@@ -341,7 +388,7 @@ export default function EditOrderDialog({ order, onSave, onCancel }: Props) {
               type="submit"
               className="flex-1 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 py-3 font-semibold text-white hover:from-cyan-700 hover:to-blue-700 transition-all transform hover:scale-105"
             >
-              Save Changes
+              Update Order
             </button>
           </div>
         </form>

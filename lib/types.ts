@@ -11,6 +11,7 @@ export interface Subscription {
   category?: string;
   notes?: string;
   link?: string;
+  isEssential?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,6 +33,7 @@ export interface Order {
   vendor?: string;
   category?: string;
   notes?: string;
+  isEssential?: boolean;
   createdAt: string;
   updatedAt: string;
 }
