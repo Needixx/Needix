@@ -1,7 +1,5 @@
 // lib/useRecurringEvents.ts
 import { useMemo } from 'react';
-import type { Subscription, Expense } from '@/lib/types';
-import type { OrderItem } from '@/lib/types-orders';
 
 export interface CalendarEvent {
   id: string;
@@ -14,19 +12,62 @@ export interface CalendarEvent {
   originalId: string;
 }
 
-// Extended types with isEssential property
-interface SubscriptionWithEssential extends Subscription {
+// Basic types to avoid import conflicts
+interface BasicSubscription {
+  id: string;
+  name: string;
+  price: number;
+  nextBillingDate?: string;
+  period?: string;
+  category?: string;
   isEssential?: boolean;
 }
 
-interface OrderWithEssential extends OrderItem {
+interface BasicOrder {
+  id: string;
+  name: string;
+  amount?: number;
+  type?: string;
+  scheduledDate?: string;
+  nextDate?: string;
+  category?: string;
+  status?: string;
   isEssential?: boolean;
+}
+
+interface BasicExpense {
+  id: string;
+  name: string;
+  amount: number;
+  nextPaymentDate?: string;
+  dueDate?: string;
+  frequency?: string;
+  isRecurring?: boolean;
+  category?: string;
+  isEssential?: boolean;
+}
+
+// Helper function to parse date strings as local dates (avoiding timezone shifts)
+function parseLocalDate(dateString: string): Date {
+  const parts = dateString.split('-');
+  if (parts.length !== 3) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
+  const year = parseInt(parts[0]!, 10);
+  const month = parseInt(parts[1]!, 10) - 1; // Month is 0-indexed
+  const day = parseInt(parts[2]!, 10);
+  
+  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
+  
+  return new Date(year, month, day);
 }
 
 export const useRecurringEvents = (
-  subscriptions: Subscription[],
-  orders: OrderItem[],
-  expenses: Expense[],
+  subscriptions: BasicSubscription[],
+  orders: BasicOrder[],
+  expenses: BasicExpense[],
   startDate: Date,
   endDate: Date
 ): CalendarEvent[] => {
@@ -51,8 +92,7 @@ export const useRecurringEvents = (
     subscriptions.forEach((subscription) => {
       if (!subscription.nextBillingDate) return;
       
-      const subscriptionWithEssential = subscription as SubscriptionWithEssential;
-      const nextBilling = new Date(subscription.nextBillingDate);
+      const nextBilling = parseLocalDate(subscription.nextBillingDate);
       let currentDate = new Date(nextBilling);
 
       while (currentDate <= endDate) {
@@ -64,7 +104,7 @@ export const useRecurringEvents = (
             date: new Date(currentDate),
             type: 'subscription',
             category: subscription.category,
-            isEssential: subscriptionWithEssential.isEssential ?? false, // Default to false
+            isEssential: subscription.isEssential ?? false,
             originalId: subscription.id
           });
         }
@@ -90,11 +130,14 @@ export const useRecurringEvents = (
 
     // Process orders
     orders.forEach((order) => {
-      const orderWithEssential = order as OrderWithEssential;
-      const orderDate = new Date(order.scheduledDate || order.nextDate || new Date());
+      const orderDate = order.scheduledDate 
+        ? parseLocalDate(order.scheduledDate)
+        : order.nextDate 
+        ? parseLocalDate(order.nextDate)
+        : new Date();
       
       if (order.type === 'recurring' && order.nextDate) {
-        let currentDate = new Date(order.nextDate);
+        let currentDate = parseLocalDate(order.nextDate);
         
         while (currentDate <= endDate) {
           if (currentDate >= startDate) {
@@ -105,7 +148,7 @@ export const useRecurringEvents = (
               date: new Date(currentDate),
               type: 'order',
               category: order.category,
-              isEssential: orderWithEssential.isEssential ?? false, // Default to false
+              isEssential: order.isEssential ?? false,
               originalId: order.id
             });
           }
@@ -122,7 +165,7 @@ export const useRecurringEvents = (
           date: orderDate,
           type: 'order',
           category: order.category,
-          isEssential: orderWithEssential.isEssential ?? false, // Default to false
+          isEssential: order.isEssential ?? false,
           originalId: order.id
         });
       }
@@ -130,10 +173,14 @@ export const useRecurringEvents = (
 
     // Process expenses
     expenses.forEach((expense) => {
-      const expenseDate = new Date(expense.dueDate || expense.nextPaymentDate || new Date());
+      const expenseDate = expense.dueDate 
+        ? parseLocalDate(expense.dueDate)
+        : expense.nextPaymentDate 
+        ? parseLocalDate(expense.nextPaymentDate)
+        : new Date();
       
       if (expense.isRecurring && expense.nextPaymentDate) {
-        let currentDate = new Date(expense.nextPaymentDate);
+        let currentDate = parseLocalDate(expense.nextPaymentDate);
         
         while (currentDate <= endDate) {
           if (currentDate >= startDate) {
@@ -144,7 +191,7 @@ export const useRecurringEvents = (
               date: new Date(currentDate),
               type: 'expense',
               category: expense.category,
-              isEssential: expense.isEssential,
+              isEssential: expense.isEssential ?? false,
               originalId: expense.id
             });
           }
@@ -182,7 +229,7 @@ export const useRecurringEvents = (
           date: expenseDate,
           type: 'expense',
           category: expense.category,
-          isEssential: expense.isEssential,
+          isEssential: expense.isEssential ?? false,
           originalId: expense.id
         });
       }

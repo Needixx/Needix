@@ -1,15 +1,28 @@
+// components/UpcomingRenewals.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import { useSubscriptions } from "@/lib/useSubscriptions";
-import type { Subscription } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { fmtCurrency } from "@/lib/format";
-import {
-  EditSubscriptionDialog,
-  type SubscriptionFormData,
-} from "@/components/AddSubscriptionDialog";
 import { useToast } from "@/components/ui/Toast";
+
+// Helper function to parse date strings as local dates (avoiding timezone shifts)
+function parseLocalDate(dateString: string): Date {
+  const parts = dateString.split('-');
+  if (parts.length !== 3) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
+  const year = parseInt(parts[0]!, 10);
+  const month = parseInt(parts[1]!, 10) - 1; // Month is 0-indexed
+  const day = parseInt(parts[2]!, 10);
+  
+  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
+  
+  return new Date(year, month, day);
+}
 
 function toLocalYMD(d: Date): string {
   const y = d.getFullYear();
@@ -30,8 +43,6 @@ export default function UpcomingRenewals() {
   const [sortKey, setSortKey] = useState<
     "date_asc" | "date_desc" | "name_asc" | "price_desc"
   >("date_asc");
-
-  const [editing, setEditing] = useState<Subscription | null>(null);
 
   const categories = useMemo(
     () =>
@@ -55,7 +66,7 @@ export default function UpcomingRenewals() {
       if (category !== "all" && s.category !== category) return false;
       if (query && !s.name.toLowerCase().includes(query.toLowerCase())) return false;
       if (!s.nextBillingDate) return true; // allow when not hiding
-      const d = new Date(`${s.nextBillingDate}T00:00:00`);
+      const d = parseLocalDate(s.nextBillingDate);
       return d >= now && d <= end;
     });
   }, [items, hideNoDate, category, query, windowDays]);
@@ -66,217 +77,204 @@ export default function UpcomingRenewals() {
       if (sortKey === "name_asc") return a.name.localeCompare(b.name);
       if (sortKey === "price_desc") return b.price - a.price;
       const ad = a.nextBillingDate
-        ? new Date(`${a.nextBillingDate}T00:00:00`).getTime()
+        ? parseLocalDate(a.nextBillingDate).getTime()
         : Number.POSITIVE_INFINITY;
       const bd = b.nextBillingDate
-        ? new Date(`${b.nextBillingDate}T00:00:00`).getTime()
+        ? parseLocalDate(b.nextBillingDate).getTime()
         : Number.POSITIVE_INFINITY;
       return sortKey === "date_desc" ? bd - ad : ad - bd;
     });
   }, [filtered, sortKey]);
 
-  function snooze(sub: Subscription, days: number) {
+  function snooze(sub: typeof items[0], days: number) {
     const base = sub.nextBillingDate
-      ? new Date(`${sub.nextBillingDate}T00:00:00`)
+      ? parseLocalDate(sub.nextBillingDate)
       : new Date();
     base.setDate(base.getDate() + days);
     update(sub.id, { nextBillingDate: toLocalYMD(base) });
     toast(`Snoozed ${sub.name} by ${days}d`, "success");
   }
 
-  function onUpdate(data: SubscriptionFormData & { id?: string }) {
-    if (!data.id) return;
-    update(data.id, {
-      name: data.name,
-      price: data.price,
-      period: data.period,
-      nextBillingDate: data.nextBillingDate,
-      category: data.category,
-      notes: data.notes,
-    });
-    setEditing(null);
-    toast(`Updated ${data.name}`, "success");
+  function onDelete(id: string) {
+    const sub = items.find((s) => s.id === id);
+    if (sub && confirm(`Delete ${sub.name}?`)) {
+      remove(id);
+      toast(`Deleted ${sub.name}`, "success");
+    }
   }
 
-  const nowRef = new Date();
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="mb-2 text-2xl font-bold text-white">Upcoming Renewals</h2>
+        <p className="text-white/70">
+          Manage your subscription renewal dates and track upcoming payments
+        </p>
+      </div>
+
       {/* Controls */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <input
-          className="rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none"
-          placeholder="Search by name"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <select
-          className="rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none"
-          value={String(windowDays)}
-          onChange={(e) => setWindowDays(Number(e.target.value))}
-        >
-          <option value="7">Next 7 days</option>
-          <option value="14">Next 14 days</option>
-          <option value="30">Next 30 days</option>
-          <option value="60">Next 60 days</option>
-        </select>
-        <select
-          className="rounded-xl border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-        >
-          <option value="all">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <div className="flex items-center justify-between rounded-xl border border-white/10 bg-neutral-800 px-3 py-2">
-          <label className="flex items-center gap-2 text-sm">
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-4">
+          {/* Window Selection */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-white/70">Window:</label>
+            <select
+              value={windowDays}
+              onChange={(e) => setWindowDays(Number(e.target.value))}
+              className="rounded-lg border border-white/10 bg-neutral-800 px-3 py-1 text-white focus:ring-2 focus:ring-green-500/50"
+            >
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+              <option value={60}>60 days</option>
+              <option value={90}>90 days</option>
+            </select>
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-white/70">Category:</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="rounded-lg border border-white/10 bg-neutral-800 px-3 py-1 text-white focus:ring-2 focus:ring-green-500/50"
+            >
+              <option value="all">All</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sort Options */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-white/70">Sort:</label>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as typeof sortKey)}
+              className="rounded-lg border border-white/10 bg-neutral-800 px-3 py-1 text-white focus:ring-2 focus:ring-green-500/50"
+            >
+              <option value="date_asc">Date (earliest first)</option>
+              <option value="date_desc">Date (latest first)</option>
+              <option value="name_asc">Name (A-Z)</option>
+              <option value="price_desc">Price (high to low)</option>
+            </select>
+          </div>
+
+          {/* Hide No Date Toggle */}
+          <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={hideNoDate}
               onChange={(e) => setHideNoDate(e.target.checked)}
+              className="rounded border-white/20 bg-neutral-700 text-green-500 focus:ring-green-500/50"
             />
-            Hide without date
+            <span className="text-sm text-white/70">Hide items without dates</span>
           </label>
-          <select
-            className="bg-transparent outline-none text-sm"
-            value={sortKey}
-            onChange={(e) =>
-              setSortKey(
-                e.target.value as
-                  | "date_asc"
-                  | "date_desc"
-                  | "name_asc"
-                  | "price_desc",
-              )
-            }
-          >
-            <option value="date_asc">Soonest first</option>
-            <option value="date_desc">Latest first</option>
-            <option value="name_asc">Name A→Z</option>
-            <option value="price_desc">Price high→low</option>
-          </select>
         </div>
-      </div>
 
-      {/* List */}
-      <div className="overflow-x-auto rounded-2xl border border-white/10">
-        <table className="min-w-full text-sm">
-          <thead className="bg-white/5 text-white/70">
-            <tr>
-              <th className="px-3 py-2 text-left font-normal">Name</th>
-              <th className="px-3 py-2 text-left font-normal">Next bill</th>
-              <th className="px-3 py-2 text-left font-normal">Price</th>
-              <th className="px-3 py-2 text-left font-normal">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((s) => {
-              const date = s.nextBillingDate
-                ? new Date(`${s.nextBillingDate}T00:00:00`)
-                : null;
-              const days =
-                date !== null
-                  ? Math.ceil((date.getTime() - nowRef.getTime()) / 86400000)
-                  : null;
-              const daysLabel =
-                days === null
-                  ? null
-                  : days >= 0
-                  ? `in ${days} day${days === 1 ? "" : "s"}`
-                  : `${Math.abs(days)} days ago`;
-
-              return (
-                <tr key={s.id} className="border-t border-white/10">
-                  <td className="px-3 py-2">
-                    <div className="font-medium">{s.name}</div>
-                    <div className="text-xs text-white/50">
-                      {s.category || "Uncategorized"}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    {date ? (
-                      <div>
-                        <div>{date.toLocaleDateString()}</div>
-                        {daysLabel && (
-                          <div className="text-xs text-white/50">
-                            {daysLabel}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-white/50">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {fmtCurrency(s.price, s.currency)}
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <Button variant="secondary" onClick={() => snooze(s, 1)}>
-                        Snooze 1d
-                      </Button>
-                      <Button variant="secondary" onClick={() => snooze(s, 3)}>
-                        3d
-                      </Button>
-                      <Button variant="secondary" onClick={() => snooze(s, 7)}>
-                        7d
-                      </Button>
-                      <Button variant="ghost" onClick={() => setEditing(s)}>
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          if (confirm(`Delete ${s.name}?`)) {
-                            remove(s.id);
-                            toast(`Deleted ${s.name}`, "success");
-                          }
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {sorted.length === 0 && (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="px-3 py-8 text-center text-white/60"
-                >
-                  No renewals match your filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {editing && (
-        <EditSubscriptionDialog
-          open
-          onOpenChange={(o) => {
-            if (!o) setEditing(null);
-          }}
-          initial={{
-            id: editing.id,
-            name: editing.name,
-            price: editing.price,
-            period: editing.period,
-            nextBillingDate: editing.nextBillingDate,
-            category: editing.category,
-            notes: editing.notes,
-            currency: "USD",
-          }}
-          onUpdate={onUpdate}
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="Search subscriptions..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-neutral-800 px-4 py-2 text-white placeholder-white/40 focus:ring-2 focus:ring-green-500/50"
         />
-      )}
+      </div>
+
+      {/* Results */}
+      <div className="space-y-3">
+        {sorted.length === 0 ? (
+          <div className="rounded-lg border border-white/10 bg-neutral-800/50 p-6 text-center">
+            <p className="text-white/70">No subscriptions found matching your criteria.</p>
+          </div>
+        ) : (
+          sorted.map((sub) => {
+            const dueDate = sub.nextBillingDate ? parseLocalDate(sub.nextBillingDate) : null;
+            const daysUntil = dueDate ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+            
+            return (
+              <div
+                key={sub.id}
+                className="rounded-lg border border-white/10 bg-neutral-800/50 p-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-semibold text-white">{sub.name}</h3>
+                      {sub.category && (
+                        <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/70">
+                          {sub.category}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 flex items-center gap-4 text-sm">
+                      <span className="text-green-400">{fmtCurrency(sub.price)}</span>
+                      <span className="text-white/60">·</span>
+                      <span className="text-white/60">{sub.period}</span>
+                      {dueDate && (
+                        <>
+                          <span className="text-white/60">·</span>
+                          <span className={`font-medium ${
+                            daysUntil !== null && daysUntil <= 3 ? 'text-red-400' :
+                            daysUntil !== null && daysUntil <= 7 ? 'text-yellow-400' :
+                            'text-white/70'
+                          }`}>
+                            {daysUntil !== null ? (
+                              daysUntil === 0 ? 'Due today' :
+                              daysUntil === 1 ? 'Due tomorrow' :
+                              daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue` :
+                              `Due in ${daysUntil} days`
+                            ) : 'No date set'}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {/* Snooze Buttons */}
+                    {dueDate && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => snooze(sub, 7)}
+                          className="text-xs"
+                        >
+                          +7d
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => snooze(sub, 30)}
+                          className="text-xs"
+                        >
+                          +30d
+                        </Button>
+                      </>
+                    )}
+                    
+                    {/* Delete Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(sub.id)}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

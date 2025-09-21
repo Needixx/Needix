@@ -13,6 +13,23 @@ function endOfMonth(d = new Date()) { return new Date(d.getFullYear(), d.getMont
 function daysFromNow(days: number) { return new Date(Date.now() + days * 24 * 60 * 60 * 1000); }
 function inRange(date: Date, start: Date, end: Date) { return date >= start && date <= end; }
 
+// Helper function to parse date strings as local dates (avoiding timezone shifts)
+function parseLocalDate(dateString: string): Date {
+  const parts = dateString.split('-');
+  if (parts.length !== 3) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
+  const year = parseInt(parts[0]!, 10);
+  const month = parseInt(parts[1]!, 10) - 1; // Month is 0-indexed
+  const day = parseInt(parts[2]!, 10);
+  
+  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
+  
+  return new Date(year, month, day);
+}
+
 function StatCard({
   title,
   value,
@@ -38,7 +55,36 @@ function StatCard({
   );
 }
 
-function QuickActionCard({
+function ActionButton({
+  title,
+  subtitle,
+  icon,
+  href,
+  gradient,
+}: {
+  title: string;
+  subtitle: string;
+  icon: string;
+  href: string;
+  gradient: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`block rounded-2xl border border-white/10 bg-gradient-to-r ${gradient} backdrop-blur-sm p-4 hover:scale-[1.02] transition-all duration-200`}
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-xl">{icon}</span>
+        <div>
+          <h3 className="font-semibold text-white">{title}</h3>
+          <p className="text-white/70 text-sm">{subtitle}</p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function SectionCard({
   title,
   description,
   icon,
@@ -70,134 +116,138 @@ export default function DashboardOverview() {
   const { items: orders } = useOrders();
   const { totals: expenseTotals } = useExpenses();
 
-  const { upcomingRenewals, ordersThisMonthTotal, potentialSavings, totalMonthlySpend, nextRenewal } = useMemo(() => {
+  const { upcomingRenewals, ordersThisMonthTotal, potentialSavings, totalMonthlySpend, nextRenewal, annualSpending } = useMemo(() => {
     const now = new Date();
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
     
-    // Calculate upcoming renewals (next 7 days)
+    // Calculate upcoming renewals (next 7 days) - using parseLocalDate
     const renewals = subs.filter((s) => {
       if (!s.nextBillingDate) return false;
-      const renewalDate = new Date(`${s.nextBillingDate}T00:00:00`);
+      const renewalDate = parseLocalDate(s.nextBillingDate);
       return inRange(renewalDate, now, daysFromNow(7));
     });
 
-    // Find next renewal
+    // Find next renewal - using parseLocalDate
     const nextRenewal = subs
       .filter(s => s.nextBillingDate)
-      .map(s => ({ ...s, date: new Date(`${s.nextBillingDate}T00:00:00`) }))
+      .map(s => ({ ...s, date: parseLocalDate(s.nextBillingDate!) }))
       .filter(s => s.date >= now)
       .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
     
-    // Calculate orders this month
+    // Calculate orders this month - using parseLocalDate
     const ordersTotal = orders.reduce((sum, o) => {
       if (!o.amount || o.status !== 'active') return sum;
       const orderDate = o.type === 'recurring' 
-        ? (o.nextDate ? new Date(`${o.nextDate}T00:00:00`) : null) 
-        : (o.scheduledDate ? new Date(`${o.scheduledDate}T00:00:00`) : null);
-      if (!orderDate || !inRange(orderDate, monthStart, monthEnd)) return sum;
-      return sum + o.amount;
+        ? (o.nextDate ? parseLocalDate(o.nextDate) : null) 
+        : (o.scheduledDate ? parseLocalDate(o.scheduledDate) : null);
+      
+      if (orderDate && inRange(orderDate, monthStart, monthEnd)) {
+        return sum + o.amount;
+      }
+      return sum;
     }, 0);
 
-    // Calculate potential savings (subscriptions that haven't been used recently)
-    const potentialSavings = subs.reduce((sum, s) => {
-      // Simple heuristic: if it's been more than 2 months since last activity, consider it for review
-      return sum + (s.price || 0) * 0.3; // Assume 30% potential savings
-    }, 0);
-
-    const totalMonthlySpend = (subTotals.monthly || 0) + (expenseTotals.monthly || 0);
+    // Calculate potential savings (subscriptions under $5)
+    const savings = subs.filter(s => s.price <= 5).length;
+    
+    // Calculate total monthly spend
+    const total = (subTotals?.monthly || 0) + (expenseTotals?.monthly || 0) + ordersTotal;
+    
+    // Calculate annual spending
+    const annual = total * 12;
 
     return {
       upcomingRenewals: renewals.length,
       ordersThisMonthTotal: ordersTotal,
-      potentialSavings,
-      totalMonthlySpend,
-      nextRenewal
+      potentialSavings: savings,
+      totalMonthlySpend: total,
+      nextRenewal: nextRenewal || null,
+      annualSpending: annual
     };
-  }, [subs, orders, subTotals, expenseTotals]);
+  }, [subs, orders, subTotals?.monthly, expenseTotals?.monthly]);
 
   return (
     <div className="relative min-h-screen">
-      {/* Futuristic Background */}
+      {/* Secure Dark Background with Subtle Accents */}
       <div className="fixed inset-0 bg-black -z-10" />
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900 -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-500/8 via-transparent to-transparent -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-pink-500/8 via-transparent to-transparent -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-cyan-500/8 via-transparent to-transparent -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-blue-500/4 to-transparent -z-10" />
-
-      <main className="relative mx-auto max-w-6xl px-4 py-10">
-        {/* Hero Section */}
-        <div className="relative mb-8 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-r from-purple-500/15 via-pink-500/10 to-cyan-500/15 backdrop-blur-sm p-8">
-          <div className="absolute -top-16 -left-16 h-48 w-48 rounded-full bg-purple-400/20 blur-3xl" />
-          <div className="absolute -bottom-16 -right-16 h-48 w-48 rounded-full bg-cyan-400/20 blur-3xl" />
-          <div className="relative">
-            <h1 className="mb-2 text-4xl font-extrabold bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-neutral-900 to-slate-900 -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-emerald-500/6 via-transparent to-transparent -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-500/6 via-transparent to-transparent -z-10" />
+      
+      <main className="relative mx-auto max-w-7xl px-4 py-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="rounded-3xl border border-white/10 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-cyan-500/10 backdrop-blur-sm p-8">
+            <h1 className="mb-3 text-4xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
               Financial Dashboard
             </h1>
-            <p className="text-xl text-white/80 mb-6">
+            <p className="text-gray-400 text-lg mb-6">
               Your complete financial overview — track subscriptions, orders, and expenses all in one place.
             </p>
             
-            {/* Quick Navigation Buttons */}
-            <div className="flex flex-wrap gap-4">
-              <Link
+            {/* Quick Action Buttons */}
+            <div className="flex flex-wrap gap-3">
+              <ActionButton
+                title="Subscriptions"
+                subtitle="Track a new recurring service"
+                icon="📺"
                 href="/dashboard/subscriptions"
-                className="rounded-2xl px-6 py-3 font-semibold text-sm text-white shadow-lg border border-purple-400/30 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 transform hover:scale-[1.02] transition-all duration-200"
-              >
-                📺 Subscriptions
-              </Link>
-              <Link
+                gradient="from-purple-500/20 to-pink-500/20"
+              />
+              <ActionButton
+                title="Orders"
+                subtitle="Monitor a scheduled purchase"
+                icon="📦"
                 href="/dashboard/orders"
-                className="rounded-2xl px-6 py-3 font-semibold text-sm text-white shadow-lg border border-cyan-400/30 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 transform hover:scale-[1.02] transition-all duration-200"
-              >
-                📦 Orders
-              </Link>
-              <Link
+                gradient="from-cyan-500/20 to-blue-500/20"
+              />
+              <ActionButton
+                title="Expenses"
+                subtitle="Record a monthly expense"
+                icon="💰"
                 href="/dashboard/expenses"
-                className="rounded-2xl px-6 py-3 font-semibold text-sm text-white shadow-lg border border-green-400/30 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 transform hover:scale-[1.02] transition-all duration-200"
-              >
-                💰 Expenses
-              </Link>
+                gradient="from-green-500/20 to-emerald-500/20"
+              />
             </div>
           </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
           <StatCard
             title="Total Monthly Spend"
             value={fmtCurrency(totalMonthlySpend)}
             subtitle="All recurring costs"
-            gradient="from-purple-400/15 to-pink-400/10"
+            gradient="from-purple-600/20 to-purple-800/20"
             icon="💸"
           />
           <StatCard
             title="Subscriptions"
-            value={fmtCurrency(subTotals.monthly)}
+            value={fmtCurrency(subTotals?.monthly || 0)}
             subtitle={`${subs.length} active`}
-            gradient="from-purple-400/15 to-indigo-400/10"
-            icon="📺"
+            gradient="from-blue-600/20 to-blue-800/20"
+            icon="💳"
           />
           <StatCard
             title="Monthly Expenses"
-            value={fmtCurrency(expenseTotals.monthly)}
-            subtitle={`${expenseTotals.essential > 0 ? fmtCurrency(expenseTotals.essential) + ' essential' : 'Track expenses'}`}
-            gradient="from-green-400/15 to-emerald-400/10"
+            value={fmtCurrency(expenseTotals?.monthly || 0)}
+            subtitle={`${expenseTotals?.essential ? fmtCurrency(expenseTotals.essential) + ' essential' : 'Tracked recurring expenses'}`}
+            gradient="from-emerald-600/20 to-emerald-800/20"
             icon="🏠"
           />
           <StatCard
             title="Orders This Month"
             value={fmtCurrency(ordersThisMonthTotal)}
             subtitle={`${orders.length} tracked`}
-            gradient="from-cyan-400/15 to-blue-400/10"
+            gradient="from-cyan-600/20 to-cyan-800/20"
             icon="📦"
           />
         </div>
 
-        {/* Insights & Quick Actions Grid */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Upcoming Items */}
+        {/* Three Column Layout */}
+        <div className="grid gap-6 lg:grid-cols-3 mb-8">
+          {/* Upcoming This Week */}
           <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-6">
             <h3 className="mb-4 text-lg font-semibold text-white flex items-center gap-2">
               <span>🕒</span>
@@ -220,7 +270,7 @@ export default function DashboardOverview() {
                   <div className="text-sm text-purple-300 font-medium">Next Renewal</div>
                   <div className="text-white">{nextRenewal.name}</div>
                   <div className="text-white/70 text-xs">
-                    {new Date(nextRenewal.date).toLocaleDateString()} - {fmtCurrency(nextRenewal.price)}
+                    {nextRenewal.date.toLocaleDateString()} - {fmtCurrency(nextRenewal.price)}
                   </div>
                 </div>
               )}
@@ -236,21 +286,14 @@ export default function DashboardOverview() {
             <div className="space-y-3">
               <div className="rounded-xl bg-white/5 p-3">
                 <div className="text-sm text-white/70">Annual Spending</div>
-                <div className="text-lg font-semibold text-white">{fmtCurrency(totalMonthlySpend * 12)}</div>
+                <div className="text-lg font-semibold text-white">{fmtCurrency(annualSpending)}</div>
               </div>
               
               {potentialSavings > 0 && (
                 <div className="rounded-xl bg-green-500/10 border border-green-400/20 p-3">
                   <div className="text-sm text-green-300">Potential Savings</div>
-                  <div className="text-white font-medium">{fmtCurrency(potentialSavings)}</div>
-                  <div className="text-xs text-white/60">Review unused subscriptions</div>
-                </div>
-              )}
-
-              {subs.length === 0 && orders.length === 0 && (
-                <div className="rounded-xl bg-blue-500/10 border border-blue-400/20 p-3 text-center">
-                  <div className="text-blue-300 text-sm">👋 Getting Started</div>
-                  <div className="text-white/80 text-xs mt-1">Add your first subscription or expense to begin tracking</div>
+                  <div className="text-white">{fmtCurrency(potentialSavings * 3)}</div>
+                  <div className="text-green-200 text-xs">Review unused subscriptions</div>
                 </div>
               )}
             </div>
@@ -262,77 +305,56 @@ export default function DashboardOverview() {
               <span>⚡</span>
               Quick Actions
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-2">
               <Link
                 href="/dashboard/subscriptions"
                 className="block rounded-xl bg-purple-500/10 border border-purple-400/20 p-3 hover:bg-purple-500/20 transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <span>📺</span>
-                  <div>
-                    <div className="text-white font-medium text-sm">Add Subscription</div>
-                    <div className="text-white/60 text-xs">Track a new recurring service</div>
-                  </div>
-                </div>
+                <div className="text-sm text-purple-300">Add Subscription</div>
+                <div className="text-white text-xs">Track a new recurring service</div>
               </Link>
-              
               <Link
                 href="/dashboard/expenses"
                 className="block rounded-xl bg-green-500/10 border border-green-400/20 p-3 hover:bg-green-500/20 transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <span>💰</span>
-                  <div>
-                    <div className="text-white font-medium text-sm">Log Expense</div>
-                    <div className="text-white/60 text-xs">Record a monthly expense</div>
-                  </div>
-                </div>
+                <div className="text-sm text-green-300">Log Expense</div>
+                <div className="text-white text-xs">Record a monthly expense</div>
               </Link>
-              
               <Link
                 href="/dashboard/orders"
                 className="block rounded-xl bg-cyan-500/10 border border-cyan-400/20 p-3 hover:bg-cyan-500/20 transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <span>📦</span>
-                  <div>
-                    <div className="text-white font-medium text-sm">Track Order</div>
-                    <div className="text-white/60 text-xs">Monitor a scheduled purchase</div>
-                  </div>
-                </div>
+                <div className="text-sm text-cyan-300">Track Order</div>
+                <div className="text-white text-xs">Monitor a scheduled purchase</div>
               </Link>
             </div>
           </div>
         </div>
 
-        {/* Summary Cards for Categories */}
-        {(subs.length > 0 || orders.length > 0 || expenseTotals.monthly > 0) && (
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            <QuickActionCard
-              title="Subscriptions Overview"
-              description={`${subs.length} active subscriptions spending ${fmtCurrency(subTotals.monthly)} monthly`}
-              icon="📺"
-              href="/dashboard/subscriptions"
-              gradient="from-purple-500/15 to-pink-500/10"
-            />
-            
-            <QuickActionCard
-              title="Orders Summary"
-              description={`${orders.length} tracked orders with ${fmtCurrency(ordersThisMonthTotal)} this month`}
-              icon="📦"
-              href="/dashboard/orders"
-              gradient="from-cyan-500/15 to-blue-500/10"
-            />
-            
-            <QuickActionCard
-              title="Expenses Breakdown"
-              description={`${fmtCurrency(expenseTotals.monthly)} monthly expenses ${expenseTotals.essential > 0 ? 'including essentials' : 'tracked'}`}
-              icon="💰"
-              href="/dashboard/expenses"
-              gradient="from-green-500/15 to-emerald-500/10"
-            />
-          </div>
-        )}
+        {/* Bottom Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <SectionCard
+            title="Subscriptions Overview"
+            description={`${subs.length} active subscriptions spending ${fmtCurrency(subTotals?.monthly || 0)} monthly`}
+            icon="📺"
+            href="/dashboard/subscriptions"
+            gradient="from-purple-600/15 to-indigo-600/15"
+          />
+          <SectionCard
+            title="Orders Summary"
+            description={`${orders.length} tracked orders with ${fmtCurrency(ordersThisMonthTotal)} this month`}
+            icon="📦"
+            href="/dashboard/orders"
+            gradient="from-cyan-600/15 to-blue-600/15"
+          />
+          <SectionCard
+            title="Expenses Breakdown"
+            description={`${fmtCurrency(expenseTotals?.monthly || 0)} monthly expenses including essentials`}
+            icon="💰"
+            href="/dashboard/expenses"
+            gradient="from-green-600/15 to-emerald-600/15"
+          />
+        </div>
       </main>
     </div>
   );

@@ -1,9 +1,9 @@
+// lib/useReminders.ts
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import type { Subscription } from "@/lib/types";
 
 type PermissionState = NotificationPermission | "unsupported";
 
@@ -12,6 +12,13 @@ export type RemindersSettings = {
   leadDays: number[]; // e.g., [7,3,1]
   timeOfDay: string; // "HH:MM" 24h local time
 };
+
+// Basic subscription type to avoid imports
+interface BasicSubscription {
+  id: string;
+  name: string;
+  nextBillingDate?: string;
+}
 
 const SETTINGS_KEY = "needix.reminders.v1";
 const SHOWN_KEY_PREFIX = "needix.reminders.shown";
@@ -74,8 +81,21 @@ function todayLocalMidnight(): Date {
   return t;
 }
 
-function parseLocalDateOnly(ymd: string): Date {
-  return new Date(`${ymd}T00:00:00`);
+// Helper function to parse date strings as local dates (avoiding timezone shifts)
+function parseLocalDate(dateString: string): Date {
+  const parts = dateString.split('-');
+  if (parts.length !== 3) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
+  const year = parseInt(parts[0]!, 10);
+  const month = parseInt(parts[1]!, 10) - 1; // Month is 0-indexed
+  const day = parseInt(parts[2]!, 10);
+  
+  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+    throw new Error(`Invalid date format: ${dateString}`);
+  }
+  
+  return new Date(year, month, day);
 }
 
 function parseTimeHM(time: string): { h: number; m: number } {
@@ -87,53 +107,24 @@ function parseTimeHM(time: string): { h: number; m: number } {
 function daysUntil(date: Date): number {
   const t0 = todayLocalMidnight().getTime();
   const t1 = new Date(date).getTime();
-  return Math.round((t1 - t0) / 86400000);
-}
-
-function alreadyShown(subId: string, dateStr: string, lead: number): boolean {
-  try {
-    const key = `${SHOWN_KEY_PREFIX}.${subId}.${dateStr}.${lead}`;
-    return localStorage.getItem(key) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function markShown(subId: string, dateStr: string, lead: number) {
-  try {
-    const key = `${SHOWN_KEY_PREFIX}.${subId}.${dateStr}.${lead}`;
-    localStorage.setItem(key, "1");
-  } catch {
-    /* noop */
-  }
-}
-
-function fireNotification(title: string, body: string) {
-  try {
-    if (!isSupported()) return;
-    if (Notification.permission !== "granted") return;
-    new Notification(title, { body });
-  } catch {
-    /* noop */
-  }
+  return Math.ceil((t1 - t0) / (24 * 60 * 60 * 1000));
 }
 
 function hashId(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
-    h = (h << 5) - h + s.charCodeAt(i);
-    h |= 0;
+    h = ((h << 5) - h + s.charCodeAt(i)) & 0xffffffff;
   }
-  return Math.abs(h) % 2147483647;
+  return Math.abs(h);
 }
 
 function loadScheduledIds(): Set<number> {
   try {
     const raw = localStorage.getItem(SCHEDULED_IDS_KEY);
     if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.every((n) => typeof n === "number")) {
-        return new Set<number>(parsed);
+      const arr: unknown = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.every((n) => typeof n === "number")) {
+        return new Set(arr);
       }
     }
   } catch {
@@ -150,40 +141,48 @@ function saveScheduledIds(ids: Set<number>) {
   }
 }
 
-export function useReminders(items: Subscription[]) {
-  const [settings, setSettingsState] =
-    useState<RemindersSettings>(DEFAULT_SETTINGS);
+function alreadyShown(
+  subId: string,
+  billingDate: string,
+  leadDays: number,
+): boolean {
+  try {
+    const key = `${SHOWN_KEY_PREFIX}.${subId}.${billingDate}.${leadDays}`;
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markShown(subId: string, billingDate: string, leadDays: number) {
+  try {
+    const key = `${SHOWN_KEY_PREFIX}.${subId}.${billingDate}.${leadDays}`;
+    localStorage.setItem(key, "1");
+  } catch {
+    /* noop */
+  }
+}
+
+function fireNotification(title: string, body: string) {
+  try {
+    new Notification(title, { body });
+  } catch {
+    /* noop */
+  }
+}
+
+export function useReminders(items: BasicSubscription[]) {
+  const [settings, setSettingsState] = useState<RemindersSettings>(DEFAULT_SETTINGS);
   const [permission, setPermission] = useState<PermissionState>("default");
+  const [lastTest, setLastTest] = useState<Date | null>(null);
 
   useEffect(() => {
-    try {
-      const saved = loadSettings();
-      setSettingsState(saved);
-    } catch {
-      /* noop */
+    setSettingsState(loadSettings());
+    if (isSupported()) {
+      setPermission(Notification.permission);
+    } else {
+      setPermission("unsupported");
     }
-
-    if (typeof window === "undefined") return;
-    void (async () => {
-      try {
-        if (isNative()) {
-          const p = await LocalNotifications.checkPermissions();
-          const mapped =
-            p.display === "granted"
-              ? "granted"
-              : p.display === "denied"
-              ? "denied"
-              : "default";
-          setPermission(mapped as PermissionState);
-        } else if (isSupported()) {
-          setPermission(Notification.permission);
-        } else {
-          setPermission("unsupported");
-        }
-      } catch {
-        /* noop */
-      }
-    })();
   }, []);
 
   const setSettings = useCallback((s: RemindersSettings) => {
@@ -191,112 +190,37 @@ export function useReminders(items: Subscription[]) {
     saveSettings(s);
   }, []);
 
-  const requestPermission = useCallback(async () => {
-    if (isNative()) {
-      try {
-        const res = await LocalNotifications.requestPermissions();
-        const mapped =
-          res.display === "granted"
-            ? "granted"
-            : res.display === "denied"
-            ? "denied"
-            : "default";
-        setPermission(mapped as PermissionState);
-        return mapped as PermissionState;
-      } catch {
-        return permission;
-      }
-    }
-    if (!isSupported()) return "unsupported" as PermissionState;
+  const requestPermission = useCallback(async (): Promise<boolean> => {
+    if (!isSupported()) return false;
     try {
-      const p = await Notification.requestPermission();
-      setPermission(p);
-      return p;
+      const result = await Notification.requestPermission();
+      setPermission(result);
+      return result === "granted";
     } catch {
-      return Notification.permission;
+      return false;
     }
-  }, [permission]);
+  }, []);
 
-  const [lastTest, setLastTest] = useState<{ ok: boolean; at: number } | null>(
-    null,
+  const sendTest = useCallback(() => {
+    if (!isSupported() || Notification.permission !== "granted") return;
+    fireNotification("Test notification", "Your reminders are working!");
+    setLastTest(new Date());
+  }, []);
+
+  const notifyNow = useCallback(
+    (sub: BasicSubscription, leadDays: number) => {
+      if (!settings.enabled || !isSupported() || Notification.permission !== "granted") return;
+      if (!sub.nextBillingDate) return;
+      
+      const d = parseLocalDate(sub.nextBillingDate);
+      const body =
+        leadDays > 0
+          ? `${sub.name} renews in ${leadDays} day${leadDays === 1 ? "" : "s"} (${d.toLocaleDateString()})`
+          : `${sub.name} renews today (${d.toLocaleDateString()})`;
+      fireNotification("Upcoming subscription renewal", body);
+    },
+    [settings.enabled],
   );
-
-  const sendTest = useCallback(async () => {
-    if (isNative()) {
-      try {
-        const res = await LocalNotifications.checkPermissions();
-        if (res.display !== "granted") {
-          await LocalNotifications.requestPermissions();
-        }
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              id: Math.floor(Math.random() * 1_000_000),
-              title: "Needix test notification",
-              body: "If you see this, native notifications work!",
-              schedule: { at: new Date(Date.now() + 1000) },
-            },
-          ],
-        });
-        setLastTest({ ok: true, at: Date.now() });
-        return true;
-      } catch {
-        /* fall through to web */
-      }
-    }
-
-    if (!isSupported()) return false;
-    try {
-      if (Notification.permission !== "granted") {
-        const p = await Notification.requestPermission();
-        if (p !== "granted") return false;
-        setPermission(p);
-      }
-      new Notification("Needix test notification", {
-        body: "If you see this, web notifications work!",
-      });
-      setLastTest({ ok: true, at: Date.now() });
-      return true;
-    } catch {
-      setLastTest({ ok: false, at: Date.now() });
-      return false;
-    }
-  }, []);
-
-  const notifyNow = useCallback(async (title: string, body: string) => {
-    if (isNative()) {
-      try {
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              id: Math.floor(Math.random() * 1_000_000),
-              title,
-              body,
-              schedule: { at: new Date(Date.now() + 500) },
-            },
-          ],
-        });
-        setLastTest({ ok: true, at: Date.now() });
-        return true;
-      } catch {
-        /* noop */
-      }
-    }
-    if (!isSupported()) return false;
-    try {
-      if (Notification.permission !== "granted") {
-        const p = await Notification.requestPermission();
-        if (p !== "granted") return false;
-        setPermission(p);
-      }
-      new Notification(title, { body });
-      setLastTest({ ok: true, at: Date.now() });
-      return true;
-    } catch {
-      setLastTest({ ok: false, at: Date.now() });
-      return false;
-    }
-  }, []);
 
   const upcoming = useMemo(() => {
     if (!settings.enabled)
@@ -308,7 +232,7 @@ export function useReminders(items: Subscription[]) {
     const { h, m } = parseTimeHM(settings.timeOfDay);
     for (const s of items) {
       if (!s.nextBillingDate) continue;
-      const base = parseLocalDateOnly(s.nextBillingDate);
+      const base = parseLocalDate(s.nextBillingDate);
       const leads = Array.from(new Set([0, ...settings.leadDays])).sort(
         (a, b) => a - b,
       );
@@ -349,7 +273,7 @@ export function useReminders(items: Subscription[]) {
     const { h, m } = parseTimeHM(settings.timeOfDay);
     for (const s of items) {
       if (!s.nextBillingDate) continue;
-      const base = parseLocalDateOnly(s.nextBillingDate);
+      const base = parseLocalDate(s.nextBillingDate);
       const leads = Array.from(new Set([0, ...settings.leadDays])).sort(
         (a, b) => a - b,
       );
@@ -412,7 +336,7 @@ export function useReminders(items: Subscription[]) {
     const now = new Date();
     for (const s of items) {
       if (!s.nextBillingDate) continue;
-      const d = parseLocalDateOnly(s.nextBillingDate);
+      const d = parseLocalDate(s.nextBillingDate);
       const diff = daysUntil(d);
       if (settings.leadDays.includes(diff) || diff === 0) {
         const scheduled = new Date(d);
