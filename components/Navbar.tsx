@@ -65,7 +65,7 @@ function UserStatus() {
     return (
       <Link 
         href="/signin" 
-        className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
+        className="flex items-center justify-center rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
       >
         Sign in
       </Link>
@@ -103,7 +103,7 @@ function MenuSheet() {
     <>
       <button 
         onClick={() => setOpen(true)} 
-        className="rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
+        className="flex items-center justify-center rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
       >
         Menu
       </button>

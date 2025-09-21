@@ -1,3 +1,4 @@
+// app/signin/page.tsx
 "use client";
 
 import { Button } from "@/components/ui/Button";
@@ -30,6 +31,33 @@ function SignInForm() {
           break;
         case "AccessDenied":
           setError("Access denied. Please try again.");
+          break;
+        case "OAuthSignin":
+          setError("Unable to connect to Google. Please try again.");
+          break;
+        case "OAuthCallback":
+          setError("Google authentication encountered an issue. Please try again.");
+          break;
+        case "OAuthCreateAccount":
+          setError("Unable to create account with Google. Please try manual sign-up.");
+          break;
+        case "EmailCreateAccount":
+          setError("Unable to create account. Please try again.");
+          break;
+        case "Callback":
+          setError("Authentication callback failed. Please try again.");
+          break;
+        case "OAuthAccountNotLinked":
+          setError("This email is already associated with another account. Please sign in with your email and password.");
+          break;
+        case "EmailSignin":
+          setError("Unable to send verification email. Please try again.");
+          break;
+        case "CredentialsSignup":
+          setError("Unable to create account. Please try again.");
+          break;
+        case "SessionRequired":
+          setError("Please sign in to continue.");
           break;
         default:
           setError("An error occurred during sign in. Please try again.");
@@ -102,11 +130,14 @@ function SignInForm() {
     setLoading(true);
     setError("");
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      // Use redirect: true to actually navigate to Google's OAuth page
+      await signIn("google", { 
+        callbackUrl: "/dashboard",
+        redirect: true
+      });
     } catch (err) {
       console.error("Google sign in error:", err);
       setError("Failed to sign in with Google. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -205,16 +236,20 @@ function SignInForm() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 pr-12 bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent pr-12"
                 placeholder="Enter your password"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white/80"
               >
-                {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                {showPassword ? (
+                  <EyeSlashIcon className="h-5 w-5" />
+                ) : (
+                  <EyeIcon className="h-5 w-5" />
+                )}
               </button>
             </div>
           </div>
@@ -233,26 +268,28 @@ function SignInForm() {
               mode === "signin" ? "Sign in" : "Create account"
             )}
           </Button>
-        </form>
 
-        <div className="text-center space-y-2">
-          <button
-            onClick={() => router.push("/forgot-password")}
-            className="text-purple-400 hover:text-purple-300 text-sm transition-colors"
-          >
-            Forgot your password?
-          </button>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => router.push("/forgot-password")}
+              className="text-purple-400 hover:text-purple-300 text-sm transition-colors"
+            >
+              Forgot your password?
+            </button>
+          </div>
           
-          <div className="text-sm text-white/60">
+          <div className="text-sm text-white/60 text-center">
             {mode === "signin" ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
+              type="button"
               onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
               className="text-purple-400 hover:text-purple-300 transition-colors"
             >
               {mode === "signin" ? "Sign up" : "Sign in"}
             </button>
           </div>
-        </div>
+        </form>
 
         {process.env.ENABLE_DEV_AUTH === "1" && (
           <Button 

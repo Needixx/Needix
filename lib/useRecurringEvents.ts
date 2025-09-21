@@ -74,11 +74,45 @@ export const useRecurringEvents = (
   return useMemo(() => {
     const events: CalendarEvent[] = [];
 
-    // Helper function to add months to a date
-    const addMonths = (date: Date, months: number): Date => {
-      const newDate = new Date(date);
-      newDate.setMonth(newDate.getMonth() + months);
-      return newDate;
+    // Smart helper function to add months to a date with proper end-of-month handling
+    const addMonthsSmart = (date: Date, months: number): Date => {
+      const originalDay = date.getDate();
+      const originalMonth = date.getMonth();
+      const originalYear = date.getFullYear();
+      
+      // Calculate target month and year
+      let targetMonth = originalMonth + months;
+      let targetYear = originalYear;
+      
+      // Handle year overflow/underflow
+      while (targetMonth >= 12) {
+        targetMonth -= 12;
+        targetYear += 1;
+      }
+      while (targetMonth < 0) {
+        targetMonth += 12;
+        targetYear -= 1;
+      }
+      
+      // Get the last day of the target month
+      const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+      
+      // If the original day was the last day of its month, or if the target month 
+      // doesn't have enough days, use the last day of the target month
+      const lastDayOfOriginalMonth = new Date(originalYear, originalMonth + 1, 0).getDate();
+      const isLastDayOfMonth = originalDay === lastDayOfOriginalMonth;
+      
+      let targetDay: number;
+      
+      if (isLastDayOfMonth || originalDay > lastDayOfTargetMonth) {
+        // Use the last day of the target month
+        targetDay = lastDayOfTargetMonth;
+      } else {
+        // Use the original day
+        targetDay = originalDay;
+      }
+      
+      return new Date(targetYear, targetMonth, targetDay);
     };
 
     // Helper function to add days to a date
@@ -115,14 +149,14 @@ export const useRecurringEvents = (
             currentDate = addDays(currentDate, 7);
             break;
           case 'monthly':
-            currentDate = addMonths(currentDate, 1);
+            currentDate = addMonthsSmart(currentDate, 1);
             break;
           case 'yearly':
-            currentDate = addMonths(currentDate, 12);
+            currentDate = addMonthsSmart(currentDate, 12);
             break;
           default:
             // For custom or unknown periods, add 1 month as fallback
-            currentDate = addMonths(currentDate, 1);
+            currentDate = addMonthsSmart(currentDate, 1);
             break;
         }
       }
@@ -153,8 +187,8 @@ export const useRecurringEvents = (
             });
           }
 
-          // For recurring orders, assume monthly recurrence if no specific interval is defined
-          currentDate = addMonths(currentDate, 1);
+          // For recurring orders, assume monthly recurrence with smart month handling
+          currentDate = addMonthsSmart(currentDate, 1);
         }
       } else if (orderDate >= startDate && orderDate <= endDate) {
         // One-time order
@@ -205,13 +239,13 @@ export const useRecurringEvents = (
               currentDate = addDays(currentDate, 14);
               break;
             case 'monthly':
-              currentDate = addMonths(currentDate, 1);
+              currentDate = addMonthsSmart(currentDate, 1);
               break;
             case 'quarterly':
-              currentDate = addMonths(currentDate, 3);
+              currentDate = addMonthsSmart(currentDate, 3);
               break;
             case 'yearly':
-              currentDate = addMonths(currentDate, 12);
+              currentDate = addMonthsSmart(currentDate, 12);
               break;
             default: // 'one-time'
               break;
