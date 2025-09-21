@@ -1,11 +1,30 @@
-// prisma/schema.prisma
+// prisma/schema.prisma  (FULL FILE — paste & save)
 generator client {
   provider = "prisma-client-js"
 }
 
+model WebhookEvent {
+  id         String   @id            // Stripe event.id
+  type       String
+  receivedAt DateTime @default(now())
+}
+
 datasource db {
-  provider = "postgresql"  // Correct syntax
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+/// Stripe subscription lifecycle states we care about.
+/// Mirrors Stripe's status strings for easy mapping.
+enum PlanStatus {
+  trialing
+  active
+  past_due
+  unpaid
+  canceled
+  incomplete
+  incomplete_expired
+  paused
 }
 
 model User {
@@ -14,30 +33,39 @@ model User {
   email                    String?   @unique
   emailVerified            DateTime?
   image                    String?
-  password                 String?   // For credentials login
-  passwordResetToken       String?   @unique // For password reset functionality
-  passwordResetTokenExpiry DateTime? // Token expiration time
-  accounts                 Account[]
-  sessions                 Session[]
+  password                 String?
+  passwordResetToken       String?   @unique
+  passwordResetTokenExpiry DateTime?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
+
+  // NextAuth relations
+  accounts Account[]
+  sessions Session[]
+
+  // 🔐 Stripe + Pro fields
+  isPro                Boolean     @default(false)
+  stripeCustomerId     String?     @unique
+  stripeSubscriptionId String?     @unique
+  planStatus           PlanStatus?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean?    @default(false)
 }
 
 model Account {
-  id                String  @id @default(cuid())
+  id                String @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
 
-  // For PostgreSQL, use Text for potentially long tokens
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
+  refresh_token String? @db.Text
+  access_token  String? @db.Text
+  expires_at    Int?
+  token_type    String?
+  scope         String?
+  id_token      String? @db.Text
+  session_state String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -65,18 +93,19 @@ model SubscriptionEvent {
   id        String   @id @default(cuid())
   userId    String
   userEmail String
-  event     String   // 'subscribed', 'cancelled', 'renewed', 'failed_payment'
+  event     String // 'subscribed', 'cancelled', 'renewed', 'failed_payment'
   timestamp DateTime @default(now())
-  metadata  Json?    // Store additional data like plan type, amount, etc.
+  metadata  Json?
 }
 
 model UserActivity {
-  id             String   @id @default(cuid())
-  userId         String
+  id                 String   @id @default(cuid())
+  userId             String
   subscriptionsCount Int
-  lastActiveDate DateTime
-  totalSpent     Float    @default(0)
-  planType       String   // 'free' or 'pro'
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  lastActiveDate     DateTime
+  totalSpent         Float    @default(0)
+  planType           String // 'free' or 'pro'
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
+

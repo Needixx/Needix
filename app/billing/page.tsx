@@ -5,12 +5,19 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import BillingStatus from "@/components/BillingStatus";
 
 type ActionState = "idle" | "loading";
 type ApiResponse = { url?: string; error?: string };
 
+// Safe helpers for custom session fields
+function readIsPro(user: unknown): boolean {
+  if (typeof user !== "object" || user === null) return false;
+  const v = (user as { isPro?: unknown }).isPro;
+  return typeof v === "boolean" ? v : false;
+}
+
 export default function BillingPage() {
-  // Wrap the client content that calls useSearchParams in Suspense
   return (
     <Suspense fallback={<BillingSkeleton />}>
       <BillingContent />
@@ -21,11 +28,12 @@ export default function BillingPage() {
 function BillingContent() {
   const [state, setState] = useState<ActionState>("idle");
   const router = useRouter();
-  const q = useSearchParams(); // now safely inside <Suspense>
+  const q = useSearchParams(); // must be inside <Suspense />
   const { data: session } = useSession();
-  const email = session?.user?.email ?? "";
 
-  const status = q.get("status");
+  const email = session?.user?.email ?? "";
+  const isPro = readIsPro(session?.user);
+  const status = q.get("status"); // "success" | "cancelled" | null
 
   async function goToPortal(): Promise<void> {
     try {
@@ -48,7 +56,11 @@ function BillingContent() {
   async function startCheckout(): Promise<void> {
     try {
       setState("loading");
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }), // send email for webhook matching
+      });
       const data = (await res.json()) as ApiResponse;
       if (!res.ok || !data.url) throw new Error(data.error ?? "Checkout error");
       window.location.href = data.url;
@@ -77,6 +89,10 @@ function BillingContent() {
           </Link>
         </header>
 
+        {/* Plan/next bill badge */}
+        <BillingStatus />
+
+        {/* Query param feedback */}
         {status === "success" && (
           <div className="mb-8 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300">
             🎉 Your upgrade was successful. Manage your plan any time below.
@@ -130,22 +146,27 @@ function BillingContent() {
               <li>• Smart reminders & price alerts</li>
               <li>• Priority support</li>
             </ul>
+
             <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
-                onClick={() => {
-                  void startCheckout(); // satisfy no-misused-promises
-                }}
-                disabled={state === "loading"}
+                onClick={() => void startCheckout()} // satisfy no-misused-promises
+                disabled={state === "loading" || !email}
+                title={!email ? "Sign in to purchase Pro" : undefined}
                 className="rounded-2xl bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-4 py-3 font-semibold text-black hover:from-fuchsia-400 hover:to-cyan-300 disabled:opacity-60"
               >
                 {state === "loading" ? "Loading…" : "Upgrade to Pro"}
               </button>
+
               <button
-                onClick={() => {
-                  void goToPortal(); // satisfy no-misused-promises
-                }}
-                disabled={state === "loading" || !email}
-                title={!email ? "Sign in to manage billing" : undefined}
+                onClick={() => void goToPortal()} // satisfy no-misused-promises
+                disabled={state === "loading" || !email || !isPro}
+                title={
+                  !email
+                    ? "Sign in to manage billing"
+                    : !isPro
+                    ? "Upgrade to access billing portal"
+                    : undefined
+                }
                 className="rounded-2xl border border-cyan-400/40 bg-transparent px-4 py-3 font-medium text-cyan-300 hover:bg-cyan-400/10 disabled:opacity-60"
               >
                 Manage billing
@@ -169,23 +190,25 @@ function BillingContent() {
               </div>
             </div>
 
-            <p className="mt-4 text-xs text-zinc-500">You can cancel anytime from the customer portal.</p>
+            <p className="mt-4 text-xs text-zinc-500">
+              You can cancel anytime from the customer portal.
+            </p>
           </div>
         </div>
 
         {/* Extra trust row */}
         <div className="mt-14 grid grid-cols-1 gap-4 text-zinc-400 md:grid-cols-3">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
-            🔒 <span className="font-medium text-zinc-200">Secure by design.</span> We never store card numbers; all
-            payments are processed by Stripe.
+            🔒 <span className="font-medium text-zinc-200">Secure by design.</span> We never store
+            card numbers; all payments are processed by Stripe.
           </div>
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
-            💳 <span className="font-medium text-zinc-200">Cancel anytime.</span> Manage your plan from the portal in
-            one click.
+            💳 <span className="font-medium text-zinc-200">Cancel anytime.</span> Manage your plan from
+            the portal in one click.
           </div>
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
-            🛠️ <span className="font-medium text-zinc-200">Priority support.</span> Pro users jump to the front of the
-            line.
+            🛠️ <span className="font-medium text-zinc-200">Priority support.</span> Pro users jump to
+            the front of the line.
           </div>
         </div>
       </section>
