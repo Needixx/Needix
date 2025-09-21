@@ -1,4 +1,3 @@
-// app/forgot-password/page.tsx
 "use client";
 
 import { Button } from "@/components/ui/Button";
@@ -30,15 +29,21 @@ export default function ForgotPassword() {
         body: JSON.stringify({ email }),
       });
 
-      const data = await response.json();
+      type ResetResp = { message?: string; error?: string };
+      const raw: unknown = await response.json();
+      const data: ResetResp =
+        raw && typeof raw === "object" ? (raw as ResetResp) : {};
 
       if (response.ok) {
-        setMessage(data.message);
+        setMessage(
+          data.message ??
+            "If an account with that email exists, you will receive a password reset email."
+        );
       } else {
-        setError(data.error || "An error occurred");
+        setError(data.error ?? "An error occurred");
       }
-    } catch (error) {
-      console.error("Reset password error:", error);
+    } catch (err) {
+      console.error("Reset password error:", err);
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
@@ -66,7 +71,7 @@ export default function ForgotPassword() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="grid gap-4">
+      <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-4">
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-white/80 mb-2">
             Email Address

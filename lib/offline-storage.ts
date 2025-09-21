@@ -1,6 +1,4 @@
-// lib/offline-storage.ts
-
-import { Preferences } from '@capacitor/preferences';
+import { Preferences } from "@capacitor/preferences";
 
 export interface CachedSubscription {
   id: string;
@@ -19,13 +17,25 @@ export interface OfflineData {
   userEmail: string;
 }
 
-class OfflineStorageManager {
-  private static readonly STORAGE_KEY = 'needix-offline-data';
+function isOfflineData(x: unknown): x is OfflineData {
+  if (typeof x !== "object" || x === null) return false;
+  const o = x as Partial<OfflineData>;
+  return (
+    Array.isArray(o.subscriptions) &&
+    typeof o.lastSync === "string" &&
+    typeof o.userEmail === "string"
+  );
+}
 
-  // Save subscriptions to local storage
-  async saveSubscriptions(subscriptions: CachedSubscription[], userEmail: string): Promise<void> {
+class OfflineStorageManager {
+  private static readonly STORAGE_KEY = "needix-offline-data";
+
+  async saveSubscriptions(
+    subscriptions: CachedSubscription[],
+    userEmail: string,
+  ): Promise<void> {
     try {
-      const cachedSubscriptions: CachedSubscription[] = subscriptions.map((sub: CachedSubscription) => ({
+      const cachedSubscriptions: CachedSubscription[] = subscriptions.map((sub) => ({
         id: sub.id,
         name: sub.name,
         price: sub.price,
@@ -33,69 +43,67 @@ class OfflineStorageManager {
         nextBillingDate: sub.nextBillingDate,
         category: sub.category,
         notes: sub.notes,
-        cachedAt: new Date().toISOString()
+        cachedAt: new Date().toISOString(),
       }));
 
       const offlineData: OfflineData = {
         subscriptions: cachedSubscriptions,
         lastSync: new Date().toISOString(),
-        userEmail
+        userEmail,
       };
 
       await Preferences.set({
         key: OfflineStorageManager.STORAGE_KEY,
-        value: JSON.stringify(offlineData)
+        value: JSON.stringify(offlineData),
       });
-
-      console.log('Subscriptions cached offline successfully');
+      console.log("Subscriptions cached offline successfully");
     } catch (error) {
-      console.error('Failed to cache subscriptions:', error);
+      console.error("Failed to cache subscriptions:", error);
     }
   }
 
-  // Load subscriptions from local storage
   async loadSubscriptions(): Promise<CachedSubscription[]> {
     try {
       const { value } = await Preferences.get({
-        key: OfflineStorageManager.STORAGE_KEY
+        key: OfflineStorageManager.STORAGE_KEY,
       });
 
       if (value) {
-        const offlineData: OfflineData = JSON.parse(value);
-        return offlineData.subscriptions || [];
+        const parsed: unknown = JSON.parse(value);
+        if (isOfflineData(parsed)) {
+          return parsed.subscriptions ?? [];
+        }
       }
-      
       return [];
     } catch (error) {
-      console.error('Failed to load cached subscriptions:', error);
+      console.error("Failed to load cached subscriptions:", error);
       return [];
     }
   }
 
-  // Get last sync time
   async getLastSyncTime(): Promise<string | null> {
     try {
       const { value } = await Preferences.get({
-        key: OfflineStorageManager.STORAGE_KEY
+        key: OfflineStorageManager.STORAGE_KEY,
       });
 
       if (value) {
-        const offlineData: OfflineData = JSON.parse(value);
-        return offlineData.lastSync;
+        const parsed: unknown = JSON.parse(value);
+        if (isOfflineData(parsed)) {
+          return parsed.lastSync ?? null;
+        }
       }
-      
       return null;
     } catch (error) {
-      console.error('Failed to get last sync time:', error);
+      console.error("Failed to get last sync time:", error);
       return null;
     }
   }
 
-  // Check if data exists offline
   async hasOfflineData(): Promise<boolean> {
     try {
       const { value } = await Preferences.get({
-        key: OfflineStorageManager.STORAGE_KEY
+        key: OfflineStorageManager.STORAGE_KEY,
       });
       return !!value;
     } catch {
@@ -103,21 +111,19 @@ class OfflineStorageManager {
     }
   }
 
-  // Clear offline data
   async clearOfflineData(): Promise<void> {
     try {
       await Preferences.remove({
-        key: OfflineStorageManager.STORAGE_KEY
+        key: OfflineStorageManager.STORAGE_KEY,
       });
-      console.log('Offline data cleared');
+      console.log("Offline data cleared");
     } catch (error) {
-      console.error('Failed to clear offline data:', error);
+      console.error("Failed to clear offline data:", error);
     }
   }
 
-  // Check if device is online
   isOnline(): boolean {
-    return navigator.onLine;
+    return typeof navigator !== "undefined" ? navigator.onLine : true;
   }
 }
 

@@ -1,10 +1,13 @@
-// lib/useSubscriptions.ts
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type { Subscription } from "@/lib/types";
 
 const KEY = "needix.subscriptions.v1";
+
+function isSubscriptionArray(x: unknown): x is Subscription[] {
+  return Array.isArray(x);
+}
 
 export function useSubscriptions() {
   const [items, setItems] = useState<Subscription[]>([]);
@@ -14,35 +17,37 @@ export function useSubscriptions() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) {
-        setItems(JSON.parse(raw));
+        const parsed: unknown = JSON.parse(raw);
+        setItems(isSubscriptionArray(parsed) ? parsed : []);
       } else {
-        // Start with empty array instead of demo data
         setItems([]);
       }
     } catch (error) {
-      console.error('Error loading subscriptions:', error);
+      console.error("Error loading subscriptions:", error);
       setItems([]);
     }
     setLoaded(true);
   }, []);
 
-  // Listen for changes from other hook instances (same tab) and other tabs
   useEffect(() => {
     function reload() {
       try {
         const raw = localStorage.getItem(KEY);
         if (raw) {
-          setItems(JSON.parse(raw));
+          const parsed: unknown = JSON.parse(raw);
+          setItems(isSubscriptionArray(parsed) ? parsed : []);
         } else {
           setItems([]);
         }
       } catch (error) {
-        console.error('Error reloading subscriptions:', error);
+        console.error("Error reloading subscriptions:", error);
         setItems([]);
       }
     }
     const internal = () => reload();
-    const onStorage = (e: StorageEvent) => { if (e.key === KEY) reload(); };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === KEY) reload();
+    };
     window.addEventListener("needix:subscriptions-changed", internal as EventListener);
     window.addEventListener("storage", onStorage);
     return () => {
@@ -56,7 +61,7 @@ export function useSubscriptions() {
     try {
       localStorage.setItem(KEY, JSON.stringify(items));
     } catch (error) {
-      console.error('Error saving subscriptions:', error);
+      console.error("Error saving subscriptions:", error);
     }
   }, [items, loaded]);
 
@@ -66,7 +71,7 @@ export function useSubscriptions() {
       localStorage.setItem(KEY, JSON.stringify(next));
       window.dispatchEvent(new Event("needix:subscriptions-changed"));
     } catch (error) {
-      console.error('Error persisting subscriptions:', error);
+      console.error("Error persisting subscriptions:", error);
     }
   }
 
@@ -85,7 +90,9 @@ export function useSubscriptions() {
   }
 
   function update(id: string, patch: Partial<Subscription>) {
-    const next = items.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s));
+    const next = items.map((s) =>
+      s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s,
+    );
     persist(next);
   }
 

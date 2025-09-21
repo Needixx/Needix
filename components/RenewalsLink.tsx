@@ -8,9 +8,13 @@ export default function RenewalsLink() {
   const { data: session } = useSession();
   const router = useRouter();
 
-  function go() {
-    if (session?.user) router.push("/renewals");
-    else signIn("google", { callbackUrl: "/renewals" });
+  function go(): void {
+    if (session?.user) {
+      router.push("/renewals");
+    } else {
+      // Avoid no-floating-promises
+      void signIn("google", { callbackUrl: "/renewals" });
+    }
   }
 
   return (
@@ -19,4 +23,3 @@ export default function RenewalsLink() {
     </Button>
   );
 }
-

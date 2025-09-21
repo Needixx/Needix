@@ -1,4 +1,3 @@
-// app/reset-password/page.tsx
 "use client";
 
 import { Button } from "@/components/ui/Button";
@@ -27,7 +26,6 @@ function ResetPasswordForm() {
       return;
     }
 
-    // Validate token
     const validateToken = async () => {
       try {
         const response = await fetch("/api/auth/validate-reset-token", {
@@ -36,22 +34,27 @@ function ResetPasswordForm() {
           body: JSON.stringify({ token }),
         });
 
-        const data = await response.json();
+        type ValidateResp = { valid: boolean; error?: string };
+        const raw: unknown = await response.json();
+        const data: ValidateResp =
+          raw && typeof raw === "object" && "valid" in raw
+            ? (raw as ValidateResp)
+            : { valid: false };
 
         if (response.ok && data.valid) {
           setIsValidToken(true);
         } else {
-          setError(data.error || "Invalid or expired reset token");
+          setError(data.error ?? "Invalid or expired reset token");
         }
-      } catch (error) {
-        console.error("Token validation error:", error);
+      } catch (err) {
+        console.error("Token validation error:", err);
         setError("Failed to validate reset token");
       } finally {
         setCheckingToken(false);
       }
     };
 
-    validateToken();
+    void validateToken();
   }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,12 +64,10 @@ function ResetPasswordForm() {
       setError("Please fill in all fields");
       return;
     }
-
     if (password.length < 6) {
       setError("Password must be at least 6 characters long");
       return;
     }
-
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -82,16 +83,20 @@ function ResetPasswordForm() {
         body: JSON.stringify({ token, password }),
       });
 
-      const data = await response.json();
+      type ResetResp = { error?: string };
+      const raw: unknown = await response.json();
+      const data: ResetResp =
+        raw && typeof raw === "object" ? (raw as ResetResp) : {};
 
       if (response.ok) {
-        // Success - redirect to sign in with success message
-        router.push("/signin?message=Password reset successfully. Please sign in with your new password.");
+        router.push(
+          "/signin?message=Password reset successfully. Please sign in with your new password."
+        );
       } else {
-        setError(data.error || "Failed to reset password");
+        setError(data.error ?? "Failed to reset password");
       }
-    } catch (error) {
-      console.error("Reset password error:", error);
+    } catch (err) {
+      console.error("Reset password error:", err);
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
@@ -142,9 +147,7 @@ function ResetPasswordForm() {
     <main className="mx-auto grid max-w-md gap-6 px-4 py-16">
       <div className="text-center">
         <h1 className="text-2xl font-semibold">Set New Password</h1>
-        <p className="text-white/70 mt-2">
-          Enter your new password below.
-        </p>
+        <p className="text-white/70 mt-2">Enter your new password below.</p>
       </div>
 
       {error && (
@@ -153,7 +156,7 @@ function ResetPasswordForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="grid gap-4">
+      <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-4">
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-white/80 mb-2">
             New Password
@@ -174,11 +177,7 @@ function ResetPasswordForm() {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80 transition-colors"
             >
-              {showPassword ? (
-                <EyeSlashIcon className="w-5 h-5" />
-              ) : (
-                <EyeIcon className="w-5 h-5" />
-              )}
+              {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
             </button>
           </div>
         </div>
@@ -203,11 +202,7 @@ function ResetPasswordForm() {
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80 transition-colors"
             >
-              {showConfirmPassword ? (
-                <EyeSlashIcon className="w-5 h-5" />
-              ) : (
-                <EyeIcon className="w-5 h-5" />
-              )}
+              {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
             </button>
           </div>
         </div>
@@ -246,14 +241,16 @@ function ResetPasswordForm() {
 
 export default function ResetPassword() {
   return (
-    <Suspense fallback={
-      <main className="mx-auto grid max-w-md gap-6 px-4 py-16 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-          <span>Loading...</span>
-        </div>
-      </main>
-    }>
+    <Suspense
+      fallback={
+        <main className="mx-auto grid max-w-md gap-6 px-4 py-16 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <span>Loading...</span>
+          </div>
+        </main>
+      }
+    >
       <ResetPasswordForm />
     </Suspense>
   );

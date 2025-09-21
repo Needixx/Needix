@@ -1,5 +1,5 @@
-import crypto from 'crypto';
-import type { Subscription } from '@/lib/types';
+import crypto from "crypto";
+import type { Subscription } from "@/lib/types";
 
 type KVClient = {
   get<T = unknown>(key: string): Promise<T | null>;
@@ -10,7 +10,7 @@ type KVClient = {
 };
 
 function hashId(input: string): string {
-  return crypto.createHash('sha1').update(input).digest('hex').slice(0, 16);
+  return crypto.createHash("sha1").update(input).digest("hex").slice(0, 16);
 }
 
 function kvAvailable(): boolean {
@@ -21,36 +21,50 @@ let kv: KVClient | null = null;
 
 async function getKV(): Promise<KVClient> {
   if (kv) return kv;
-  if (!kvAvailable()) throw new Error('KV not configured');
-  const { Redis } = await import('@upstash/redis');
-  const redis = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL!, token: process.env.UPSTASH_REDIS_REST_TOKEN! });
+  if (!kvAvailable()) throw new Error("KV not configured");
+  const { Redis } = await import("@upstash/redis");
+  const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  });
+
   kv = {
     async get<T = unknown>(key: string): Promise<T | null> {
       const res = await redis.get(key);
       return (res as T) ?? null;
     },
     async set(key, value, opts) {
-      const options = opts?.ex ? ({ ex: opts.ex } as unknown) : undefined;
-      await (redis as unknown as { set: (k: string, v: unknown, o?: unknown) => Promise<unknown> }).set(key, value as unknown, options);
+      const options = opts?.ex ? ({ ex: opts.ex } as { ex: number }) : undefined;
+      await (redis as unknown as { set: (k: string, v: unknown, o?: { ex?: number }) => Promise<unknown> }).set(
+        key,
+        value,
+        options,
+      );
     },
-    async del(key) { await redis.del(key); },
-    async sadd(key, member) { await redis.sadd(key, member); },
-    async smembers(key) { return (await redis.smembers(key)) as unknown as string[]; },
+    async del(key) {
+      await redis.del(key);
+    },
+    async sadd(key, member) {
+      await redis.sadd(key, member);
+    },
+    async smembers(key) {
+      return (await redis.smembers(key)) as unknown as string[];
+    },
   };
-  return kv as KVClient;
+  return kv;
 }
 
 export type PushSubscriptionRecord = {
-  id: string;             // hash of endpoint
+  id: string; // hash of endpoint
   endpoint: string;
-  data: unknown;          // full PushSubscription JSON
+  data: unknown; // full PushSubscription JSON
   userEmail?: string | null;
   createdAt: number;
   updatedAt: number;
 };
 
 export type ReminderSnapshot = {
-  id: string;             // same as subscription id
+  id: string; // same as subscription id
   userEmail?: string | null;
   tzOffsetMinutes: number; // user's local timezone offset in minutes
   settings: { leadDays: number[]; timeOfDay: string };
@@ -58,8 +72,8 @@ export type ReminderSnapshot = {
   updatedAt: number;
 };
 
-const SET_SUBS = 'needix:push:subs';
-const SET_SNAPS = 'needix:reminder:snaps';
+const SET_SUBS = "needix:push:subs";
+const SET_SNAPS = "needix:reminder:snaps";
 const KEY_SUB = (id: string) => `needix:push:sub:${id}`;
 const KEY_SNAP = (id: string) => `needix:reminder:snap:${id}`;
 const KEY_SENT = (id: string, ymd: string, lead: number) => `needix:lastsent:${id}:${ymd}:${lead}`;
@@ -69,22 +83,31 @@ export function makeSubId(endpoint: string): string {
   return hashId(endpoint);
 }
 
-export async function saveSubscription(record: Omit<PushSubscriptionRecord, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) {
-  if (!kvAvailable()) return; // silently noop if not configured
+export async function saveSubscription(
+  record: Omit<PushSubscriptionRecord, "id" | "createdAt" | "updatedAt"> & { id?: string },
+) {
+  if (!kvAvailable()) return;
   const store = await getKV();
   const id = record.id ?? makeSubId(record.endpoint);
   const now = Date.now();
-  const rec: PushSubscriptionRecord = { id, endpoint: record.endpoint, data: record.data, userEmail: record.userEmail ?? null, createdAt: now, updatedAt: now };
+  const rec: PushSubscriptionRecord = {
+    id,
+    endpoint: record.endpoint,
+    data: record.data,
+    userEmail: record.userEmail ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
   await store.set(KEY_SUB(id), rec);
   await store.sadd(SET_SUBS, id);
 }
 
 export async function saveSnapshot(snap: ReminderSnapshot) {
-  if (!kvAvailable()) return; // noop if not configured
+  if (!kvAvailable()) return;
   const store = await getKV();
-  snap.updatedAt = Date.now();
-  await store.set(KEY_SNAP(snap.id), snap);
-  await store.sadd(SET_SNAPS, snap.id);
+  const copy: ReminderSnapshot = { ...snap, updatedAt: Date.now() };
+  await store.set(KEY_SNAP(copy.id), copy);
+  await store.sadd(SET_SNAPS, copy.id);
 }
 
 export async function listSnapshots(): Promise<ReminderSnapshot[]> {

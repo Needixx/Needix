@@ -49,7 +49,7 @@ export default function AddSubscriptionDialog({
   const { add } = useSubscriptions();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, _setCurrency] = useState("USD");
   const [category, setCategory] = useState('Other');
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [notes, setNotes] = useState("");
@@ -346,7 +346,7 @@ interface EditProps {
 export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }: EditProps) {
   const [name, setName] = useState(initial?.name || "");
   const [price, setPrice] = useState(initial?.price?.toString() || "");
-  const [currency, setCurrency] = useState("USD");
+  const [_currency, _setCurrency] = useState("USD");
   const [category, setCategory] = useState(initial?.category || 'Other');
   const [period, setPeriod] = useState<BillingPeriod>(initial?.period || 'monthly');
   const [notes, setNotes] = useState(initial?.notes || "");

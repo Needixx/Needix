@@ -12,7 +12,6 @@ export default function Navbar() {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    // Check if running in Capacitor (mobile app)
     const checkMobile = async () => {
       try {
         const { Capacitor } = await import('@capacitor/core');
@@ -21,7 +20,7 @@ export default function Navbar() {
         setIsMobile(false);
       }
     };
-    checkMobile();
+    void checkMobile();
   }, []);
 
   return (
@@ -41,9 +40,7 @@ export default function Navbar() {
 
 function CalendarLink() {
   const { data: session } = useSession();
-  
   if (!session?.user) return null;
-  
   return (
     <Link 
       href="/calendar" 
@@ -83,7 +80,6 @@ function MenuSheet() {
   const { isPro } = useSubscriptionLimit();
   const [open, setOpen] = useState(false);
   
-  // Prevent background scroll when open
   useEffect(() => {
     if (open) {
       const prev = document.body.style.overflow;
@@ -92,11 +88,10 @@ function MenuSheet() {
     }
   }, [open]);
 
-  const handleSignOut = async () => {
+  function handleSignOut() {
     setOpen(false);
-    // Use our custom sign out that goes to home page
     window.location.href = '/api/auth/signout';
-  };
+  }
 
   return (
     <>

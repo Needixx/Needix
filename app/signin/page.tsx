@@ -1,4 +1,3 @@
-// app/signin/page.tsx
 "use client";
 
 import { Button } from "@/components/ui/Button";
@@ -19,12 +18,10 @@ function SignInForm() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check for auth errors in URL
     const errorParam = searchParams.get("error");
     const message = searchParams.get("message");
     
     if (message) {
-      // Show success message
       setError("");
     } else if (errorParam) {
       switch (errorParam) {
@@ -52,22 +49,23 @@ function SignInForm() {
 
     try {
       if (mode === "signup") {
-        // Handle signup
         const signupResponse = await fetch("/api/auth/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
 
-        const data = await signupResponse.json();
+        type SignupResp = { error?: string };
+        const raw: unknown = await signupResponse.json();
+        const data: SignupResp =
+          raw && typeof raw === "object" ? (raw as SignupResp) : {};
 
         if (!signupResponse.ok) {
-          setError(data.error || "Failed to create account");
+          setError(data.error ?? "Failed to create account");
           setLoading(false);
           return;
         }
 
-        // After successful signup, sign them in
         const result = await signIn("credentials", {
           email,
           password,
@@ -80,7 +78,6 @@ function SignInForm() {
           router.push("/dashboard");
         }
       } else {
-        // Handle signin
         const result = await signIn("credentials", {
           email,
           password,
@@ -93,8 +90,8 @@ function SignInForm() {
           router.push("/dashboard");
         }
       }
-    } catch (error) {
-      console.error("Auth error:", error);
+    } catch (err) {
+      console.error("Auth error:", err);
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
@@ -106,8 +103,8 @@ function SignInForm() {
     setError("");
     try {
       await signIn("google", { callbackUrl: "/dashboard" });
-    } catch (error) {
-      console.error("Google sign in error:", error);
+    } catch (err) {
+      console.error("Google sign in error:", err);
       setError("Failed to sign in with Google. Please try again.");
     } finally {
       setLoading(false);
@@ -154,7 +151,7 @@ function SignInForm() {
 
       <div className="grid gap-4">
         <Button 
-          onClick={handleGoogleSignIn}
+          onClick={() => void handleGoogleSignIn()}
           disabled={loading}
           className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 h-11"
         >
@@ -182,7 +179,7 @@ function SignInForm() {
           <div className="flex-1 h-px bg-white/20"></div>
         </div>
 
-        <form onSubmit={handleCredentialsAuth} className="grid gap-4">
+        <form onSubmit={(e) => void handleCredentialsAuth(e)} className="grid gap-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-white/80 mb-2">
               Email
@@ -217,11 +214,7 @@ function SignInForm() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80 transition-colors"
               >
-                {showPassword ? (
-                  <EyeSlashIcon className="w-5 h-5" />
-                ) : (
-                  <EyeIcon className="w-5 h-5" />
-                )}
+                {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
               </button>
             </div>
           </div>
@@ -263,7 +256,7 @@ function SignInForm() {
 
         {process.env.ENABLE_DEV_AUTH === "1" && (
           <Button 
-            onClick={handleDevLogin}
+            onClick={() => void handleDevLogin()}
             disabled={loading}
             className="bg-orange-600 hover:bg-orange-700 h-11"
           >
@@ -288,14 +281,16 @@ function SignInForm() {
 
 export default function SignIn() {
   return (
-    <Suspense fallback={
-      <main className="mx-auto grid max-w-md gap-6 px-4 py-16 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-          <span>Loading...</span>
-        </div>
-      </main>
-    }>
+    <Suspense
+      fallback={
+        <main className="mx-auto grid max-w-md gap-6 px-4 py-16 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <span>Loading...</span>
+          </div>
+        </main>
+      }
+    >
       <SignInForm />
     </Suspense>
   );

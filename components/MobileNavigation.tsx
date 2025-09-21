@@ -1,58 +1,49 @@
-// components/MobileNavigation.tsx
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 export default function MobileNavigation() {
   const [isCapacitor, setIsCapacitor] = useState(false);
 
   useEffect(() => {
-    // Only run on client side
-    if (typeof window !== 'undefined') {
-      // Check if we're running in Capacitor
-      const checkCapacitor = async () => {
-        try {
-          // Dynamic import to avoid SSR issues
-          const { Capacitor } = await import('@capacitor/core');
-          setIsCapacitor(Capacitor.isNativePlatform());
-          
-          if (Capacitor.isNativePlatform()) {
-            // Apply mobile-specific styling
-            document.body.classList.add('mobile-app');
-            
-            // Handle status bar if available - make import conditional
-            try {
-              // Check if status-bar package is available before importing
-              const statusBarModule = await import('@capacitor/status-bar').catch(() => null);
-              if (statusBarModule) {
-                const { StatusBar, Style } = statusBarModule;
-                await StatusBar.setStyle({ style: Style.Dark });
-                await StatusBar.setBackgroundColor({ color: '#000000' });
-              }
-            } catch {
-              console.log('StatusBar not available');
+    if (typeof window === "undefined") return;
+
+    const checkCapacitor = async () => {
+      try {
+        const { Capacitor } = await import("@capacitor/core");
+        const native = Capacitor.isNativePlatform();
+        setIsCapacitor(native);
+
+        if (native) {
+          document.body.classList.add("mobile-app");
+
+          try {
+            // Import defensively; the plugin may not be installed
+            const statusBarModule = await import("@capacitor/status-bar").catch(
+              () => null
+            );
+            if (statusBarModule) {
+              const { StatusBar, Style } = statusBarModule;
+              await StatusBar.setStyle({ style: Style.Dark });
+              await StatusBar.setBackgroundColor({ color: "#000000" });
             }
+          } catch {
+            // Optional plugin, ignore if missing
+            console.log("StatusBar not available");
           }
-        } catch {
-          console.log('Capacitor not available, running in web mode');
-          setIsCapacitor(false);
         }
-      };
-      
-      checkCapacitor();
-    }
+      } catch {
+        console.log("Capacitor not available, running in web mode");
+        setIsCapacitor(false);
+      }
+    };
+
+    // Avoid no-floating-promises
+    void checkCapacitor();
   }, []);
 
-  // Don't render anything on server side
-  if (typeof window === 'undefined') {
-    return null;
-  }
+  // Client-only component, but keep this guard harmlessly
+  if (typeof window === "undefined") return null;
 
-  return (
-    <>
-      {isCapacitor && (
-        <div className="h-safe-top bg-black" />
-      )}
-    </>
-  );
+  return <>{isCapacitor && <div className="h-safe-top bg-black" />}</>;
 }

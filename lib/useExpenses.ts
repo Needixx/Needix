@@ -1,25 +1,29 @@
-// lib/useExpenses.ts
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import type { Expense, ExpenseTotals } from './types/expenses';
+import { useState, useEffect, useMemo } from "react";
+import type { Expense, ExpenseTotals } from "./types/expenses";
+
+const KEY = "needix-expenses";
+
+function isExpenseArray(x: unknown): x is Expense[] {
+  return Array.isArray(x);
+}
 
 export function useExpenses() {
   const [items, setItems] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load from localStorage only - no demo data
-    const saved = localStorage.getItem('needix-expenses');
+    const saved = localStorage.getItem(KEY);
     if (saved) {
       try {
-        setItems(JSON.parse(saved));
+        const parsed: unknown = JSON.parse(saved);
+        setItems(isExpenseArray(parsed) ? parsed : []);
       } catch (error) {
-        console.error('Error parsing saved expenses:', error);
+        console.error("Error parsing saved expenses:", error);
         setItems([]);
       }
     } else {
-      // Start with empty array instead of demo data
       setItems([]);
     }
     setLoading(false);
@@ -28,48 +32,67 @@ export function useExpenses() {
   const totals: ExpenseTotals = useMemo(() => {
     const monthly = items.reduce((sum, expense) => {
       if (!expense.isRecurring) return sum;
-      
+
       switch (expense.frequency) {
-        case 'monthly': return sum + expense.amount;
-        case 'weekly': return sum + (expense.amount * 4.33);
-        case 'bi-weekly': return sum + (expense.amount * 2.17);
-        case 'yearly': return sum + (expense.amount / 12);
-        case 'quarterly': return sum + (expense.amount / 3);
-        default: return sum;
+        case "monthly":
+          return sum + expense.amount;
+        case "weekly":
+          return sum + expense.amount * 4.33;
+        case "bi-weekly":
+          return sum + expense.amount * 2.17;
+        case "yearly":
+          return sum + expense.amount / 12;
+        case "quarterly":
+          return sum + expense.amount / 3;
+        default:
+          return sum;
       }
     }, 0);
 
     const yearly = monthly * 12;
-    const essential = items.filter(e => e.isEssential).reduce((sum, e) => {
-      switch (e.frequency) {
-        case 'monthly': return sum + e.amount;
-        case 'weekly': return sum + (e.amount * 4.33);
-        case 'bi-weekly': return sum + (e.amount * 2.17);
-        case 'yearly': return sum + (e.amount / 12);
-        case 'quarterly': return sum + (e.amount / 3);
-        default: return sum;
-      }
-    }, 0);
-    
+    const essential = items
+      .filter((e) => e.isEssential)
+      .reduce((sum, e) => {
+        switch (e.frequency) {
+          case "monthly":
+            return sum + e.amount;
+          case "weekly":
+            return sum + e.amount * 4.33;
+          case "bi-weekly":
+            return sum + e.amount * 2.17;
+          case "yearly":
+            return sum + e.amount / 12;
+          case "quarterly":
+            return sum + e.amount / 3;
+          default:
+            return sum;
+        }
+      }, 0);
+
     const nonEssential = monthly - essential;
-    
-    // Calculate this month's total (including one-time expenses)
+
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    
+
     const totalThisMonth = items.reduce((sum, expense) => {
       if (expense.isRecurring) {
         switch (expense.frequency) {
-          case 'monthly': return sum + expense.amount;
-          case 'weekly': return sum + (expense.amount * 4.33);
-          case 'bi-weekly': return sum + (expense.amount * 2.17);
-          case 'yearly': return sum + (expense.amount / 12);
-          case 'quarterly': return sum + (expense.amount / 3);
-          default: return sum;
+          case "monthly":
+            return sum + expense.amount;
+          case "weekly":
+            return sum + expense.amount * 4.33;
+          case "bi-weekly":
+            return sum + expense.amount * 2.17;
+          case "yearly":
+            return sum + expense.amount / 12;
+          case "quarterly":
+            return sum + expense.amount / 3;
+          default:
+            return sum;
         }
       } else if (expense.nextPaymentDate) {
-        const paymentDate = new Date(expense.nextPaymentDate + 'T00:00:00');
+        const paymentDate = new Date(expense.nextPaymentDate + "T00:00:00");
         if (paymentDate >= monthStart && paymentDate <= monthEnd) {
           return sum + expense.amount;
         }
@@ -80,33 +103,34 @@ export function useExpenses() {
     return { monthly, yearly, essential, nonEssential, totalThisMonth };
   }, [items]);
 
-  const addExpense = (expense: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const persist = (next: Expense[]) => {
+    setItems(next);
+    localStorage.setItem(KEY, JSON.stringify(next));
+  };
+
+  const addExpense = (expense: Omit<Expense, "id" | "createdAt" | "updatedAt">) => {
     const newExpense: Expense = {
       ...expense,
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
-    
-    const updated = [...items, newExpense];
-    setItems(updated);
-    localStorage.setItem('needix-expenses', JSON.stringify(updated));
+
+    persist([...items, newExpense]);
   };
 
   const updateExpense = (id: string, updates: Partial<Expense>) => {
-    const updated = items.map(expense => 
-      expense.id === id 
+    const updated = items.map((expense) =>
+      expense.id === id
         ? { ...expense, ...updates, updatedAt: new Date().toISOString() }
-        : expense
+        : expense,
     );
-    setItems(updated);
-    localStorage.setItem('needix-expenses', JSON.stringify(updated));
+    persist(updated);
   };
 
   const deleteExpense = (id: string) => {
-    const updated = items.filter(expense => expense.id !== id);
-    setItems(updated);
-    localStorage.setItem('needix-expenses', JSON.stringify(updated));
+    const updated = items.filter((expense) => expense.id !== id);
+    persist(updated);
   };
 
   return {
@@ -115,6 +139,6 @@ export function useExpenses() {
     loading,
     addExpense,
     updateExpense,
-    deleteExpense
+    deleteExpense,
   };
 }

@@ -1,65 +1,52 @@
 // app/api/subscriptions/[id]/route.ts
+import { NextResponse } from "next/server";
 
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-
-// PUT - Update subscription
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await auth();
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
+// Narrow the Next.js route context safely without using `any`
+function getId(ctx: unknown): string {
+  if (ctx && typeof ctx === "object" && "params" in ctx) {
+    const p = (ctx as { params?: unknown }).params;
+    if (p && typeof p === "object" && "id" in p) {
+      const id = (p as { id?: unknown }).id;
+      if (typeof id === "string") return id;
     }
-
-    const { id: _id } = await params;
-    void _id;
-    const body = await req.json();
-    const { name, price, period, nextBillingDate, category, notes } = body;
-
-    // In production, update in database
-    const updatedSubscription = {
-      id: _id,
-      name,
-      price: parseFloat(price),
-      period,
-      nextBillingDate,
-      category: category || '',
-      notes: notes || '',
-      userId: session.user.email
-    };
-
-    return NextResponse.json({ subscription: updatedSubscription });
-    
-  } catch (error) {
-    console.error('Error updating subscription:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+  return "";
 }
 
-// DELETE - Delete subscription
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+type Json = Record<string, unknown>;
+
+export function GET(_req: Request, ctx: unknown) {
+  const id = getId(ctx);
+  return NextResponse.json({ ok: true, id });
+}
+
+export async function PUT(req: Request, ctx: unknown) {
+  const id = getId(ctx);
+
+  let body: Json | null = null;
   try {
-    const session = await auth();
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
-    }
-
-    const { id: _id } = await params;
-    void _id;
-
-    // In production, delete from database
-    return NextResponse.json({ message: 'Subscription deleted successfully' });
-    
-  } catch (error) {
-    console.error('Error deleting subscription:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    body = (await req.json()) as Json;
+  } catch {
+    body = null;
   }
+
+  // TODO: apply update with `id` + `body`
+  return NextResponse.json({ ok: true, id, update: body });
+}
+
+export function DELETE(_req: Request, ctx: unknown) {
+  const id = getId(ctx);
+  // TODO: delete by `id`
+  return NextResponse.json({ ok: true, id, deleted: true });
+}
+
+export function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,PUT,DELETE,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
 }

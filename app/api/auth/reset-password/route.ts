@@ -4,24 +4,38 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { Resend } from 'resend';
 import crypto from 'crypto';
+import { z } from 'zod';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Two valid body shapes: (1) forgot (email), (2) reset (token + password)
+const ForgotSchema = z.object({
+  email: z.string().email(),
+});
+
+const ResetSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(6),
+});
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { email, token, password } = body;
+    const raw = (await req.json()) as unknown;
 
-    // If email is provided (forgot password flow)
-    if (email && !token && !password) {
+    // Try to interpret as "forgot password" first
+    const forgotParsed = ForgotSchema.safeParse(raw);
+    if (forgotParsed.success) {
+      const { email } = forgotParsed.data;
+
       const user = await prisma.user.findUnique({
-        where: { email }
+        where: { email },
       });
 
       // Always return success to prevent email enumeration
       if (!user) {
-        return NextResponse.json({ 
-          message: 'If an account with that email exists, you will receive a password reset email.' 
+        return NextResponse.json({
+          message:
+            'If an account with that email exists, you will receive a password reset email.',
         });
       }
 
@@ -34,13 +48,13 @@ export async function POST(req: NextRequest) {
         where: { email },
         data: {
           passwordResetToken: resetToken,
-          passwordResetTokenExpiry: resetTokenExpiry
-        }
+          passwordResetTokenExpiry: resetTokenExpiry,
+        },
       });
 
       // Send email
       const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
-      
+
       await resend.emails.send({
         from: process.env.RESEND_FROM!,
         to: email,
@@ -54,29 +68,34 @@ export async function POST(req: NextRequest) {
             <p style="margin-top: 20px; color: #666;">This link will expire in 1 hour.</p>
             <p style="color: #666;">If you didn't request this, please ignore this email.</p>
           </div>
-        `
+        `,
       });
 
-      return NextResponse.json({ 
-        message: 'If an account with that email exists, you will receive a password reset email.' 
+      return NextResponse.json({
+        message:
+          'If an account with that email exists, you will receive a password reset email.',
       });
     }
 
-    // If token and password are provided (reset password flow)
-    if (token && password) {
+    // Otherwise, try to interpret as "reset password"
+    const resetParsed = ResetSchema.safeParse(raw);
+    if (resetParsed.success) {
+      const { token, password } = resetParsed.data;
+
       const user = await prisma.user.findFirst({
         where: {
           passwordResetToken: token,
           passwordResetTokenExpiry: {
-            gt: new Date()
-          }
-        }
+            gt: new Date(),
+          },
+        },
       });
 
       if (!user) {
-        return NextResponse.json({ 
-          error: 'Invalid or expired reset token.' 
-        }, { status: 400 });
+        return NextResponse.json(
+          { error: 'Invalid or expired reset token.' },
+          { status: 400 }
+        );
       }
 
       // Hash new password
@@ -88,23 +107,22 @@ export async function POST(req: NextRequest) {
         data: {
           password: hashedPassword,
           passwordResetToken: null,
-          passwordResetTokenExpiry: null
-        }
+          passwordResetTokenExpiry: null,
+        },
       });
 
-      return NextResponse.json({ 
-        message: 'Password has been reset successfully.' 
+      return NextResponse.json({
+        message: 'Password has been reset successfully.',
       });
     }
 
-    return NextResponse.json({ 
-      error: 'Invalid request.' 
-    }, { status: 400 });
-
+    // If it matched neither schema:
+    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   } catch (error) {
     console.error('Password reset error:', error);
-    return NextResponse.json({ 
-      error: 'An error occurred while processing your request.' 
-    }, { status: 500 });
+    return NextResponse.json(
+      { error: 'An error occurred while processing your request.' },
+      { status: 500 }
+    );
   }
 }

@@ -1,56 +1,41 @@
-// next.config.ts
+import type { NextConfig } from "next";
 
-import type { NextConfig } from 'next';
+const isMobileBuild = process.env.BUILD_TARGET === "mobile";
 
-const isMobileBuild = process.env.BUILD_TARGET === 'mobile';
+type WithResolve = {
+  resolve?: { fallback?: Record<string, false | string> };
+};
 
-const nextConfig: NextConfig = {
-  // For mobile builds, we need static export
-  output: isMobileBuild ? 'export' : undefined,
-  
-  // Disable image optimization for static export
-  images: {
-    unoptimized: true
-  },
-  
-  // Experimental features
-  experimental: {
-    optimizeCss: true
-  },
-  
-  // For static export, use 'out' directory
-  distDir: isMobileBuild ? 'out' : '.next',
-  
-  // Ensure proper asset handling
+const nextConfig = {
+  output: isMobileBuild ? "export" : undefined,
+
+  images: { unoptimized: true },
+
+  experimental: { optimizeCss: true },
+
+  distDir: isMobileBuild ? "out" : ".next",
+
   assetPrefix: undefined,
-  
-  // Enable TypeScript strict mode
-  typescript: {
-    ignoreBuildErrors: false
-  },
-  
-  // ESLint configuration
-  eslint: {
-    ignoreDuringBuilds: false
-  },
-  
-  // Trailing slash for static export compatibility
+
+  typescript: { ignoreBuildErrors: false },
+
+  eslint: { ignoreDuringBuilds: false },
+
   trailingSlash: isMobileBuild,
-  
-  // Webpack configuration for mobile compatibility
-  webpack: (config, { dev, isServer }) => {
-    // Handle capacitor imports
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
+
+  webpack: (config: unknown, ctx: { isServer: boolean }) => {
+    const cfg = config as WithResolve;
+    if (!ctx.isServer) {
+      if (!cfg.resolve) cfg.resolve = {};
+      cfg.resolve.fallback = {
+        ...(cfg.resolve.fallback ?? {}),
         fs: false,
         net: false,
         tls: false,
       };
     }
-    
-    return config;
+    return cfg as unknown as object;
   },
-};
+} satisfies NextConfig;
 
 export default nextConfig;

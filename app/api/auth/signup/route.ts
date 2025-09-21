@@ -2,15 +2,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
+
+const SignupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1), // keep local length check to preserve your original 6-char message
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { email, password } = body;
+    const raw = (await req.json()) as unknown;
+    const parsed = SignupSchema.safeParse(raw);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Email and password are required' },
+        { status: 400 }
+      );
+    }
+
+    const { email, password } = parsed.data;
 
     console.log('Signup attempt for:', email);
 
-    // Validation
+    // Preserve your original validation/messaging
     if (!email || !password) {
       console.log('Missing email or password');
       return NextResponse.json(
@@ -30,7 +45,7 @@ export async function POST(req: NextRequest) {
     // Check if user already exists
     console.log('Checking if user exists...');
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (existingUser) {
@@ -52,7 +67,7 @@ export async function POST(req: NextRequest) {
         email,
         password: hashedPassword,
         name: email.split('@')[0], // Use email prefix as default name
-      }
+      },
     });
 
     console.log('User created successfully:', user.id);
@@ -62,10 +77,9 @@ export async function POST(req: NextRequest) {
       user: {
         id: user.id,
         email: user.email,
-        name: user.name
-      }
+        name: user.name,
+      },
     });
-
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(

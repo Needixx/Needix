@@ -1,4 +1,3 @@
-// lib/useSubscriptionLimit.ts
 "use client";
 
 import { useSession } from "next-auth/react";
@@ -16,13 +15,11 @@ interface UserSubscription {
 
 function useSearchParamsSafe() {
   const [params, setParams] = useState<URLSearchParams | null>(null);
-  
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       setParams(new URLSearchParams(window.location.search));
     }
   }, []);
-  
   return params;
 }
 
@@ -36,48 +33,50 @@ export function useSubscriptionLimit() {
     hasReminders: false,
     hasAnalytics: false,
     hasPriceAlerts: false,
-    isLoading: true, // Start with loading = true
+    isLoading: true,
   });
 
-  // Function to check subscription status with Stripe
   const checkSubscriptionStatus = useCallback(async (userEmail: string) => {
     try {
-      const response = await fetch('/api/check-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/check-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: userEmail }),
       });
 
       if (response.ok) {
-        const { isPro } = await response.json();
-        
-        // Update localStorage with current status
+        const json: unknown = await response.json();
+        const isPro =
+          typeof json === "object" &&
+          json !== null &&
+          "isPro" in json &&
+          typeof (json as { isPro: unknown }).isPro !== "undefined"
+            ? Boolean((json as { isPro: unknown }).isPro)
+            : false;
+
         if (isPro) {
-          localStorage.setItem(`needix_pro_status_${userEmail}`, 'true');
+          localStorage.setItem(`needix_pro_status_${userEmail}`, "true");
         } else {
           localStorage.removeItem(`needix_pro_status_${userEmail}`);
           localStorage.removeItem(`needix_pro_date_${userEmail}`);
         }
-        
+
         return isPro;
       }
     } catch (error) {
-      console.error('Error checking subscription status:', error);
+      console.error("Error checking subscription status:", error);
     }
-    
-    // Fallback to localStorage
-    return localStorage.getItem(`needix_pro_status_${userEmail}`) === 'true';
+
+    return localStorage.getItem(`needix_pro_status_${userEmail}`) === "true";
   }, []);
 
   useEffect(() => {
-    if (status === 'loading') {
-      // Keep loading state while session is loading
+    if (status === "loading") {
       return;
     }
 
     if (!session?.user?.email) {
-      // Not logged in - set to free plan and stop loading
-      setSubscription(prev => ({
+      setSubscription((prev) => ({
         ...prev,
         isPro: false,
         maxSubscriptions: 2,
@@ -90,39 +89,35 @@ export function useSubscriptionLimit() {
     }
 
     const userEmail = session.user.email;
-    
-    // Check if user just completed a successful payment
-    if (searchParams?.get('success') === 'true') {
-      localStorage.setItem(`needix_pro_status_${userEmail}`, 'true');
+
+    if (searchParams?.get("success") === "true") {
+      localStorage.setItem(`needix_pro_status_${userEmail}`, "true");
       localStorage.setItem(`needix_pro_date_${userEmail}`, new Date().toISOString());
-      
-      if (typeof window !== 'undefined') {
-        window.history.replaceState({}, '', '/app');
+
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", "/app");
       }
     }
 
-    // First, check localStorage immediately for faster initial load
-    const cachedStatus = localStorage.getItem(`needix_pro_status_${userEmail}`) === 'true';
-    
-    // Update with cached status immediately
-    setSubscription(prev => ({
+    const cachedStatus =
+      localStorage.getItem(`needix_pro_status_${userEmail}`) === "true";
+
+    setSubscription((prev) => ({
       ...prev,
       isPro: cachedStatus,
-      maxSubscriptions: cachedStatus ? Infinity : 2,
+      maxSubscriptions: cachedStatus ? Number.POSITIVE_INFINITY : 2,
       hasReminders: cachedStatus,
       hasAnalytics: cachedStatus,
       hasPriceAlerts: cachedStatus,
-      isLoading: false, // Stop loading with cached data
+      isLoading: false,
     }));
 
-    // Then verify with Stripe in the background
     const checkStatus = async () => {
       const isPro = await checkSubscriptionStatus(userEmail);
-      
-      setSubscription(prev => ({
+      setSubscription((prev) => ({
         ...prev,
         isPro,
-        maxSubscriptions: isPro ? Infinity : 2,
+        maxSubscriptions: isPro ? Number.POSITIVE_INFINITY : 2,
         hasReminders: isPro,
         hasAnalytics: isPro,
         hasPriceAlerts: isPro,
@@ -130,20 +125,23 @@ export function useSubscriptionLimit() {
       }));
     };
 
-    checkStatus();
+    void checkStatus();
 
-    // Check subscription status every 5 minutes
-    const interval = setInterval(checkStatus, 5 * 60 * 1000);
-    
+    const interval = setInterval(() => {
+      void checkStatus();
+    }, 5 * 60 * 1000);
+
     return () => clearInterval(interval);
   }, [session, searchParams, status, checkSubscriptionStatus]);
 
   const updateSubscriptionCount = useCallback((count: number) => {
-    setSubscription(prev => ({ ...prev, subscriptionCount: count }));
+    setSubscription((prev) => ({ ...prev, subscriptionCount: count }));
   }, []);
 
-  const canAddSubscription = subscription.subscriptionCount < subscription.maxSubscriptions;
-  const isAtLimit = subscription.subscriptionCount >= subscription.maxSubscriptions;
+  const canAddSubscription =
+    subscription.subscriptionCount < subscription.maxSubscriptions;
+  const isAtLimit =
+    subscription.subscriptionCount >= subscription.maxSubscriptions;
 
   return {
     isPro: subscription.isPro,

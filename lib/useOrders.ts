@@ -1,10 +1,13 @@
-// lib/useOrders.ts
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type { OrderItem, OrderCadence } from "@/lib/types-orders";
 
 const KEY = "needix.orders.v1";
+
+function isOrderArray(x: unknown): x is OrderItem[] {
+  return Array.isArray(x);
+}
 
 export function useOrders() {
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -14,13 +17,13 @@ export function useOrders() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) {
-        setItems(JSON.parse(raw));
+        const parsed: unknown = JSON.parse(raw);
+        setItems(isOrderArray(parsed) ? parsed : []);
       } else {
-        // Start with empty array - no demo data
         setItems([]);
       }
     } catch (error) {
-      console.error('Error loading orders:', error);
+      console.error("Error loading orders:", error);
       setItems([]);
     }
     setLoaded(true);
@@ -28,19 +31,19 @@ export function useOrders() {
 
   useEffect(() => {
     if (!loaded) return;
-    try { 
-      localStorage.setItem(KEY, JSON.stringify(items)); 
+    try {
+      localStorage.setItem(KEY, JSON.stringify(items));
     } catch (error) {
-      console.error('Error saving orders:', error);
+      console.error("Error saving orders:", error);
     }
   }, [items, loaded]);
 
   function persist(next: OrderItem[]) {
     setItems(next);
-    try { 
-      localStorage.setItem(KEY, JSON.stringify(next)); 
+    try {
+      localStorage.setItem(KEY, JSON.stringify(next));
     } catch (error) {
-      console.error('Error persisting orders:', error);
+      console.error("Error persisting orders:", error);
     }
   }
 
@@ -55,11 +58,30 @@ export function useOrders() {
   }
 
   function update(id: string, patch: Partial<OrderItem>) {
-    persist(items.map((i) => (i.id === id ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i)));
+    persist(
+      items.map((i) =>
+        i.id === id ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i,
+      ),
+    );
   }
 
   function remove(id: string) {
     persist(items.filter((i) => i.id !== id));
+  }
+
+  function toYMD(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function advanceByCadence(d: Date, c: OrderCadence) {
+    if (c === "daily") d.setDate(d.getDate() + 1);
+    else if (c === "weekly") d.setDate(d.getDate() + 7);
+    else if (c === "monthly") d.setMonth(d.getMonth() + 1);
+    else if (c === "quarterly") d.setMonth(d.getMonth() + 3);
+    else if (c === "yearly") d.setFullYear(d.getFullYear() + 1);
   }
 
   function skipNext(id: string) {
@@ -70,26 +92,14 @@ export function useOrders() {
     update(id, { nextDate: toYMD(d) });
   }
 
-  const counts = useMemo(() => ({
-    active: items.filter((i) => i.status === "active").length,
-    paused: items.filter((i) => i.status === "paused").length,
-    completed: items.filter((i) => i.status === "completed").length,
-  }), [items]);
+  const counts = useMemo(
+    () => ({
+      active: items.filter((i) => i.status === "active").length,
+      paused: items.filter((i) => i.status === "paused").length,
+      completed: items.filter((i) => i.status === "completed").length,
+    }),
+    [items],
+  );
 
   return { items, add, update, remove, skipNext, counts };
-}
-
-function toYMD(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function advanceByCadence(d: Date, c: OrderCadence) {
-  if (c === "daily") d.setDate(d.getDate() + 1);
-  else if (c === "weekly") d.setDate(d.getDate() + 7);
-  else if (c === "monthly") d.setMonth(d.getMonth() + 1);
-  else if (c === "quarterly") d.setMonth(d.getMonth() + 3);
-  else if (c === "yearly") d.setFullYear(d.getFullYear() + 1);
 }
