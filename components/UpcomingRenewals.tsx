@@ -7,20 +7,17 @@ import { Button } from "@/components/ui/Button";
 import { fmtCurrency } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 
-// Helper function to parse date strings as local dates (avoiding timezone shifts)
 function parseLocalDate(dateString: string): Date {
-  const parts = dateString.split('-');
+  const parts = dateString.split("-");
   if (parts.length !== 3) {
     throw new Error(`Invalid date format: ${dateString}`);
   }
   const year = parseInt(parts[0]!, 10);
-  const month = parseInt(parts[1]!, 10) - 1; // Month is 0-indexed
+  const month = parseInt(parts[1]!, 10) - 1;
   const day = parseInt(parts[2]!, 10);
-  
   if (isNaN(year) || isNaN(month) || isNaN(day)) {
     throw new Error(`Invalid date format: ${dateString}`);
   }
-  
   return new Date(year, month, day);
 }
 
@@ -35,14 +32,13 @@ export default function UpcomingRenewals() {
   const { items, update, remove } = useSubscriptions();
   const toast = useToast();
 
-  // UI state
   const [windowDays, setWindowDays] = useState<number>(30);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [hideNoDate, setHideNoDate] = useState(false);
-  const [sortKey, setSortKey] = useState<
-    "date_asc" | "date_desc" | "name_asc" | "price_desc"
-  >("date_asc");
+  const [sortKey, setSortKey] = useState<"date_asc" | "date_desc" | "name_asc" | "price_desc">(
+    "date_asc"
+  );
 
   const categories = useMemo(
     () =>
@@ -50,10 +46,10 @@ export default function UpcomingRenewals() {
         new Set(
           items
             .map((i) => i.category)
-            .filter((c): c is string => typeof c === "string" && c.length > 0),
-        ),
+            .filter((c): c is string => typeof c === "string" && c.length > 0)
+        )
       ),
-    [items],
+    [items]
   );
 
   const filtered = useMemo(() => {
@@ -65,7 +61,7 @@ export default function UpcomingRenewals() {
       if (hideNoDate && !s.nextBillingDate) return false;
       if (category !== "all" && s.category !== category) return false;
       if (query && !s.name.toLowerCase().includes(query.toLowerCase())) return false;
-      if (!s.nextBillingDate) return true; // allow when not hiding
+      if (!s.nextBillingDate) return true;
       const d = parseLocalDate(s.nextBillingDate);
       return d >= now && d <= end;
     });
@@ -86,19 +82,17 @@ export default function UpcomingRenewals() {
     });
   }, [filtered, sortKey]);
 
-  function snooze(sub: typeof items[0], days: number) {
-    const base = sub.nextBillingDate
-      ? parseLocalDate(sub.nextBillingDate)
-      : new Date();
+  function snooze(sub: (typeof items)[number], days: number) {
+    const base = sub.nextBillingDate ? parseLocalDate(sub.nextBillingDate) : new Date();
     base.setDate(base.getDate() + days);
-    update(sub.id, { nextBillingDate: toLocalYMD(base) });
+    void update(sub.id, { nextBillingDate: toLocalYMD(base) });
     toast(`Snoozed ${sub.name} by ${days}d`, "success");
   }
 
   function onDelete(id: string) {
     const sub = items.find((s) => s.id === id);
     if (sub && confirm(`Delete ${sub.name}?`)) {
-      remove(id);
+      void remove(id);
       toast(`Deleted ${sub.name}`, "success");
     }
   }
@@ -195,8 +189,10 @@ export default function UpcomingRenewals() {
         ) : (
           sorted.map((sub) => {
             const dueDate = sub.nextBillingDate ? parseLocalDate(sub.nextBillingDate) : null;
-            const daysUntil = dueDate ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
-            
+            const daysUntil = dueDate
+              ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+              : null;
+
             return (
               <div
                 key={sub.id}
@@ -219,25 +215,31 @@ export default function UpcomingRenewals() {
                       {dueDate && (
                         <>
                           <span className="text-white/60">·</span>
-                          <span className={`font-medium ${
-                            daysUntil !== null && daysUntil <= 3 ? 'text-red-400' :
-                            daysUntil !== null && daysUntil <= 7 ? 'text-yellow-400' :
-                            'text-white/70'
-                          }`}>
-                            {daysUntil !== null ? (
-                              daysUntil === 0 ? 'Due today' :
-                              daysUntil === 1 ? 'Due tomorrow' :
-                              daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue` :
-                              `Due in ${daysUntil} days`
-                            ) : 'No date set'}
+                          <span
+                            className={`font-medium ${
+                              daysUntil !== null && daysUntil <= 3
+                                ? "text-red-400"
+                                : daysUntil !== null && daysUntil <= 7
+                                ? "text-yellow-400"
+                                : "text-white/70"
+                            }`}
+                          >
+                            {daysUntil !== null
+                              ? daysUntil === 0
+                                ? "Due today"
+                                : daysUntil === 1
+                                ? "Due tomorrow"
+                                : daysUntil < 0
+                                ? `${Math.abs(daysUntil)} days overdue`
+                                : `Due in ${daysUntil} days`
+                              : "No date set"}
                           </span>
                         </>
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
-                    {/* Snooze Buttons */}
                     {dueDate && (
                       <>
                         <Button
@@ -258,8 +260,7 @@ export default function UpcomingRenewals() {
                         </Button>
                       </>
                     )}
-                    
-                    {/* Delete Button */}
+
                     <Button
                       variant="ghost"
                       size="sm"

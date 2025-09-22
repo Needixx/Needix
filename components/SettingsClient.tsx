@@ -1,3 +1,4 @@
+// components/SettingsClient.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -42,7 +43,6 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   compactMode: false,
 };
 
-// Narrowing helpers to keep JSON.parse types safe
 function isNotificationSettings(v: unknown): v is NotificationSettings {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -77,12 +77,9 @@ export default function SettingsClient({ user }: { user: User }) {
     useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load settings from localStorage on mount
   useEffect(() => {
     try {
-      const savedNotifications = localStorage.getItem(
-        "needix.settings.notifications"
-      );
+      const savedNotifications = localStorage.getItem("needix.settings.notifications");
       if (savedNotifications) {
         const parsed = JSON.parse(savedNotifications) as unknown;
         if (isNotificationSettings(parsed)) {
@@ -102,22 +99,17 @@ export default function SettingsClient({ user }: { user: User }) {
     }
   }, []);
 
-  // Save notification settings
   const updateNotifications = (newSettings: Partial<NotificationSettings>) => {
     const updated: NotificationSettings = { ...notifications, ...newSettings };
     setNotifications(updated);
     try {
-      localStorage.setItem(
-        "needix.settings.notifications",
-        JSON.stringify(updated)
-      );
+      localStorage.setItem("needix.settings.notifications", JSON.stringify(updated));
       toast("Notification preferences updated", "success");
     } catch {
       toast("Failed to save notification settings", "error");
     }
   };
 
-  // Save app settings
   const updateAppSettings = (newSettings: Partial<AppSettings>) => {
     const updated: AppSettings = { ...appSettings, ...newSettings };
     setAppSettings(updated);
@@ -129,7 +121,6 @@ export default function SettingsClient({ user }: { user: User }) {
     }
   };
 
-  // Export data as JSON
   const exportData = () => {
     try {
       const data = {
@@ -152,9 +143,7 @@ export default function SettingsClient({ user }: { user: User }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `needix-data-${new Date()
-        .toISOString()
-        .split("T")[0]}.json`;
+      a.download = `needix-data-${new Date().toISOString().split("T")[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -166,13 +155,8 @@ export default function SettingsClient({ user }: { user: User }) {
     }
   };
 
-  // Clear all local data (synchronous to satisfy lint)
   const clearAllData = () => {
-    if (
-      !confirm(
-        "Are you sure you want to clear all local data? This cannot be undone."
-      )
-    ) {
+    if (!confirm("Are you sure you want to clear all local data? This cannot be undone.")) {
       return;
     }
 
@@ -181,13 +165,13 @@ export default function SettingsClient({ user }: { user: User }) {
       // Clear each subscription individually
       const currentSubs = subsData.items;
       for (const sub of currentSubs) {
-        subsData.remove(sub.id);
+        void subsData.remove(sub.id);
       }
 
       // Clear each order individually
       const currentOrders = ordersData.items;
       for (const order of currentOrders) {
-        ordersData.remove(order.id);
+        void ordersData.remove(order.id);
       }
 
       // Clear settings
@@ -216,13 +200,8 @@ export default function SettingsClient({ user }: { user: User }) {
     }
   };
 
-  // Delete account (placeholder for now)
   const deleteAccount = () => {
-    if (
-      !confirm(
-        "Are you sure you want to delete your account? This action cannot be undone."
-      )
-    ) {
+    if (!confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
       return;
     }
 
@@ -240,8 +219,7 @@ export default function SettingsClient({ user }: { user: User }) {
           <h2 className="text-lg font-medium">Profile</h2>
         </div>
         <p className="mb-4 text-white/70">
-          Your account information is managed through your authentication
-          provider.
+          Your account information is managed through your authentication provider.
         </p>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="grid gap-1">
@@ -263,14 +241,11 @@ export default function SettingsClient({ user }: { user: User }) {
         </div>
         <div className="mt-4 flex items-center gap-2">
           <div
-            className={`w-2 h-2 rounded-full ${
-              isPro ? "bg-cyan-400" : "bg-green-500"
-            }`}
+            className={`w-2 h-2 rounded-full ${isPro ? "bg-cyan-400" : "bg-green-500"}`}
           />
           <span className="text-sm text-white/70">
-            {isPro ? "Needix Pro" : "Free Plan"} • {subsData.items.length}{" "}
-            subscription{subsData.items.length !== 1 ? "s" : ""} •{" "}
-            {ordersData.items.length} order
+            {isPro ? "Needix Pro" : "Free Plan"} • {subsData.items.length} subscription
+            {subsData.items.length !== 1 ? "s" : ""} • {ordersData.items.length} order
             {ordersData.items.length !== 1 ? "s" : ""}
           </span>
         </div>
@@ -289,17 +264,13 @@ export default function SettingsClient({ user }: { user: User }) {
           <label className="flex items-center justify-between">
             <div>
               <div className="font-medium">Renewal reminders</div>
-              <div className="text-sm text-white/60">
-                Get notified before subscriptions renew
-              </div>
+              <div className="text-sm text-white/60">Get notified before subscriptions renew</div>
             </div>
             <input
               type="checkbox"
               className="h-4 w-4 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
               checked={notifications.renewalReminders}
-              onChange={(e) =>
-                updateNotifications({ renewalReminders: e.target.checked })
-              }
+              onChange={(e) => updateNotifications({ renewalReminders: e.target.checked })}
             />
           </label>
           <label className="flex items-center justify-between">
@@ -313,41 +284,31 @@ export default function SettingsClient({ user }: { user: User }) {
               type="checkbox"
               className="h-4 w-4 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
               checked={notifications.priceAlerts}
-              onChange={(e) =>
-                updateNotifications({ priceAlerts: e.target.checked })
-              }
+              onChange={(e) => updateNotifications({ priceAlerts: e.target.checked })}
             />
           </label>
           <label className="flex items-center justify-between">
             <div>
               <div className="font-medium">Weekly digest</div>
-              <div className="text-sm text-white/60">
-                Weekly summary of your subscriptions
-              </div>
+              <div className="text-sm text-white/60">Weekly summary of your subscriptions</div>
             </div>
             <input
               type="checkbox"
               className="h-4 w-4 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
               checked={notifications.weeklyDigest}
-              onChange={(e) =>
-                updateNotifications({ weeklyDigest: e.target.checked })
-              }
+              onChange={(e) => updateNotifications({ weeklyDigest: e.target.checked })}
             />
           </label>
           <label className="flex items-center justify-between">
             <div>
               <div className="font-medium">Email notifications</div>
-              <div className="text-sm text-white/60">
-                Receive notifications via email
-              </div>
+              <div className="text-sm text-white/60">Receive notifications via email</div>
             </div>
             <input
               type="checkbox"
               className="h-4 w-4 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
               checked={notifications.emailNotifications}
-              onChange={(e) =>
-                updateNotifications({ emailNotifications: e.target.checked })
-              }
+              onChange={(e) => updateNotifications({ emailNotifications: e.target.checked })}
             />
           </label>
         </div>
@@ -410,17 +371,13 @@ export default function SettingsClient({ user }: { user: User }) {
           <label className="flex items-center justify-between">
             <div>
               <div className="font-medium">Compact mode</div>
-              <div className="text-sm text-white/60">
-                Show more items in less space
-              </div>
+              <div className="text-sm text-white/60">Show more items in less space</div>
             </div>
             <input
               type="checkbox"
               className="h-4 w-4 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
               checked={appSettings.compactMode}
-              onChange={(e) =>
-                updateAppSettings({ compactMode: e.target.checked })
-              }
+              onChange={(e) => updateAppSettings({ compactMode: e.target.checked })}
             />
           </label>
         </div>
@@ -432,12 +389,10 @@ export default function SettingsClient({ user }: { user: User }) {
           <span className="text-xl">💾</span>
           <h2 className="text-lg font-medium">Data Management</h2>
         </div>
-        <p className="mb-4 text-white/70">
-          Export your data or clear all local information.
-        </p>
+        <p className="mb-4 text-white/70">Export your data or clear all local information.</p>
         <div className="flex flex-wrap gap-3">
           <Button onClick={exportData} variant="secondary">
-            📄 Export as PDF
+            📄 Export as JSON
           </Button>
           <Button
             onClick={clearAllData}
@@ -459,9 +414,7 @@ export default function SettingsClient({ user }: { user: User }) {
         <div className="space-y-4">
           <div>
             <h3 className="font-medium mb-2">Sign Out</h3>
-            <p className="text-white/70 text-sm mb-3">
-              Sign out of your account on this device.
-            </p>
+            <p className="text-white/70 text-sm mb-3">Sign out of your account on this device.</p>
             <Button
               onClick={() => {
                 void signOut({ callbackUrl: "/" });
@@ -476,8 +429,8 @@ export default function SettingsClient({ user }: { user: User }) {
           <div className="pt-4 border-t border-white/10">
             <h3 className="font-medium mb-2 text-red-400">Delete Account</h3>
             <p className="text-white/70 text-sm mb-3">
-              Permanently delete your account and all associated data. This
-              action cannot be undone.
+              Permanently delete your account and all associated data. This action cannot be
+              undone.
             </p>
             <Button
               onClick={deleteAccount}

@@ -40,7 +40,6 @@ export default function AIAssist({
 
   React.useEffect(() => setMounted(true), []);
 
-  // Lock scroll when modal is open
   React.useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -87,148 +86,160 @@ export default function AIAssist({
         expenses: ok.results.createdExpenses?.count ?? 0,
       });
       setText("");
+      
       router.refresh();
       onSuccess?.();
+      window.dispatchEvent(new CustomEvent('needix-data-refresh'));
+      
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
   };
 
-  const closeAndReset = () => {
+  const onClose = () => {
     setOpen(false);
     setError(null);
     setResult(null);
   };
 
-  const openDialog = () => {
-    setResult(null);
-    setError(null);
-    setOpen(true);
-  };
+  if (!mounted) return null;
+
+  const modal = (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="relative max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-gradient-to-br from-neutral-900 to-neutral-800 border border-white/10 rounded-2xl shadow-2xl">
+        {/* Header */}
+        <div className="sticky top-0 bg-gradient-to-r from-purple-900/80 to-cyan-900/80 backdrop-blur-sm px-6 py-4 border-b border-white/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🤖</span>
+              <h2 className="text-xl font-semibold text-white">AI Assistant</h2>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white/60 hover:text-white transition-colors rounded-lg p-2 hover:bg-white/10"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {!result && (
+            <>
+              <div className="space-y-3">
+                <p className="text-white/80">
+                  Paste receipts, billing info, or describe your purchases. I'll automatically categorize and add them to your subscriptions, orders, and expenses.
+                </p>
+                <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-sm text-white/60 mb-2">Examples:</p>
+                  <ul className="text-sm text-white/70 space-y-1">
+                    <li>• "Netflix subscription $15.99/month, next billing Dec 15"</li>
+                    <li>• "Amazon order: iPhone case $25, wireless charger $30"</li>
+                    <li>• "Monthly gym membership $89, electricity bill $150"</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-white/80">
+                  Describe your purchases or paste receipt text:
+                </label>
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Paste receipt text or describe your purchases..."
+                  className="w-full h-32 px-4 py-3 bg-neutral-800 border border-white/10 rounded-xl text-white placeholder-white/40 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none resize-none"
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                  <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => { void onSubmit(); }}  // <-- wrap async
+                  disabled={!text.trim() || loading}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50"
+                >
+                  {loading ? "Processing..." : "✨ Add with AI"}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white rounded-xl transition-all duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+
+          {result && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500/20 border border-green-500/30 rounded-full mb-4">
+                  <span className="text-2xl">✅</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Successfully Added!</h3>
+                <p className="text-white/70">Your items have been categorized and added.</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-purple-400">{result.subscriptions}</div>
+                  <div className="text-sm text-white/70">Subscriptions</div>
+                </div>
+                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-cyan-400">{result.orders}</div>
+                  <div className="text-sm text-white/70">Orders</div>
+                </div>
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-green-400">{result.expenses}</div>
+                  <div className="text-sm text-white/70">Expenses</div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={onClose}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-200"
+                >
+                  Done
+                </button>
+                <button
+                  onClick={() => {
+                    setResult(null);
+                    setText("");
+                  }}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white rounded-xl transition-all duration-200"
+                >
+                  Add More
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
       <button
-        onClick={openDialog}
-        className={`inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-400 transition-all ${className ?? ""}`}
+        onClick={() => setOpen(true)}
+        className={`flex items-center gap-2 px-6 py-3 font-medium text-white rounded-xl transition-all duration-200 hover:scale-[1.02] ${
+          className || "bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700"
+        }`}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" className="opacity-80">
-          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
+        <span className="text-lg">🤖</span>
         {buttonLabel}
       </button>
-
-      {/* Modal in a portal so it sits above all page content */}
-      {mounted && open &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[10000] flex items-start justify-center p-4 sm:p-6 md:p-8"
-            aria-modal="true"
-            role="dialog"
-          >
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 bg-black/75 backdrop-blur-md"
-              onClick={closeAndReset}
-            />
-
-            {/* Dialog */}
-            <div className="relative z-10 w-full max-w-2xl rounded-2xl border border-white/20 bg-neutral-900/95 shadow-2xl ring-1 ring-black/40">
-              <div className="p-6">
-                <div className="mb-4 flex items-start justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold text-white">AI Intake</h2>
-                    <p className="text-sm text-white/60 mt-1">Smart financial data entry</p>
-                  </div>
-                  <button
-                    onClick={closeAndReset}
-                    className="rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white focus:outline-none transition-colors"
-                    aria-label="Close"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <p className="mb-4 text-sm text-white/70 bg-white/5 rounded-xl p-3 border border-white/10">
-                  <span className="text-emerald-400 font-medium">Example:</span>{" "}
-                  <span className="text-white">
-                    "Add Netflix $15.49 monthly; iCloud $2.99; Bought Nike shoes $119 on 2025-09-03; Costco order $24 on
-                    2025-09-07"
-                  </span>
-                  <br />
-                  <span className="text-white/50 text-xs mt-1 block">
-                    We’ll parse it into subscriptions, orders, and expenses.
-                  </span>
-                </p>
-
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Type or paste your items here…"
-                  rows={6}
-                  className="mb-4 w-full resize-y rounded-xl border border-white/10 bg-neutral-900/60 p-4 text-white placeholder-white/40 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
-                />
-
-                {error && (
-                  <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-                    <div className="flex items-center gap-2">
-                      <span>⚠️</span>
-                      <span className="font-medium">Error:</span>
-                    </div>
-                    <div className="mt-1">{error}</div>
-                  </div>
-                )}
-
-                {result && (
-                  <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm">
-                    <div className="flex items-center gap-2 text-emerald-300 mb-2">
-                      <span>✅</span>
-                      <span className="font-medium">Success!</span>
-                    </div>
-                    <div className="text-emerald-200">
-                      Added <strong className="text-white">{result.subscriptions}</strong> subscriptions,{" "}
-                      <strong className="text-white">{result.orders}</strong> orders, and{" "}
-                      <strong className="text-white">{result.expenses}</strong> expenses.
-                    </div>
-                    <div className="mt-3 text-xs text-emerald-300">
-                      ✨ Your dashboard will refresh automatically to show the new items.
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-white/50">
-                    💡 Tip: Amounts unknown? Leave them blank — we won’t invent them.
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={closeAndReset}
-                      className="rounded-xl px-4 py-2 text-sm text-white/70 hover:bg-white/10 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => void onSubmit()}
-                      disabled={loading || text.trim().length === 0}
-                      className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-2 text-sm font-semibold text-black hover:from-cyan-400 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-60 transition-all transform hover:scale-105 disabled:hover:scale-100"
-                    >
-                      {loading && (
-                        <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" className="opacity-30" />
-                          <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        </svg>
-                      )}
-                      {loading ? "Processing..." : "Add with AI"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+      {open && createPortal(modal, document.body)}
     </>
   );
 }

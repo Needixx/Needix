@@ -4,13 +4,15 @@
 import { useState } from "react";
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
-import AddSubscriptionDialog from "@/components/AddSubscriptionDialog";
+import AddSubscriptionDialog, {
+  EditSubscriptionDialog,
+  type SubscriptionFormData,
+} from "@/components/AddSubscriptionDialog";
 import SubscriptionTable from "@/components/SubscriptionTable";
 import ImportCsv from "@/components/ImportCsv";
 import UpgradeButton from "@/components/UpgradeButton";
 import { Button } from "@/components/ui/Button";
 import { fmtCurrency } from "@/lib/format";
-import { EditSubscriptionDialog, type SubscriptionFormData } from "@/components/AddSubscriptionDialog";
 import { useToast } from "@/components/ui/Toast";
 import type { Subscription } from "@/lib/types";
 
@@ -26,7 +28,9 @@ function StatCard({
   gradient: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-white/10 bg-gradient-to-br ${gradient} backdrop-blur-sm p-6`}>
+    <div
+      className={`rounded-2xl border border-white/10 bg-gradient-to-br ${gradient} backdrop-blur-sm p-6`}
+    >
       <div className="text-sm font-medium text-white/70">{title}</div>
       <div className="text-2xl font-bold text-white">{value}</div>
       <div className="text-xs text-white/60">{subtitle}</div>
@@ -42,7 +46,6 @@ export default function SubscriptionsPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editing, setEditing] = useState<Subscription | null>(null);
 
-  // Check if user can add more subscriptions
   const canAddSubscription = isPro || items.length < 2;
   const subscriptionLimit = isPro ? Infinity : 2;
 
@@ -52,7 +55,7 @@ export default function SubscriptionsPage() {
 
   const handleUpdate = (data: SubscriptionFormData & { id?: string }) => {
     if (!data.id) return;
-    update(data.id, {
+    void update(data.id, {
       name: data.name,
       price: data.price,
       period: data.period,
@@ -67,15 +70,15 @@ export default function SubscriptionsPage() {
   };
 
   const handleDelete = (id: string) => {
-    const sub = items.find(s => s.id === id);
+    const sub = items.find((s) => s.id === id);
     if (sub && confirm(`Delete ${sub.name}?`)) {
-      remove(id);
+      void remove(id);
       toast(`Deleted ${sub.name}`, "success");
     }
   };
 
   const handleAdd = (data: SubscriptionFormData) => {
-    add(data);
+    void add(data);
     setShowAddDialog(false);
     toast(`Added ${data.name}`, "success");
   };
@@ -88,14 +91,12 @@ export default function SubscriptionsPage() {
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-purple-500/8 via-transparent to-transparent -z-10" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-pink-500/8 via-transparent to-transparent -z-10" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-violet-500/4 to-transparent -z-10" />
-      
+
       <main className="relative mx-auto max-w-6xl px-4 py-10">
         {/* Header */}
         <div className="mb-8">
           <h1 className="mb-2 text-3xl font-bold text-white">Your Subscriptions</h1>
-          <p className="text-white/70">
-            Track and manage all your recurring payments
-          </p>
+          <p className="text-white/70">Track and manage all your recurring payments</p>
           {!isPro && (
             <p className="text-purple-300 text-sm mt-1">
               Using {items.length} of {subscriptionLimit} free subscriptions
@@ -111,20 +112,20 @@ export default function SubscriptionsPage() {
                 <h3 className="text-lg font-semibold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent mb-2">
                   📺 Free Plan - Subscription Tracking
                 </h3>
-                <p className="text-white/80 mb-2">
-                  Track up to 2 subscriptions with basic features.
-                </p>
+                <p className="text-white/80 mb-2">Track up to 2 subscriptions with basic features.</p>
                 <div className="text-sm text-white/60 mb-3">
-                  Currently using <span className="font-semibold text-purple-300">{items.length} of {subscriptionLimit}</span> free subscription slots
+                  Currently using{" "}
+                  <span className="font-semibold text-purple-300">
+                    {items.length} of {subscriptionLimit}
+                  </span>{" "}
+                  free subscription slots
                 </div>
                 <div className="text-sm text-purple-300">
-                  ⭐ Upgrade for unlimited subscriptions, price alerts & more!
+                  ⭐ Upgrade for unlimited subscriptions, price alerts &amp; more!
                 </div>
               </div>
               <div className="flex flex-col gap-2">
-                <UpgradeButton 
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-semibold transform hover:scale-105 transition-all"
-                />
+                <UpgradeButton className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-semibold transform hover:scale-105 transition-all" />
                 <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
               </div>
             </div>
@@ -172,39 +173,35 @@ export default function SubscriptionsPage() {
             </button>
           ) : (
             <div className="flex items-center gap-2">
-              <Button 
-                disabled 
+              <Button
+                disabled
                 className="opacity-50 cursor-not-allowed bg-gray-600"
                 title="Free plan limit reached - upgrade to Pro for unlimited subscriptions"
               >
                 Add Subscription (Limit Reached)
               </Button>
-              <UpgradeButton variant="secondary">
-                Upgrade to Pro
-              </UpgradeButton>
+              <UpgradeButton variant="secondary">Upgrade to Pro</UpgradeButton>
             </div>
           )}
 
           {isPro && (
-            <ImportCsv onImport={(subs) => {
-              importMany(subs);
-              toast(`Imported ${subs.length} subscriptions`, "success");
-            }} />
+            <ImportCsv
+              onImport={(subs) => {
+                void importMany(subs);
+                toast(`Imported ${subs.length} subscriptions`, "success");
+              }}
+            />
           )}
         </div>
 
         {/* Subscriptions Table */}
         <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden">
-          <SubscriptionTable 
-            items={items}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-          />
+          <SubscriptionTable items={items} onDelete={handleDelete} onEdit={handleEdit} />
         </div>
 
         {/* Add Subscription Dialog */}
         {showAddDialog && (
-          <AddSubscriptionDialog 
+          <AddSubscriptionDialog
             open={showAddDialog}
             onOpenChange={setShowAddDialog}
             onAdd={handleAdd}
@@ -215,7 +212,9 @@ export default function SubscriptionsPage() {
         {editing && (
           <EditSubscriptionDialog
             open={true}
-            onOpenChange={(open) => { if (!open) setEditing(null); }}
+            onOpenChange={(open) => {
+              if (!open) setEditing(null);
+            }}
             initial={{
               id: editing.id,
               name: editing.name,

@@ -1,104 +1,75 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import type { Subscription } from "@/lib/types";
+import { useState, useEffect, useMemo } from 'react';
+import { Subscription, BillingPeriod } from '@/lib/types';
 
-const KEY = "needix.subscriptions.v1";
+const KEY = 'needix-subscriptions';
 
-function isSubscriptionArray(x: unknown): x is Subscription[] {
-  return Array.isArray(x);
-}
+/** Backend subscription shape */
+type ApiSubscription = {
+  id: string;
+  name: string;
+  amount: number | string;
+  currency: string;
+  interval: string;
+  nextBillingAt?: string | null;
+  category?: string | null;
+  notes?: string | null;
+  vendorUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export function useSubscriptions() {
   const [items, setItems] = useState<Subscription[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        setItems(isSubscriptionArray(parsed) ? parsed : []);
-      } else {
-        setItems([]);
-      }
-    } catch (error) {
-      console.error("Error loading subscriptions:", error);
-      setItems([]);
-    }
-    setLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    function reload() {
+    const loadData = async () => {
       try {
-        const raw = localStorage.getItem(KEY);
-        if (raw) {
-          const parsed: unknown = JSON.parse(raw);
-          setItems(isSubscriptionArray(parsed) ? parsed : []);
-        } else {
-          setItems([]);
+        setLoading(true);
+
+        const localData = localStorage.getItem(KEY);
+        if (localData) {
+          try {
+            const parsed = JSON.parse(localData) as Subscription[];
+            setItems(parsed);
+          } catch (e) {
+            console.error('Error parsing local subscriptions:', e);
+          }
+        }
+
+        const response = await fetch('/api/subscriptions');
+        if (response.ok) {
+          const backendData = (await response.json()) as ApiSubscription[];
+          if (Array.isArray(backendData)) {
+            const convertedData = backendData.map((sub) => ({
+              id: sub.id,
+              name: sub.name,
+              price: Number(sub.amount),
+              currency: sub.currency,
+              period: mapIntervalToPeriod(sub.interval),
+              nextBillingDate: sub.nextBillingAt ? new Date(sub.nextBillingAt).toISOString().split('T')[0] : undefined,
+              category: sub.category ?? undefined,
+              notes: sub.notes ?? undefined,
+              link: sub.vendorUrl ?? undefined,
+              isEssential: false,
+              createdAt: sub.createdAt,
+              updatedAt: sub.updatedAt,
+            }));
+            setItems(convertedData);
+            localStorage.setItem(KEY, JSON.stringify(convertedData));
+          }
         }
       } catch (error) {
-        console.error("Error reloading subscriptions:", error);
-        setItems([]);
+        console.error('Error loading subscriptions:', error);
+      } finally {
+        setLoading(false);
       }
-    }
-    const internal = () => reload();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY) reload();
     };
-    window.addEventListener("needix:subscriptions-changed", internal as EventListener);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener("needix:subscriptions-changed", internal as EventListener);
-      window.removeEventListener("storage", onStorage);
-    };
+
+    void loadData();
   }, []);
-
-  useEffect(() => {
-    if (!loaded) return; // avoid overwriting stored data on first mount
-    try {
-      localStorage.setItem(KEY, JSON.stringify(items));
-    } catch (error) {
-      console.error("Error saving subscriptions:", error);
-    }
-  }, [items, loaded]);
-
-  function persist(next: Subscription[]) {
-    setItems(next);
-    try {
-      localStorage.setItem(KEY, JSON.stringify(next));
-      window.dispatchEvent(new Event("needix:subscriptions-changed"));
-    } catch (error) {
-      console.error("Error persisting subscriptions:", error);
-    }
-  }
-
-  function add(sub: Omit<Subscription, "id" | "createdAt" | "updatedAt">) {
-    const next: Subscription = {
-      ...sub,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    persist([next, ...items]);
-  }
-
-  function remove(id: string) {
-    persist(items.filter((s) => s.id !== id));
-  }
-
-  function update(id: string, patch: Partial<Subscription>) {
-    const next = items.map((s) =>
-      s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s,
-    );
-    persist(next);
-  }
-
-  function importMany(subs: Subscription[]) {
-    persist([...subs, ...items]);
-  }
 
   const totals = useMemo(() => {
     const monthly = items
@@ -106,11 +77,151 @@ export function useSubscriptions() {
         if (s.period === "monthly") return s.price;
         if (s.period === "yearly") return s.price / 12;
         if (s.period === "weekly") return s.price * (52 / 12);
-        return s.price; // custom: treat as monthly for now
+        return s.price;
       })
       .reduce((a, b) => a + b, 0);
     return { monthly };
   }, [items]);
 
-  return { items, add, remove, update, importMany, totals };
+  const persist = (next: Subscription[]) => {
+    setItems(next);
+    localStorage.setItem(KEY, JSON.stringify(next));
+  };
+
+  const add = async (subscription: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const response = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: subscription.name,
+          amount: subscription.price,
+          currency: subscription.currency,
+          interval: mapPeriodToInterval(subscription.period),
+          nextBillingAt: subscription.nextBillingDate ? new Date(subscription.nextBillingDate).toISOString() : null,
+          category: subscription.category,
+          notes: subscription.notes,
+          vendorUrl: subscription.link,
+          status: 'active'
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to create subscription');
+
+      const created = (await response.json()) as ApiSubscription;
+
+      const newSub: Subscription = {
+        ...subscription,
+        id: created.id,
+        createdAt: created.createdAt,
+        updatedAt: created.updatedAt,
+      };
+
+      const updated = [...items, newSub];
+      persist(updated);
+      return created;
+    } catch (error) {
+      console.error('Error adding subscription:', error);
+      const newSub: Subscription = {
+        ...subscription,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      persist([...items, newSub]);
+      return newSub;
+    }
+  };
+
+  const remove = async (id: string) => {
+    try {
+      const response = await fetch(`/api/subscriptions/${id}`, { method: 'DELETE' });
+      if (!response.ok) console.error('Failed to delete subscription from backend');
+    } catch (error) {
+      console.error('Error deleting subscription:', error);
+    }
+    persist(items.filter((s) => s.id !== id));
+  };
+
+  const update = async (id: string, patch: Partial<Subscription>) => {
+    try {
+      const response = await fetch(`/api/subscriptions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: patch.name,
+          amount: patch.price,
+          currency: patch.currency,
+          interval: patch.period ? mapPeriodToInterval(patch.period) : undefined,
+          nextBillingAt: patch.nextBillingDate ? new Date(patch.nextBillingDate).toISOString() : undefined,
+          category: patch.category,
+          notes: patch.notes,
+          vendorUrl: patch.link,
+        })
+      });
+      if (!response.ok) console.error('Failed to update subscription in backend');
+    } catch (error) {
+      console.error('Error updating subscription:', error);
+    }
+
+    const next = items.map((s) =>
+      s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s
+    );
+    persist(next);
+  };
+
+  const importMany = (subs: Subscription[]) => {
+    persist([...subs, ...items]);
+  };
+
+  const refresh = async () => {
+    try {
+      const response = await fetch('/api/subscriptions');
+      if (response.ok) {
+        const backendData = (await response.json()) as ApiSubscription[];
+        if (Array.isArray(backendData)) {
+          const convertedData = backendData.map((sub) => ({
+            id: sub.id,
+            name: sub.name,
+            price: Number(sub.amount),
+            currency: sub.currency,
+            period: mapIntervalToPeriod(sub.interval),
+            nextBillingDate: sub.nextBillingAt ? new Date(sub.nextBillingAt).toISOString().split('T')[0] : undefined,
+            category: sub.category ?? undefined,
+            notes: sub.notes ?? undefined,
+            link: sub.vendorUrl ?? undefined,
+            isEssential: false,
+            createdAt: sub.createdAt,
+            updatedAt: sub.updatedAt,
+          }));
+          setItems(convertedData);
+          localStorage.setItem(KEY, JSON.stringify(convertedData));
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing subscriptions:', error);
+    }
+  };
+
+  return { items, add, remove, update, importMany, totals, loading, refresh };
+}
+
+// Helper mappers
+function mapPeriodToInterval(period: BillingPeriod): string {
+  switch (period) {
+    case 'monthly': return 'monthly';
+    case 'yearly': return 'yearly';
+    case 'weekly': return 'weekly';
+    case 'custom': return 'custom';
+    default: return 'monthly';
+  }
+}
+function mapIntervalToPeriod(interval: string): BillingPeriod {
+  switch (interval) {
+    case 'monthly': return 'monthly';
+    case 'yearly': return 'yearly';
+    case 'weekly': return 'weekly';
+    case 'custom': return 'custom';
+    default: return 'monthly';
+  }
 }

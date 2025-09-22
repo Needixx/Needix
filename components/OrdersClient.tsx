@@ -1,14 +1,54 @@
 // components/OrdersClient.tsx
 "use client";
 
+import { useState } from "react";
 import { useOrders } from "@/lib/useOrders";
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
-import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import AddOrderDialog from "@/components/AddOrderDialog";
 import UpgradeButton from "@/components/UpgradeButton";
 import { fmtCurrency } from "@/lib/format";
-import type { OrderFormData } from "@/lib/types-orders";
+
+// UI-level types (what AddOrderDialog emits)
+import type {
+  OrderFormData as UIOrderFormData,
+  OrderType as UIOrderType,
+  OrderStatus as UIOrderStatus,
+} from "@/lib/types-orders";
+
+// Hook-level type (what useOrders.add expects)
+import type { OrderFormData as HookOrderFormData } from "@/lib/useOrders";
+
+/* ---------- UI -> hook adapters ---------- */
+
+const uiTypeToHook = (t: UIOrderType): HookOrderFormData["type"] =>
+  t === "recurring" ? "recurring" : "one-time";
+
+const uiStatusToHook = (
+  s?: UIOrderStatus
+): HookOrderFormData["status"] | undefined => {
+  if (!s) return undefined;
+  if (s === "active" || s === "completed" || s === "cancelled") return s;
+  return "active";
+};
+
+const uiFormToHookForm = (d: UIOrderFormData): HookOrderFormData => ({
+  name: d.name,
+  type: uiTypeToHook(d.type),
+  amount: d.amount,
+  currency: d.currency,
+  status: uiStatusToHook(d.status),
+  scheduledDate: d.scheduledDate,
+  nextDate: d.nextDate,
+  priceCeiling: d.priceCeiling,
+  currentPrice: d.currentPrice,
+  vendor: d.vendor,
+  category: d.category,
+  notes: d.notes,
+  isEssential: d.isEssential,
+});
+
+/* ---------------------------------------- */
 
 export default function OrdersClient() {
   const { items: orders, remove, add } = useOrders();
@@ -20,16 +60,18 @@ export default function OrdersClient() {
   const canAddOrder = isPro || orders.length < 2;
   const orderLimit = isPro ? Infinity : 2;
 
-  const filteredOrders = filter === "all" 
-    ? orders 
-    : orders.filter(order => order.status === filter);
+  const filteredOrders =
+    filter === "all" ? orders : orders.filter((order) => order.status === filter);
 
   // Calculate stats
-  const totalOrderValue = orders.reduce((sum, order) => sum + (order.amount || 0), 0);
-  const activeOrders = orders.filter(order => order.status === 'active').length;
+  const totalOrderValue = orders.reduce(
+    (sum, order) => sum + (order.amount || 0),
+    0
+  );
+  const activeOrders = orders.filter((order) => order.status === "active").length;
 
-  const handleAdd = (orderData: OrderFormData) => {
-    add(orderData);
+  const handleAdd = (orderData: UIOrderFormData) => {
+    void add(uiFormToHookForm(orderData)); // explicitly ignore promise
     setShowAddDialog(false);
   };
 
@@ -43,20 +85,20 @@ export default function OrdersClient() {
               <h3 className="text-lg font-semibold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-2">
                 📦 Free Plan - Order Tracking
               </h3>
-              <p className="text-white/80 mb-2">
-                Track up to 2 orders with basic features.
-              </p>
+              <p className="text-white/80 mb-2">Track up to 2 orders with basic features.</p>
               <div className="text-sm text-white/60 mb-3">
-                Currently using <span className="font-semibold text-cyan-300">{orders.length} of {orderLimit}</span> free order slots
+                Currently using{" "}
+                <span className="font-semibold text-cyan-300">
+                  {orders.length} of {orderLimit}
+                </span>{" "}
+                free order slots
               </div>
               <div className="text-sm text-cyan-300">
                 ⭐ Upgrade for unlimited orders, price tracking & more!
               </div>
             </div>
             <div className="flex flex-col gap-2">
-              <UpgradeButton 
-                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 font-semibold transform hover:scale-105 transition-all"
-              />
+              <UpgradeButton className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 font-semibold transform hover:scale-105 transition-all" />
               <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
             </div>
           </div>
@@ -90,21 +132,21 @@ export default function OrdersClient() {
         <div className="flex gap-3">
           {/* Filter Buttons */}
           <div className="flex rounded-xl border border-white/10 bg-white/5 p-1">
-            {['all', 'active', 'completed', 'cancelled'].map((filterOption) => (
+            {["all", "active", "completed", "cancelled"].map((filterOption) => (
               <button
                 key={filterOption}
                 onClick={() => setFilter(filterOption)}
                 className={`px-3 py-1 text-sm rounded-lg transition-colors capitalize ${
                   filter === filterOption
-                    ? 'bg-cyan-500/20 text-cyan-300'
-                    : 'text-white/70 hover:text-white'
+                    ? "bg-cyan-500/20 text-cyan-300"
+                    : "text-white/70 hover:text-white"
                 }`}
               >
                 {filterOption}
               </button>
             ))}
           </div>
-          
+
           {canAddOrder ? (
             <Button
               onClick={() => setShowAddDialog(true)}
@@ -117,9 +159,7 @@ export default function OrdersClient() {
               <p className="text-white/60 text-sm mb-2">
                 Free plan limit reached ({orders.length}/{orderLimit})
               </p>
-              <UpgradeButton 
-                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
-              />
+              <UpgradeButton className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700" />
             </div>
           )}
         </div>
@@ -133,10 +173,9 @@ export default function OrdersClient() {
             {filter === "all" ? "No orders yet" : `No ${filter} orders`}
           </h3>
           <p className="text-white/60 mb-6">
-            {filter === "all" 
+            {filter === "all"
               ? "Start tracking your online orders to stay organized."
-              : `You don't have any ${filter} orders at the moment.`
-            }
+              : `You don't have any ${filter} orders at the moment.`}
           </p>
           {filter === "all" && canAddOrder && (
             <Button
@@ -150,24 +189,35 @@ export default function OrdersClient() {
       ) : (
         <div className="grid gap-4">
           {filteredOrders.map((order) => (
-            <div key={order.id} className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6">
+            <div
+              key={order.id}
+              className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6"
+            >
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <h3 className="font-semibold text-lg">{order.name}</h3>
-                  {order.vendor && <p className="text-white/60 text-sm">{order.vendor}</p>}
+                  {order.vendor && (
+                    <p className="text-white/60 text-sm">{order.vendor}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    order.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                    order.status === 'active' ? 'bg-blue-500/20 text-blue-400' :
-                    order.status === 'cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'
-                  }`}>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      order.status === "completed"
+                        ? "bg-green-500/20 text-green-400"
+                        : order.status === "active"
+                        ? "bg-blue-500/20 text-blue-400"
+                        : order.status === "cancelled"
+                        ? "bg-red-500/20 text-red-400"
+                        : "bg-gray-500/20 text-gray-400"
+                    }`}
+                  >
                     {order.status}
                   </span>
                   <button
                     onClick={() => {
                       if (confirm(`Delete ${order.name}?`)) {
-                        remove(order.id);
+                        void remove(order.id); // explicitly ignore promise
                       }
                     }}
                     className="text-red-400 hover:text-red-300 text-sm"
@@ -176,27 +226,29 @@ export default function OrdersClient() {
                   </button>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 {order.amount && (
                   <div>
                     <span className="text-white/60 block">Price</span>
-                    <span className="font-medium">{fmtCurrency(order.amount)}</span>
+                    <span className="font-medium">
+                      {fmtCurrency(order.amount)}
+                    </span>
                   </div>
                 )}
-                
+
                 <div>
                   <span className="text-white/60 block">Type</span>
                   <span className="capitalize">{order.type}</span>
                 </div>
-                
+
                 {order.nextDate && (
                   <div>
                     <span className="text-white/60 block">Next Date</span>
                     <span>{new Date(order.nextDate).toLocaleDateString()}</span>
                   </div>
                 )}
-                
+
                 {order.scheduledDate && (
                   <div>
                     <span className="text-white/60 block">Scheduled</span>
@@ -232,7 +284,7 @@ export default function OrdersClient() {
 
       {/* Add Order Dialog */}
       {showAddDialog && (
-        <AddOrderDialog 
+        <AddOrderDialog
           open={showAddDialog}
           onOpenChange={setShowAddDialog}
           onAdd={handleAdd}

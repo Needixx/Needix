@@ -2,7 +2,21 @@
 "use client";
 
 import { useState } from "react";
-import { useOrders } from "@/lib/useOrders";
+
+// 👉 Hook + its types (the data actually stored/updated)
+import {
+  useOrders,
+  type OrderItem as HookOrderItem,
+  type OrderFormData as HookOrderFormData,
+} from "@/lib/useOrders";
+
+// 👉 UI types used by Add/Edit dialogs
+import type {
+  OrderItem as UIOrderItem,
+  OrderFormData as UIOrderFormData,
+  OrderType as UIOrderType,
+} from "@/lib/types-orders";
+
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import AddOrderDialog from "@/components/AddOrderDialog";
 import EditOrderDialog from "@/components/EditOrderDialog";
@@ -10,7 +24,6 @@ import UpgradeButton from "@/components/UpgradeButton";
 import { Button } from "@/components/ui/Button";
 import { fmtCurrency } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
-import type { OrderItem, OrderFormData } from "@/lib/types-orders";
 
 function StatCard({
   title,
@@ -32,47 +45,148 @@ function StatCard({
   );
 }
 
+/* ---------------------------
+   Type bridges (UI <-> Hook)
+----------------------------*/
+
+// UI can include "future"; the hook only knows "one-time" | "recurring".
+function uiTypeToHook(t: UIOrderType): HookOrderFormData["type"] {
+  return t === "recurring" ? "recurring" : "one-time";
+}
+
+// Some UI statuses (e.g. "paused") don't exist in the hook.
+// Map unknowns to a safe default ("active").
+type HookStatus = HookOrderFormData["status"];
+type UIStatus = UIOrderItem["status"];
+function uiStatusToHookStatus(s?: UIStatus): HookStatus | undefined {
+  if (!s) return undefined;
+  if (s === "active" || s === "completed" || s === "cancelled") {
+    return s as HookStatus;
+  }
+  // "paused" or anything else → treat as active for the hook model
+  return "active" as HookStatus;
+}
+
+// Convert UI form payload from dialogs to the hook's form payload
+function uiFormToHookForm(data: UIOrderFormData): HookOrderFormData {
+  return {
+    name: data.name,
+    type: uiTypeToHook(data.type),
+    amount: data.amount,
+    currency: data.currency,
+    status: uiStatusToHookStatus(data.status),
+    scheduledDate: data.scheduledDate,
+    nextDate: data.nextDate,
+    priceCeiling: data.priceCeiling,
+    currentPrice: data.currentPrice,
+    vendor: data.vendor,
+    category: data.category,
+    notes: data.notes,
+    isEssential: data.isEssential,
+  };
+}
+
+// Convert a hook OrderItem to a UI OrderItem for the Edit dialog
+function hookItemToUIItem(item: HookOrderItem): UIOrderItem {
+  return {
+    id: item.id,
+    name: item.name,
+    vendor: item.vendor,
+    // hook only has "one-time" | "recurring"; UI will accept that subset
+    type: (item.type as UIOrderItem["type"]),
+    status: (item.status as UIOrderItem["status"]),
+    currency: item.currency,
+    isEssential: item.isEssential,
+    category: item.category,
+    productUrl: item.productUrl,
+    amount: item.amount,
+    priceCeiling: item.priceCeiling,
+    currentPrice: item.currentPrice,
+    cadence: (item.cadence as UIOrderItem["cadence"]),
+    nextDate: item.nextDate,
+    scheduledDate: item.scheduledDate,
+    // UI expects an object for usage; the hook stores a string.
+    // Provide undefined so the Edit dialog prop type is satisfied.
+    usage: undefined,
+    leadTimeDays: item.leadTimeDays,
+    envelopeId: item.envelopeId,
+    notes: item.notes,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+// Build a hook patch from a UI update payload
+function uiUpdateToHookPatch(
+  updated: UIOrderFormData & { id: string },
+  current: HookOrderItem
+): Partial<HookOrderItem> {
+  return {
+    name: updated.name ?? current.name,
+    vendor: updated.vendor ?? current.vendor,
+    type: updated.type ? uiTypeToHook(updated.type) : current.type,
+    status: uiStatusToHookStatus(updated.status) ?? current.status,
+    currency: updated.currency ?? current.currency,
+    isEssential: updated.isEssential ?? current.isEssential,
+    category: updated.category ?? current.category,
+    productUrl: current.productUrl,
+    amount: updated.amount ?? current.amount,
+    priceCeiling: updated.priceCeiling ?? current.priceCeiling,
+    currentPrice: updated.currentPrice ?? current.currentPrice,
+    cadence: current.cadence, // unchanged by UI
+    nextDate: updated.nextDate ?? current.nextDate,
+    scheduledDate: updated.scheduledDate ?? current.scheduledDate,
+    // keep existing string usage in the hook model
+    usage: current.usage,
+    leadTimeDays: current.leadTimeDays,
+    envelopeId: current.envelopeId,
+    notes: updated.notes ?? current.notes,
+  };
+}
+
 export default function OrdersPage() {
   const { items: orders, remove, update, add } = useOrders();
   const { isPro } = useSubscriptionLimit();
   const toast = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<OrderItem | null>(null);
+  const [editingOrder, setEditingOrder] = useState<HookOrderItem | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
   // Check if user can add more orders
   const canAddOrder = isPro || orders.length < 2;
   const orderLimit = isPro ? Infinity : 2;
 
-  const filteredOrders = filter === "all" 
-    ? orders 
-    : orders.filter(order => order.status === filter);
+  const filteredOrders = filter === "all" ? orders : orders.filter((order) => order.status === filter);
 
   // Calculate stats
   const totalOrderValue = orders.reduce((sum, order) => sum + (order.amount || 0), 0);
-  const activeOrders = orders.filter(order => order.status === 'active').length;
+  const activeOrders = orders.filter((order) => order.status === "active").length;
 
-  const handleEdit = (order: OrderItem) => {
+  const handleEdit = (order: HookOrderItem) => {
     setEditingOrder(order);
   };
 
-  const handleUpdate = (updatedOrder: OrderFormData & { id: string }) => {
+  // onUpdate signature must match EditOrderDialog (UI types)
+  const handleUpdate = (updatedOrder: UIOrderFormData & { id: string }) => {
     if (!editingOrder) return;
-    update(editingOrder.id, updatedOrder);
+    const patch = uiUpdateToHookPatch(updatedOrder, editingOrder);
+    void update(editingOrder.id, patch);
     setEditingOrder(null);
     toast(`Updated ${updatedOrder.name || editingOrder.name}`, "success");
   };
 
   const handleDelete = (id: string) => {
-    const order = orders.find(o => o.id === id);
+    const order = orders.find((o) => o.id === id);
     if (order && confirm(`Delete ${order.name}?`)) {
-      remove(id);
+      void remove(id);
       toast(`Deleted ${order.name}`, "success");
     }
   };
 
-  const handleAdd = (orderData: OrderFormData) => {
-    add(orderData);
+  // onAdd signature must match AddOrderDialog (UI types)
+  const handleAdd = (orderData: UIOrderFormData) => {
+    const toHook = uiFormToHookForm(orderData);
+    void add(toHook);
     setShowAddDialog(false);
     toast(`Added ${orderData.name}`, "success");
   };
@@ -85,14 +199,12 @@ export default function OrdersPage() {
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-cyan-500/8 via-transparent to-transparent -z-10" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-500/8 via-transparent to-transparent -z-10" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-indigo-500/4 to-transparent -z-10" />
-      
+
       <main className="relative mx-auto max-w-6xl px-4 py-10">
         {/* Header */}
         <div className="mb-8">
           <h1 className="mb-2 text-3xl font-bold text-white">Your Orders</h1>
-          <p className="text-white/70">
-            Track your online purchases and deliveries
-          </p>
+          <p className="text-white/70">Track your online purchases and deliveries</p>
           {!isPro && (
             <p className="text-cyan-300 text-sm mt-1">
               Using {orders.length} of {orderLimit} free orders
@@ -108,20 +220,14 @@ export default function OrdersPage() {
                 <h3 className="text-lg font-semibold bg-gradient-to-r from-cyan-300 to-blue-300 bg-clip-text text-transparent mb-2">
                   📦 Free Plan - Order Tracking
                 </h3>
-                <p className="text-white/80 mb-2">
-                  Track up to 2 orders with basic features.
-                </p>
+                <p className="text-white/80 mb-2">Track up to 2 orders with basic features.</p>
                 <div className="text-sm text-white/60 mb-3">
                   Currently using <span className="font-semibold text-cyan-300">{orders.length} of {orderLimit}</span> free order slots
                 </div>
-                <div className="text-sm text-cyan-300">
-                  ⭐ Upgrade for unlimited orders, price tracking & more!
-                </div>
+                <div className="text-sm text-cyan-300">⭐ Upgrade for unlimited orders, price tracking & more!</div>
               </div>
               <div className="flex flex-col gap-2">
-                <UpgradeButton 
-                  className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 font-semibold transform hover:scale-105 transition-all"
-                />
+                <UpgradeButton className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 font-semibold transform hover:scale-105 transition-all" />
                 <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
               </div>
             </div>
@@ -158,21 +264,19 @@ export default function OrdersPage() {
           <div className="flex gap-3">
             {/* Filter Buttons */}
             <div className="flex rounded-xl border border-white/10 bg-white/5 p-1">
-              {['all', 'active', 'completed', 'cancelled'].map((filterOption) => (
+              {["all", "active", "completed", "cancelled"].map((filterOption) => (
                 <button
                   key={filterOption}
                   onClick={() => setFilter(filterOption)}
                   className={`px-3 py-1 text-sm rounded-lg transition-colors capitalize ${
-                    filter === filterOption
-                      ? 'bg-cyan-500/20 text-cyan-300'
-                      : 'text-white/70 hover:text-white'
+                    filter === filterOption ? "bg-cyan-500/20 text-cyan-300" : "text-white/70 hover:text-white"
                   }`}
                 >
                   {filterOption}
                 </button>
               ))}
             </div>
-            
+
             {canAddOrder ? (
               <Button
                 onClick={() => setShowAddDialog(true)}
@@ -185,9 +289,7 @@ export default function OrdersPage() {
                 <p className="text-white/60 text-sm mb-2">
                   Free plan limit reached ({orders.length}/{orderLimit})
                 </p>
-                <UpgradeButton 
-                  className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
-                />
+                <UpgradeButton className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700" />
               </div>
             )}
           </div>
@@ -201,10 +303,9 @@ export default function OrdersPage() {
               {filter === "all" ? "No orders yet" : `No ${filter} orders`}
             </h3>
             <p className="text-white/60 mb-6">
-              {filter === "all" 
+              {filter === "all"
                 ? "Start tracking your online orders to stay organized."
-                : `You don't have any ${filter} orders at the moment.`
-              }
+                : `You don't have any ${filter} orders at the moment.`}
             </p>
             {filter === "all" && canAddOrder && (
               <Button
@@ -233,30 +334,28 @@ export default function OrdersPage() {
                   <tr key={order.id} className="border-t border-white/10">
                     <td className="px-4 py-3">
                       <div className="font-medium">{order.name}</div>
-                      {order.vendor && (
-                        <div className="text-xs text-white/50">{order.vendor}</div>
-                      )}
+                      {order.vendor && <div className="text-xs text-white/50">{order.vendor}</div>}
                     </td>
                     <td className="px-4 py-3 capitalize">{order.type}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        order.status === 'completed' ? 'bg-green-400/20 text-green-300' :
-                        order.status === 'active' ? 'bg-blue-400/20 text-blue-300' :
-                        order.status === 'cancelled' ? 'bg-red-400/20 text-red-300' : 'bg-gray-400/20 text-gray-300'
-                      }`}>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          order.status === "completed"
+                            ? "bg-green-400/20 text-green-300"
+                            : order.status === "active"
+                            ? "bg-blue-400/20 text-blue-300"
+                            : order.status === "cancelled"
+                            ? "bg-red-400/20 text-red-300"
+                            : "bg-gray-400/20 text-gray-300"
+                        }`}
+                      >
                         {order.status}
                       </span>
                     </td>
+                    <td className="px-4 py-3">{order.amount ? fmtCurrency(order.amount) : "—"}</td>
                     <td className="px-4 py-3">
-                      {order.amount ? fmtCurrency(order.amount) : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {order.nextDate && (
-                        <div>{new Date(order.nextDate).toLocaleDateString()}</div>
-                      )}
-                      {order.scheduledDate && (
-                        <div>{new Date(order.scheduledDate).toLocaleDateString()}</div>
-                      )}
+                      {order.nextDate && <div>{new Date(order.nextDate).toLocaleDateString()}</div>}
+                      {order.scheduledDate && <div>{new Date(order.scheduledDate).toLocaleDateString()}</div>}
                       {!order.nextDate && !order.scheduledDate && "—"}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -284,23 +383,19 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {/* Add Order Dialog */}
+        {/* Add Order Dialog (expects UI types) */}
         {showAddDialog && (
-          <AddOrderDialog 
-            open={showAddDialog}
-            onOpenChange={setShowAddDialog}
-            onAdd={handleAdd}
-          />
+          <AddOrderDialog open={showAddDialog} onOpenChange={setShowAddDialog} onAdd={handleAdd} />
         )}
 
-        {/* Edit Order Dialog */}
+        {/* Edit Order Dialog (expects UI types) */}
         {editingOrder && (
           <EditOrderDialog
             open={!!editingOrder}
             onOpenChange={(open) => {
               if (!open) setEditingOrder(null);
             }}
-            order={editingOrder}
+            order={hookItemToUIItem(editingOrder)}
             onUpdate={handleUpdate}
           />
         )}

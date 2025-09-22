@@ -1,24 +1,13 @@
-// app/api/subscriptions/[id]/route.ts
+// app/api/orders/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import type { Recurrence, SubscriptionStatus } from '@prisma/client';
 
 // Pull the dynamic [id] from the URL (no second arg needed)
 function getId(req: NextRequest): string | null {
   const p = req.nextUrl.pathname.replace(/\/+$/, '');
   const id = p.split('/').pop() ?? null;
   return id && id.length > 0 ? id : null;
-}
-
-function asRecurrence(v: unknown): Recurrence | undefined {
-  const ok: Recurrence[] = ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'];
-  return ok.includes(v as Recurrence) ? (v as Recurrence) : undefined;
-}
-
-function asStatus(v: unknown): SubscriptionStatus | undefined {
-  const ok: SubscriptionStatus[] = ['active', 'paused', 'canceled'];
-  return ok.includes(v as SubscriptionStatus) ? (v as SubscriptionStatus) : undefined;
 }
 
 export const PATCH = async (req: NextRequest) => {
@@ -31,8 +20,8 @@ export const PATCH = async (req: NextRequest) => {
     const id = getId(req);
     if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
 
-    // Ensure it belongs to the user
-    const existing = await prisma.subscription.findUnique({
+    // verify ownership
+    const existing = await prisma.order.findUnique({
       where: { id },
       select: { userId: true },
     });
@@ -42,45 +31,33 @@ export const PATCH = async (req: NextRequest) => {
     }
 
     const payload = (await req.json()) as {
-      name?: string;
-      amount?: number;
+      merchant?: string;
+      total?: number;
       currency?: string;
-      interval?: unknown;
-      nextBillingAt?: string | null;
+      orderDate?: string | null; // only set if provided and non-null
       category?: string | null;
       notes?: string | null;
-      vendorUrl?: string | null;
-      status?: unknown;
     };
 
-    const data: Parameters<typeof prisma.subscription.update>[0]['data'] = {};
-    if (payload.name !== undefined) data.name = payload.name;
-    if (payload.amount !== undefined) data.amount = payload.amount;
+    const data: Parameters<typeof prisma.order.update>[0]['data'] = {};
+    if (payload.merchant !== undefined) data.merchant = payload.merchant;
+    if (payload.total !== undefined) data.total = payload.total;
     if (payload.currency !== undefined) data.currency = payload.currency;
-
-    const rec = asRecurrence(payload.interval);
-    if (rec) data.interval = rec;
-
-    // nextBillingAt is nullable: set Date if provided (string), set null if explicitly null, else leave unchanged
-    if (payload.nextBillingAt !== undefined) {
-      data.nextBillingAt = payload.nextBillingAt === null ? null : new Date(payload.nextBillingAt);
+    if (payload.orderDate !== undefined && payload.orderDate !== null) {
+      data.orderDate = new Date(payload.orderDate);
     }
-
     if (payload.category !== undefined) data.category = payload.category ?? null;
     if (payload.notes !== undefined) data.notes = payload.notes ?? null;
-    if (payload.vendorUrl !== undefined) data.vendorUrl = payload.vendorUrl ?? null;
 
-    const st = asStatus(payload.status);
-    if (st) data.status = st;
-
-    const subscription = await prisma.subscription.update({
+    const order = await prisma.order.update({
       where: { id },
       data,
+      include: { items: true },
     });
 
-    return NextResponse.json(subscription);
+    return NextResponse.json(order);
   } catch (err) {
-    console.error('Error updating subscription:', err);
+    console.error('Error updating order:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 };
@@ -95,8 +72,8 @@ export const DELETE = async (req: NextRequest) => {
     const id = getId(req);
     if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
 
-    // Ensure it belongs to the user
-    const existing = await prisma.subscription.findUnique({
+    // verify ownership
+    const existing = await prisma.order.findUnique({
       where: { id },
       select: { userId: true },
     });
@@ -105,10 +82,10 @@ export const DELETE = async (req: NextRequest) => {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await prisma.subscription.delete({ where: { id } });
+    await prisma.order.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error('Error deleting subscription:', err);
+    console.error('Error deleting order:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 };
