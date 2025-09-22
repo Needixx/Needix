@@ -1,4 +1,5 @@
 // app/dashboard/page.tsx
+
 "use client";
 
 import { useMemo } from "react";
@@ -6,12 +7,25 @@ import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useOrders } from "@/lib/useOrders";
 import { useExpenses } from "@/lib/useExpenses";
 import { fmtCurrency } from "@/lib/format";
+import AIAssist from "@/components/AIAssist";
 import Link from "next/link";
 
-function startOfMonth(d = new Date()) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function endOfMonth(d = new Date()) { return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999); }
-function daysFromNow(days: number) { return new Date(Date.now() + days * 24 * 60 * 60 * 1000); }
-function inRange(date: Date, start: Date, end: Date) { return date >= start && date <= end; }
+// Helper functions for date calculations
+function startOfMonth(d = new Date()) { 
+  return new Date(d.getFullYear(), d.getMonth(), 1); 
+}
+
+function endOfMonth(d = new Date()) { 
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999); 
+}
+
+function daysFromNow(days: number) { 
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000); 
+}
+
+function inRange(date: Date, start: Date, end: Date) { 
+  return date >= start && date <= end; 
+}
 
 // Helper function to parse date strings as local dates (avoiding timezone shifts)
 function parseLocalDate(dateString: string): Date {
@@ -30,13 +44,13 @@ function parseLocalDate(dateString: string): Date {
   return new Date(year, month, day);
 }
 
-function StatCard({
-  title,
-  value,
-  subtitle,
-  gradient,
-  icon,
-}: {
+function StatCard({ 
+  title, 
+  value, 
+  subtitle, 
+  gradient, 
+  icon 
+}: { 
   title: string;
   value: string;
   subtitle: string;
@@ -44,24 +58,26 @@ function StatCard({
   icon: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-white/10 bg-gradient-to-br ${gradient} backdrop-blur-sm p-6`}>
+    <div className={`rounded-2xl border border-white/10 bg-gradient-to-br ${gradient} backdrop-blur-sm p-6 hover:scale-[1.02] transition-all duration-200`}>
       <div className="flex items-center gap-3 mb-3">
         <span className="text-2xl">{icon}</span>
-        <div className="text-sm font-medium text-white/70">{title}</div>
+        <div>
+          <h3 className="text-2xl font-bold text-white">{value}</h3>
+          <p className="text-sm font-medium text-white/90">{title}</p>
+        </div>
       </div>
-      <div className="text-2xl font-bold text-white mb-1">{value}</div>
-      <div className="text-xs text-white/60">{subtitle}</div>
+      <p className="text-white/70 text-sm">{subtitle}</p>
     </div>
   );
 }
 
-function ActionButton({
-  title,
-  subtitle,
-  icon,
-  href,
-  gradient,
-}: {
+function ActionButton({ 
+  title, 
+  subtitle, 
+  icon, 
+  href, 
+  gradient 
+}: { 
   title: string;
   subtitle: string;
   icon: string;
@@ -71,26 +87,24 @@ function ActionButton({
   return (
     <Link
       href={href}
-      className={`block rounded-2xl border border-white/10 bg-gradient-to-r ${gradient} backdrop-blur-sm p-4 hover:scale-[1.02] transition-all duration-200`}
+      className={`block rounded-xl border border-white/10 bg-gradient-to-br ${gradient} backdrop-blur-sm p-4 hover:scale-[1.02] transition-all duration-200 min-w-[200px]`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 mb-2">
         <span className="text-xl">{icon}</span>
-        <div>
-          <h3 className="font-semibold text-white">{title}</h3>
-          <p className="text-white/70 text-sm">{subtitle}</p>
-        </div>
+        <h3 className="font-semibold text-white">{title}</h3>
       </div>
+      <p className="text-white/70 text-sm">{subtitle}</p>
     </Link>
   );
 }
 
-function SectionCard({
-  title,
-  description,
-  icon,
-  href,
-  gradient,
-}: {
+function SectionCard({ 
+  title, 
+  description, 
+  icon, 
+  href, 
+  gradient 
+}: { 
   title: string;
   description: string;
   icon: string;
@@ -121,21 +135,21 @@ export default function DashboardOverview() {
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
     
-    // Calculate upcoming renewals (next 7 days) - using parseLocalDate
+    // Calculate upcoming renewals (next 7 days)
     const renewals = subs.filter((s) => {
       if (!s.nextBillingDate) return false;
       const renewalDate = parseLocalDate(s.nextBillingDate);
       return inRange(renewalDate, now, daysFromNow(7));
     });
 
-    // Find next renewal - using parseLocalDate
+    // Find next renewal
     const nextRenewal = subs
       .filter(s => s.nextBillingDate)
       .map(s => ({ ...s, date: parseLocalDate(s.nextBillingDate!) }))
       .filter(s => s.date >= now)
       .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
     
-    // Calculate orders this month - using parseLocalDate
+    // Calculate orders this month
     const ordersTotal = orders.reduce((sum, o) => {
       if (!o.amount || o.status !== 'active') return sum;
       const orderDate = o.type === 'recurring' 
@@ -168,47 +182,68 @@ export default function DashboardOverview() {
   }, [subs, orders, subTotals?.monthly, expenseTotals?.monthly]);
 
   return (
-    <div className="relative min-h-screen">
-      {/* Secure Dark Background with Subtle Accents */}
-      <div className="fixed inset-0 bg-black -z-10" />
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-neutral-900 to-slate-900 -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-emerald-500/6 via-transparent to-transparent -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-500/6 via-transparent to-transparent -z-10" />
-      
-      <main className="relative mx-auto max-w-7xl px-4 py-8">
-        {/* Header Section */}
+    <>
+      <div className="relative min-h-screen">
+        {/* Secure Dark Background with Subtle Accents */}
+        <div className="fixed inset-0 bg-black -z-10" />
+        <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-neutral-900 to-slate-900 -z-10" />
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-emerald-500/6 via-transparent to-transparent -z-10" />
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-500/6 via-transparent to-transparent -z-10" />
+        
+        <main className="relative mx-auto max-w-7xl px-4 py-8">
+          {/* Navigation is handled by DashboardLayout */}
+
+        {/* Header Section with AI Integration */}
         <div className="mb-8">
           <div className="rounded-3xl border border-white/10 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-cyan-500/10 backdrop-blur-sm p-8">
-            <h1 className="mb-3 text-4xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              Financial Dashboard
-            </h1>
-            <p className="text-gray-400 text-lg mb-6">
-              Your complete financial overview — track subscriptions, orders, and expenses all in one place.
-            </p>
-            
-            {/* Quick Action Buttons */}
-            <div className="flex flex-wrap gap-3">
-              <ActionButton
-                title="Subscriptions"
-                subtitle="Track a new recurring service"
-                icon="📺"
-                href="/dashboard/subscriptions"
-                gradient="from-purple-500/20 to-pink-500/20"
-              />
-              <ActionButton
-                title="Orders"
-                subtitle="Monitor a scheduled purchase"
-                icon="📦"
-                href="/dashboard/orders"
-                gradient="from-cyan-500/20 to-blue-500/20"
-              />
-              <ActionButton
-                title="Expenses"
-                subtitle="Record a monthly expense"
-                icon="💰"
-                href="/dashboard/expenses"
-                gradient="from-green-500/20 to-emerald-500/20"
-              />
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              <div>
+                <h1 className="mb-3 text-4xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                  Financial Dashboard
+                </h1>
+                <p className="text-gray-400 text-lg mb-6">
+                  Your complete financial overview — track subscriptions, orders, and expenses all in one place.
+                </p>
+                
+                {/* Quick Action Buttons */}
+                <div className="flex flex-wrap gap-3">
+                  <ActionButton
+                    title="Subscriptions"
+                    subtitle="Track recurring services"
+                    icon="📺"
+                    href="/dashboard/subscriptions"
+                    gradient="from-purple-500/20 to-pink-500/20"
+                  />
+                  <ActionButton
+                    title="Orders"
+                    subtitle="Monitor purchases"
+                    icon="📦"
+                    href="/dashboard/orders"
+                    gradient="from-cyan-500/20 to-blue-500/20"
+                  />
+                  <ActionButton
+                    title="Expenses"
+                    subtitle="Record monthly costs"
+                    icon="💰"
+                    href="/dashboard/expenses"
+                    gradient="from-green-500/20 to-emerald-500/20"
+                  />
+                </div>
+              </div>
+
+              {/* AI Assistant Integration */}
+              <div className="flex flex-col items-center lg:items-end gap-4">
+                <div className="text-center lg:text-right">
+                  <h3 className="text-lg font-semibold text-white mb-2">Quick Add with AI</h3>
+                  <p className="text-white/60 text-sm mb-4 max-w-xs">
+                    Paste receipts, billing info, or describe purchases. Our AI will categorize everything automatically.
+                  </p>
+                </div>
+                <AIAssist 
+                  buttonLabel="🤖 Add with AI"
+                  className="bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border-cyan-400/30 hover:from-cyan-500/30 hover:to-purple-500/30"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -260,40 +295,37 @@ export default function DashboardOverview() {
                   <span className="font-medium text-white">{upcomingRenewals}</span>
                 </div>
               ) : (
-                <div className="rounded-xl bg-white/5 p-3 text-center">
-                  <span className="text-white/60 text-sm">No renewals this week</span>
-                </div>
+                <div className="text-white/60 text-sm">No upcoming renewals this week</div>
               )}
               
               {nextRenewal && (
-                <div className="rounded-xl bg-purple-500/10 border border-purple-400/20 p-3">
-                  <div className="text-sm text-purple-300 font-medium">Next Renewal</div>
-                  <div className="text-white">{nextRenewal.name}</div>
-                  <div className="text-white/70 text-xs">
-                    {nextRenewal.date.toLocaleDateString()} - {fmtCurrency(nextRenewal.price)}
+                <div className="rounded-xl bg-white/5 p-3">
+                  <div className="text-white/80 text-sm">Next renewal:</div>
+                  <div className="font-medium text-white">{nextRenewal.name}</div>
+                  <div className="text-white/60 text-xs">
+                    {nextRenewal.date.toLocaleDateString()}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Financial Insights */}
+          {/* Quick Insights */}
           <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-6">
             <h3 className="mb-4 text-lg font-semibold text-white flex items-center gap-2">
               <span>📊</span>
-              Financial Insights
+              Quick Insights
             </h3>
             <div className="space-y-3">
               <div className="rounded-xl bg-white/5 p-3">
-                <div className="text-sm text-white/70">Annual Spending</div>
-                <div className="text-lg font-semibold text-white">{fmtCurrency(annualSpending)}</div>
+                <div className="text-white/80 text-sm">Annual spending</div>
+                <div className="font-medium text-white">{fmtCurrency(annualSpending)}</div>
               </div>
               
               {potentialSavings > 0 && (
-                <div className="rounded-xl bg-green-500/10 border border-green-400/20 p-3">
-                  <div className="text-sm text-green-300">Potential Savings</div>
-                  <div className="text-white">{fmtCurrency(potentialSavings * 3)}</div>
-                  <div className="text-green-200 text-xs">Review unused subscriptions</div>
+                <div className="rounded-xl bg-white/5 p-3">
+                  <div className="text-white/80 text-sm">Low-cost subscriptions</div>
+                  <div className="font-medium text-white">{potentialSavings} under $5</div>
                 </div>
               )}
             </div>
@@ -305,19 +337,19 @@ export default function DashboardOverview() {
               <span>⚡</span>
               Quick Actions
             </h3>
-            <div className="space-y-2">
+            <div className="grid gap-3">
               <Link
                 href="/dashboard/subscriptions"
                 className="block rounded-xl bg-purple-500/10 border border-purple-400/20 p-3 hover:bg-purple-500/20 transition-colors"
               >
                 <div className="text-sm text-purple-300">Add Subscription</div>
-                <div className="text-white text-xs">Track a new recurring service</div>
+                <div className="text-white text-xs">Track a recurring service</div>
               </Link>
               <Link
                 href="/dashboard/expenses"
-                className="block rounded-xl bg-green-500/10 border border-green-400/20 p-3 hover:bg-green-500/20 transition-colors"
+                className="block rounded-xl bg-emerald-500/10 border border-emerald-400/20 p-3 hover:bg-emerald-500/20 transition-colors"
               >
-                <div className="text-sm text-green-300">Log Expense</div>
+                <div className="text-sm text-emerald-300">Add Expense</div>
                 <div className="text-white text-xs">Record a monthly expense</div>
               </Link>
               <Link
@@ -355,7 +387,8 @@ export default function DashboardOverview() {
             gradient="from-green-600/15 to-emerald-600/15"
           />
         </div>
-      </main>
-    </div>
+              </main>
+      </div>
+    </>
   );
 }
