@@ -1,24 +1,35 @@
-// app/api/subscriptions/[id]/route.ts
+// app/api/subscriptions/[id]/route.ts - TYPE SAFE VERSION
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import type { Recurrence, SubscriptionStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { Recurrence } from '@prisma/client';
 
-// Pull the dynamic [id] from the URL (no second arg needed)
+interface UpdateSubscriptionBody {
+  name?: string;
+  amount?: number;
+  currency?: string;
+  interval?: string;
+  nextBillingAt?: string | null;
+  category?: string | null;
+  notes?: string | null;
+  vendorUrl?: string | null;
+  isEssential?: boolean;
+  status?: 'active' | 'paused' | 'canceled';
+}
+
 function getId(req: NextRequest): string | null {
-  const p = req.nextUrl.pathname.replace(/\/+$/, '');
-  const id = p.split('/').pop() ?? null;
-  return id && id.length > 0 ? id : null;
+  const pathname = req.nextUrl.pathname;
+  const segments = pathname.split('/');
+  const id = segments[segments.length - 1];
+  return id && id !== 'route.ts' ? id : null;
 }
 
-function asRecurrence(v: unknown): Recurrence | undefined {
-  const ok: Recurrence[] = ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'];
-  return ok.includes(v as Recurrence) ? (v as Recurrence) : undefined;
-}
-
-function asStatus(v: unknown): SubscriptionStatus | undefined {
-  const ok: SubscriptionStatus[] = ['active', 'paused', 'canceled'];
-  return ok.includes(v as SubscriptionStatus) ? (v as SubscriptionStatus) : undefined;
+function asStatus(value: unknown): 'active' | 'paused' | 'canceled' | null {
+  if (value === 'active' || value === 'paused' || value === 'canceled') {
+    return value;
+  }
+  return null;
 }
 
 export const PATCH = async (req: NextRequest) => {
@@ -41,29 +52,17 @@ export const PATCH = async (req: NextRequest) => {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const payload = (await req.json()) as {
-      name?: string;
-      amount?: number;
-      currency?: string;
-      interval?: unknown;
-      nextBillingAt?: string | null;
-      category?: string | null;
-      notes?: string | null;
-      vendorUrl?: string | null;
-      status?: unknown;
-    };
+    const payload = (await req.json()) as UpdateSubscriptionBody;
+    const data: Prisma.SubscriptionUpdateInput = {};
 
-    const data: Parameters<typeof prisma.subscription.update>[0]['data'] = {};
-    if (payload.name !== undefined) data.name = payload.name;
-    if (payload.amount !== undefined) data.amount = payload.amount;
-    if (payload.currency !== undefined) data.currency = payload.currency;
+    if (payload.name !== undefined) data.name = String(payload.name);
+    if (payload.amount !== undefined) data.amount = Number(payload.amount);
+    if (payload.currency !== undefined) data.currency = String(payload.currency);
+    if (payload.interval !== undefined) data.interval = payload.interval as Prisma.EnumRecurrenceFieldUpdateOperationsInput | Recurrence;
+    if (payload.isEssential !== undefined) data.isEssential = Boolean(payload.isEssential);
 
-    const rec = asRecurrence(payload.interval);
-    if (rec) data.interval = rec;
-
-    // nextBillingAt is nullable: set Date if provided (string), set null if explicitly null, else leave unchanged
     if (payload.nextBillingAt !== undefined) {
-      data.nextBillingAt = payload.nextBillingAt === null ? null : new Date(payload.nextBillingAt);
+      data.nextBillingAt = payload.nextBillingAt ? new Date(payload.nextBillingAt) : null;
     }
 
     if (payload.category !== undefined) data.category = payload.category ?? null;

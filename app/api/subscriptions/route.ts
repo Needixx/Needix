@@ -1,102 +1,91 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import type { Recurrence, SubscriptionStatus } from "@prisma/client";
+// app/api/subscriptions/route.ts - TYPE SAFE VERSION
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { Recurrence } from '@prisma/client';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-function toRecurrence(val: unknown): Recurrence | undefined {
-  const allowed: Recurrence[] = ["none", "daily", "weekly", "monthly", "yearly", "custom"];
-  return allowed.includes(val as Recurrence) ? (val as Recurrence) : undefined;
+interface CreateSubscriptionBody {
+  name: string;
+  amount: number;
+  currency?: string;
+  interval: string;
+  nextBillingAt?: string | null;
+  category?: string | null;
+  notes?: string | null;
+  vendorUrl?: string | null;
+  isEssential?: boolean;
 }
 
-function toSubStatus(val: unknown): SubscriptionStatus | undefined {
-  const allowed: SubscriptionStatus[] = ["active", "paused", "canceled"];
-  return allowed.includes(val as SubscriptionStatus) ? (val as SubscriptionStatus) : undefined;
-}
-
-export async function GET(_req: Request) {
+export const GET = async () => {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const subscriptions = await prisma.subscription.findMany({
       where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json(subscriptions);
-  } catch (error) {
-    console.error("Error fetching subscriptions:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (err) {
+    console.error('Error fetching subscriptions:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+};
 
-export async function POST(req: Request) {
+export const POST = async (req: NextRequest) => {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const raw: unknown = await req.json();
+    const body = (await req.json()) as CreateSubscriptionBody;
     const {
       name,
       amount,
-      currency = "USD",
-      interval = "monthly",
+      currency = 'USD',
+      interval,
       nextBillingAt,
       category,
       notes,
       vendorUrl,
-      status = "active",
-    } = raw as {
-      name: string;
-      amount: number;
-      currency?: string;
-      interval?: unknown;
-      nextBillingAt?: string | null;
-      category?: string | null;
-      notes?: string | null;
-      vendorUrl?: string | null;
-      status?: unknown;
-    };
+      isEssential = false,
+    } = body;
 
-    // Ensure user exists (id/email/name from session)
-    await prisma.user.upsert({
-      where: { id: session.user.id },
-      update: {},
-      create: {
-        id: session.user.id,
-        email: session.user.email ?? null,
-        name: session.user.name ?? null,
-      },
-    });
+    if (!name || amount === undefined) {
+      return NextResponse.json(
+        { error: 'Name and amount are required' },
+        { status: 400 }
+      );
+    }
 
-    const rec: Recurrence = toRecurrence(interval) ?? "monthly";
-    const st: SubscriptionStatus = toSubStatus(status) ?? "active";
+    // Validate interval
+    const validIntervals: Recurrence[] = ['daily', 'weekly', 'monthly', 'yearly', 'custom'];
+    const mappedInterval: Recurrence = validIntervals.includes(interval as Recurrence) 
+      ? (interval as Recurrence) 
+      : 'monthly';
 
     const subscription = await prisma.subscription.create({
       data: {
         userId: session.user.id,
-        name,
-        amount,
-        currency,
-        interval: rec,
+        name: String(name),
+        amount: Number(amount),
+        currency: String(currency),
+        interval: mappedInterval,
         nextBillingAt: nextBillingAt ? new Date(nextBillingAt) : null,
-        category: category ?? null,
-        notes: notes ?? null,
-        vendorUrl: vendorUrl ?? null,
-        status: st,
+        category: category ? String(category) : null,
+        notes: notes ? String(notes) : null,
+        vendorUrl: vendorUrl ? String(vendorUrl) : null,
+        isEssential: Boolean(isEssential),
       },
     });
 
-    return NextResponse.json(subscription);
-  } catch (error) {
-    console.error("Error creating subscription:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(subscription, { status: 201 });
+  } catch (err) {
+    console.error('Error creating subscription:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+};

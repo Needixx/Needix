@@ -1,13 +1,24 @@
-// app/api/orders/[id]/route.ts
+// app/api/orders/[id]/route.ts - TYPE SAFE VERSION
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
-// Pull the dynamic [id] from the URL (no second arg needed)
+interface UpdateOrderBody {
+  merchant?: string;
+  total?: number;
+  currency?: string;
+  orderDate?: string;
+  notes?: string | null;
+  category?: string | null;
+  isEssential?: boolean;
+}
+
 function getId(req: NextRequest): string | null {
-  const p = req.nextUrl.pathname.replace(/\/+$/, '');
-  const id = p.split('/').pop() ?? null;
-  return id && id.length > 0 ? id : null;
+  const pathname = req.nextUrl.pathname;
+  const segments = pathname.split('/');
+  const id = segments[segments.length - 1];
+  return id && id !== 'route.ts' ? id : null;
 }
 
 export const PATCH = async (req: NextRequest) => {
@@ -20,7 +31,7 @@ export const PATCH = async (req: NextRequest) => {
     const id = getId(req);
     if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
 
-    // verify ownership
+    // Ensure it belongs to the user
     const existing = await prisma.order.findUnique({
       where: { id },
       select: { userId: true },
@@ -30,24 +41,16 @@ export const PATCH = async (req: NextRequest) => {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const payload = (await req.json()) as {
-      merchant?: string;
-      total?: number;
-      currency?: string;
-      orderDate?: string | null; // only set if provided and non-null
-      category?: string | null;
-      notes?: string | null;
-    };
+    const payload = (await req.json()) as UpdateOrderBody;
+    const data: Prisma.OrderUpdateInput = {};
 
-    const data: Parameters<typeof prisma.order.update>[0]['data'] = {};
-    if (payload.merchant !== undefined) data.merchant = payload.merchant;
-    if (payload.total !== undefined) data.total = payload.total;
-    if (payload.currency !== undefined) data.currency = payload.currency;
-    if (payload.orderDate !== undefined && payload.orderDate !== null) {
-      data.orderDate = new Date(payload.orderDate);
-    }
-    if (payload.category !== undefined) data.category = payload.category ?? null;
-    if (payload.notes !== undefined) data.notes = payload.notes ?? null;
+    if (payload.merchant !== undefined) data.merchant = String(payload.merchant);
+    if (payload.total !== undefined) data.total = Number(payload.total);
+    if (payload.currency !== undefined) data.currency = String(payload.currency);
+    if (payload.orderDate !== undefined) data.orderDate = payload.orderDate ? new Date(payload.orderDate) : new Date();
+    if (payload.notes !== undefined) data.notes = payload.notes ? String(payload.notes) : null;
+    if (payload.category !== undefined) data.category = payload.category ? String(payload.category) : null;
+    if (payload.isEssential !== undefined) data.isEssential = Boolean(payload.isEssential);
 
     const order = await prisma.order.update({
       where: { id },
@@ -72,7 +75,7 @@ export const DELETE = async (req: NextRequest) => {
     const id = getId(req);
     if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
 
-    // verify ownership
+    // Ensure it belongs to the user
     const existing = await prisma.order.findUnique({
       where: { id },
       select: { userId: true },

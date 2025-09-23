@@ -1,3 +1,4 @@
+// lib/useSubscriptions.ts - FINAL DATABASE VERSION
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -5,7 +6,7 @@ import { Subscription, BillingPeriod } from '@/lib/types';
 
 const KEY = 'needix-subscriptions';
 
-/** Backend subscription shape */
+/** Backend subscription shape with isEssential */
 type ApiSubscription = {
   id: string;
   name: string;
@@ -16,6 +17,7 @@ type ApiSubscription = {
   category?: string | null;
   notes?: string | null;
   vendorUrl?: string | null;
+  isEssential: boolean;  // ✅ Now included from backend
   createdAt: string;
   updatedAt: string;
 };
@@ -53,7 +55,7 @@ export function useSubscriptions() {
               category: sub.category ?? undefined,
               notes: sub.notes ?? undefined,
               link: sub.vendorUrl ?? undefined,
-              isEssential: false,
+              isEssential: Boolean(sub.isEssential),  // ✅ Use actual database value
               createdAt: sub.createdAt,
               updatedAt: sub.updatedAt,
             }));
@@ -98,10 +100,12 @@ export function useSubscriptions() {
           amount: subscription.price,
           currency: subscription.currency,
           interval: mapPeriodToInterval(subscription.period),
-          nextBillingAt: subscription.nextBillingDate ? new Date(subscription.nextBillingDate).toISOString() : null,
+          nextBillingAt: subscription.nextBillingDate ? 
+            new Date(subscription.nextBillingDate).toISOString() : null,
           category: subscription.category,
           notes: subscription.notes,
           vendorUrl: subscription.link,
+          isEssential: subscription.isEssential || false,  // ✅ Send to database
           status: 'active'
         })
       });
@@ -113,6 +117,7 @@ export function useSubscriptions() {
       const newSub: Subscription = {
         ...subscription,
         id: created.id,
+        isEssential: Boolean(created.isEssential),  // ✅ Use database value
         createdAt: created.createdAt,
         updatedAt: created.updatedAt,
       };
@@ -157,6 +162,7 @@ export function useSubscriptions() {
           category: patch.category,
           notes: patch.notes,
           vendorUrl: patch.link,
+          isEssential: patch.isEssential,  // ✅ Send to database
         })
       });
       if (!response.ok) console.error('Failed to update subscription in backend');
@@ -190,7 +196,7 @@ export function useSubscriptions() {
             category: sub.category ?? undefined,
             notes: sub.notes ?? undefined,
             link: sub.vendorUrl ?? undefined,
-            isEssential: false,
+            isEssential: Boolean(sub.isEssential),  // ✅ Use database value
             createdAt: sub.createdAt,
             updatedAt: sub.updatedAt,
           }));
@@ -203,24 +209,22 @@ export function useSubscriptions() {
     }
   };
 
-  return { items, add, remove, update, importMany, totals, loading, refresh };
+  return { items, totals, add, remove, update, importMany, loading, refresh };
 }
 
-// Helper mappers
-function mapPeriodToInterval(period: BillingPeriod): string {
-  switch (period) {
-    case 'monthly': return 'monthly';
-    case 'yearly': return 'yearly';
+function mapIntervalToPeriod(interval: string): BillingPeriod {
+  switch (interval) {
     case 'weekly': return 'weekly';
+    case 'yearly': return 'yearly';
     case 'custom': return 'custom';
     default: return 'monthly';
   }
 }
-function mapIntervalToPeriod(interval: string): BillingPeriod {
-  switch (interval) {
-    case 'monthly': return 'monthly';
-    case 'yearly': return 'yearly';
+
+function mapPeriodToInterval(period: BillingPeriod): string {
+  switch (period) {
     case 'weekly': return 'weekly';
+    case 'yearly': return 'yearly';
     case 'custom': return 'custom';
     default: return 'monthly';
   }

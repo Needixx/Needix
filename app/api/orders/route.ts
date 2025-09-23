@@ -1,93 +1,95 @@
-// app/api/orders/[id]/route.ts
-import { NextResponse, NextRequest } from 'next/server';
+// app/api/orders/route.ts - TYPE SAFE VERSION
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
 
-// Get the dynamic [id] from the URL safely
-function getId(req: NextRequest): string | null {
-  const p = req.nextUrl.pathname.replace(/\/+$/, ''); // trim trailing slash
-  const id = p.split('/').pop() ?? null;
-  return id && id.length > 0 ? id : null;
+interface OrderItemInput {
+  name: string;
+  qty?: number;
+  unitPrice?: number;
 }
 
-export async function PATCH(req: NextRequest) {
+interface CreateOrderBody {
+  merchant: string;
+  total: number;
+  currency?: string;
+  orderDate?: string;
+  notes?: string | null;
+  category?: string | null;
+  items?: OrderItemInput[];
+  isEssential?: boolean;
+}
+
+export const GET = async () => {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const id = getId(req);
-    if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-
-    // verify ownership
-    const existing = await prisma.order.findUnique({
-      where: { id },
-      select: { userId: true },
+    const orders = await prisma.order.findMany({
+      where: { userId: session.user.id },
+      include: { items: true },
+      orderBy: { orderDate: 'desc' },
     });
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (existing.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    return NextResponse.json(orders);
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+};
+
+export const POST = async (req: NextRequest) => {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const payload = (await req.json()) as {
-      merchant?: string;
-      total?: number;
-      currency?: string;
-      orderDate?: string | null;
-      category?: string | null;
-      notes?: string | null;
-    };
+    const body = (await req.json()) as CreateOrderBody;
+    const {
+      merchant,
+      total,
+      currency = 'USD',
+      orderDate,
+      notes,
+      category,
+      items = [],
+      isEssential = false,
+    } = body;
 
-    const data: Prisma.OrderUpdateInput = {};
-    if (payload.merchant !== undefined) data.merchant = payload.merchant;
-    if (payload.total !== undefined) data.total = payload.total;
-    if (payload.currency !== undefined) data.currency = payload.currency;
-    // orderDate is non-nullable -> only set when provided and not null
-    if (payload.orderDate !== undefined && payload.orderDate !== null) {
-      data.orderDate = new Date(payload.orderDate);
+    if (!merchant || total === undefined) {
+      return NextResponse.json(
+        { error: 'Merchant and total are required' },
+        { status: 400 }
+      );
     }
-    if (payload.category !== undefined) data.category = payload.category ?? null;
-    if (payload.notes !== undefined) data.notes = payload.notes ?? null;
 
-    const order = await prisma.order.update({
-      where: { id },
-      data,
+    const order = await prisma.order.create({
+      data: {
+        userId: session.user.id,
+        merchant: String(merchant),
+        total: Number(total),
+        currency: String(currency),
+        orderDate: orderDate ? new Date(orderDate) : new Date(),
+        notes: notes ? String(notes) : null,
+        category: category ? String(category) : null,
+        isEssential: Boolean(isEssential),
+        items: {
+          create: Array.isArray(items) ? items.map((item: OrderItemInput) => ({
+            name: String(item.name),
+            qty: Number(item.qty) || 1,
+            unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
+          })) : [],
+        },
+      },
       include: { items: true },
     });
 
-    return NextResponse.json(order);
+    return NextResponse.json(order, { status: 201 });
   } catch (err) {
-    console.error('Error updating order:', err);
+    console.error('Error creating order:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-export async function DELETE(req: NextRequest) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const id = getId(req);
-    if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-
-    // verify ownership
-    const existing = await prisma.order.findUnique({
-      where: { id },
-      select: { userId: true },
-    });
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (existing.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    await prisma.order.delete({ where: { id } });
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error('Error deleting order:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
+};

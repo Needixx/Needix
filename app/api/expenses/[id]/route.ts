@@ -1,34 +1,39 @@
-// app/api/expenses/[id]/route.ts
-import { NextResponse } from 'next/server';
+// app/api/expenses/[id]/route.ts - TYPE SAFE VERSION
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import type { Prisma, Recurrence } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { Recurrence } from '@prisma/client';
 
-function toRecurrence(val: unknown): Recurrence | undefined {
-  const allowed: Recurrence[] = ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'];
-  return allowed.includes(val as Recurrence) ? (val as Recurrence) : undefined;
+interface UpdateExpenseBody {
+  description?: string;
+  amount?: number;
+  currency?: string;
+  date?: string;
+  merchant?: string | null;
+  category?: string | null;
+  recurrence?: string;
+  isEssential?: boolean;
 }
 
-// Helper to extract the dynamic [id] from the request URL.
-// Works whether there’s a trailing slash or query string.
-function extractIdFromUrl(req: Request): string | null {
-  const { pathname } = new URL(req.url);
-  const parts = pathname.replace(/\/+$/, '').split('/');
-  const id = parts[parts.length - 1] ?? null;
-  return id && id.length > 0 ? id : null;
+function getId(req: NextRequest): string | null {
+  const pathname = req.nextUrl.pathname;
+  const segments = pathname.split('/');
+  const id = segments[segments.length - 1];
+  return id && id !== 'route.ts' ? id : null;
 }
 
-export async function PATCH(req: Request) {
+export const PATCH = async (req: NextRequest) => {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const id = extractIdFromUrl(req);
+    const id = getId(req);
     if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
 
-    // Confirm the expense belongs to this user
+    // Ensure it belongs to the user
     const existing = await prisma.expense.findUnique({
       where: { id },
       select: { userId: true },
@@ -38,64 +43,41 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const raw: unknown = await req.json();
-    const {
-      description,
-      amount,
-      currency,
-      date,
-      merchant,
-      category,
-      recurrence,
-    } = raw as {
-      description?: string;
-      amount?: number;
-      currency?: string;
-      date?: string | null;
-      merchant?: string | null;
-      category?: string | null;
-      recurrence?: unknown;
-    };
+    const payload = (await req.json()) as UpdateExpenseBody;
+    const data: Prisma.ExpenseUpdateInput = {};
 
-    const updateData: Prisma.ExpenseUpdateInput = {};
-    if (typeof description !== 'undefined') updateData.description = description;
-    if (typeof amount !== 'undefined') updateData.amount = amount;
-    if (typeof currency !== 'undefined') updateData.currency = currency;
-
-    // Only set date if it’s a string; never write null (column is non-nullable).
-    if (typeof date !== 'undefined' && date !== null) {
-      updateData.date = new Date(date);
-    }
-
-    if (typeof merchant !== 'undefined') updateData.merchant = merchant ?? null;
-    if (typeof category !== 'undefined') updateData.category = category ?? null;
-    if (typeof recurrence !== 'undefined') {
-      const rec = toRecurrence(recurrence);
-      if (rec) updateData.recurrence = rec;
-    }
+    if (payload.description !== undefined) data.description = String(payload.description);
+    if (payload.amount !== undefined) data.amount = Number(payload.amount);
+    if (payload.currency !== undefined) data.currency = String(payload.currency);
+    if (payload.date !== undefined) data.date = payload.date ? new Date(payload.date) : new Date();
+    if (payload.merchant !== undefined) data.merchant = payload.merchant ? String(payload.merchant) : null;
+    if (payload.category !== undefined) data.category = payload.category ? String(payload.category) : null;
+    if (payload.recurrence !== undefined) data.recurrence = payload.recurrence as Prisma.EnumRecurrenceFieldUpdateOperationsInput | Recurrence;
+    if (payload.isEssential !== undefined) data.isEssential = Boolean(payload.isEssential);
 
     const expense = await prisma.expense.update({
       where: { id },
-      data: updateData,
+      data,
     });
 
     return NextResponse.json(expense);
-  } catch (error) {
-    console.error('Error updating expense:', error);
+  } catch (err) {
+    console.error('Error updating expense:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+};
 
-export async function DELETE(req: Request) {
+export const DELETE = async (req: NextRequest) => {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const id = extractIdFromUrl(req);
+    const id = getId(req);
     if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
 
+    // Ensure it belongs to the user
     const existing = await prisma.expense.findUnique({
       where: { id },
       select: { userId: true },
@@ -107,8 +89,8 @@ export async function DELETE(req: Request) {
 
     await prisma.expense.delete({ where: { id } });
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting expense:', error);
+  } catch (err) {
+    console.error('Error deleting expense:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+};

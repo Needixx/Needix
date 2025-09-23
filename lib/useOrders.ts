@@ -1,3 +1,4 @@
+// lib/useOrders.ts - FINAL DATABASE VERSION
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -45,7 +46,7 @@ export interface OrderItem {
   updatedAt: string;
 }
 
-/** Shape returned by our Orders API */
+/** Shape returned by our Orders API with isEssential */
 type ApiOrder = {
   id: string;
   merchant: string;
@@ -54,6 +55,7 @@ type ApiOrder = {
   total: number | string;
   orderDate?: string | null;
   notes?: string | null;
+  isEssential: boolean;  // ✅ Now included from backend
   createdAt: string;
   updatedAt: string;
 };
@@ -88,7 +90,7 @@ export function useOrders() {
               type: 'one-time' as const,
               status: 'completed' as const,
               currency: order.currency,
-              isEssential: false,
+              isEssential: Boolean(order.isEssential),  // ✅ Use actual database value
               category: order.category ?? undefined,
               amount: Number(order.total),
               scheduledDate: order.orderDate ? new Date(order.orderDate).toISOString().split('T')[0] : undefined,
@@ -124,9 +126,11 @@ export function useOrders() {
           merchant: formData.name,
           total: formData.amount || 0,
           currency: formData.currency || 'USD',
-          orderDate: formData.scheduledDate ? new Date(formData.scheduledDate).toISOString() : new Date().toISOString(),
+          orderDate: formData.scheduledDate ?
+            new Date(formData.scheduledDate).toISOString() : new Date().toISOString(),
           category: formData.category,
           notes: formData.notes,
+          isEssential: formData.isEssential || false,  // ✅ Send to database
           items: []
         })
       });
@@ -144,7 +148,7 @@ export function useOrders() {
         type: formData.type,
         status: formData.status || 'active',
         currency: formData.currency || 'USD',
-        isEssential: formData.isEssential || false,
+        isEssential: Boolean(created.isEssential),  // ✅ Use database value
         category: formData.category,
         amount: formData.amount,
         priceCeiling: formData.priceCeiling,
@@ -194,7 +198,26 @@ export function useOrders() {
     persist(items.filter((item) => item.id !== id));
   };
 
-  const update = (id: string, patch: Partial<OrderItem>) => {
+  const update = async (id: string, patch: Partial<OrderItem>) => {
+    try {
+      const response = await fetch(`/api/orders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchant: patch.name,
+          total: patch.amount,
+          currency: patch.currency,
+          orderDate: patch.scheduledDate ? new Date(patch.scheduledDate).toISOString() : undefined,
+          category: patch.category,
+          notes: patch.notes,
+          isEssential: patch.isEssential,  // ✅ Send to database
+        })
+      });
+      if (!response.ok) console.error('Failed to update order in backend');
+    } catch (error) {
+      console.error('Error updating order:', error);
+    }
+
     const next = items.map((item) =>
       item.id === id
         ? { ...item, ...patch, updatedAt: new Date().toISOString() }
@@ -216,7 +239,7 @@ export function useOrders() {
             type: 'one-time' as const,
             status: 'completed' as const,
             currency: order.currency,
-            isEssential: false,
+            isEssential: Boolean(order.isEssential),  // ✅ Use database value
             category: order.category ?? undefined,
             amount: Number(order.total),
             scheduledDate: order.orderDate ? new Date(order.orderDate).toISOString().split('T')[0] : undefined,

@@ -1,5 +1,3 @@
-// prisma/schema.prisma  (FULL FILE — paste & save)
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,14 +8,168 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-/* =========================
-   Stripe / Webhooks / Pro
-   ========================= */
-
 model WebhookEvent {
-  id         String   @id            // Stripe event.id
+  id         String   @id
   type       String
   receivedAt DateTime @default(now())
+}
+
+model User {
+  id                       String         @id @default(cuid())
+  name                     String?
+  email                    String?        @unique
+  emailVerified            DateTime?
+  image                    String?
+  password                 String?
+  passwordResetToken       String?        @unique
+  passwordResetTokenExpiry DateTime?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  isPro                    Boolean        @default(false)
+  stripeCustomerId         String?        @unique
+  stripeSubscriptionId     String?        @unique
+  planStatus               PlanStatus?
+  currentPeriodEnd         DateTime?
+  cancelAtPeriodEnd        Boolean?       @default(false)
+  accounts                 Account[]
+  expenses                 Expense[]
+  orders                   Order[]
+  sessions                 Session[]
+  subscriptions            Subscription[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model SubscriptionEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  userEmail String
+  event     String
+  timestamp DateTime @default(now())
+  metadata  Json?
+}
+
+model UserActivity {
+  id                 String   @id @default(cuid())
+  userId             String
+  subscriptionsCount Int
+  lastActiveDate     DateTime
+  totalSpent         Float    @default(0)
+  planType           String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Subscription {
+  id            String             @id @default(cuid())
+  userId        String
+  name          String
+  amount        Decimal            @db.Decimal(12, 2)
+  currency      String             @default("USD")
+  interval      Recurrence         @default(monthly)
+  nextBillingAt DateTime?
+  notes         String?
+  category      String?
+  vendorUrl     String?
+  status        SubscriptionStatus @default(active)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  isEssential   Boolean            @default(false)
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([interval])
+  @@index([isEssential])
+  @@index([userId, status])
+  @@index([userId, nextBillingAt])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  userId      String
+  merchant    String
+  total       Decimal     @db.Decimal(12, 2)
+  currency    String      @default("USD")
+  orderDate   DateTime    @default(now())
+  notes       String?
+  category    String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  isEssential Boolean     @default(false)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       OrderItem[]
+
+  @@index([userId])
+  @@index([orderDate])
+  @@index([merchant])
+  @@index([isEssential])
+  @@index([userId, orderDate])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  name      String
+  qty       Int      @default(1)
+  unitPrice Decimal? @db.Decimal(12, 2)
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model Expense {
+  id          String     @id @default(cuid())
+  userId      String
+  description String
+  amount      Decimal    @db.Decimal(12, 2)
+  currency    String     @default("USD")
+  date        DateTime   @default(now())
+  merchant    String?
+  category    String?
+  recurrence  Recurrence @default(none)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  isEssential Boolean    @default(false)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([date])
+  @@index([recurrence])
+  @@index([isEssential])
+  @@index([userId, date])
 }
 
 /// Stripe subscription lifecycle states we care about.
@@ -32,109 +184,6 @@ enum PlanStatus {
   incomplete_expired
   paused
 }
-
-/* ==============
-   NextAuth core
-   ============== */
-
-model User {
-  id                       String    @id @default(cuid())
-  name                     String?
-  email                    String?   @unique
-  emailVerified            DateTime?
-  image                    String?
-  password                 String?
-  passwordResetToken       String?   @unique
-  passwordResetTokenExpiry DateTime?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
-
-  // NextAuth relations
-  accounts Account[]
-  sessions Session[]
-
-  // 🔐 Stripe + Pro fields
-  isPro                Boolean     @default(false)
-  stripeCustomerId     String?     @unique
-  stripeSubscriptionId String?     @unique
-  planStatus           PlanStatus?
-  currentPeriodEnd     DateTime?
-  cancelAtPeriodEnd    Boolean?    @default(false)
-
-  // 💳 Needix data relations
-  subscriptions Subscription[]
-  orders        Order[]
-  expenses      Expense[]
-}
-
-model Account {
-  id                String @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-
-  refresh_token String? @db.Text
-  access_token  String? @db.Text
-  expires_at    Int?
-  token_type    String?
-  scope         String?
-  id_token      String? @db.Text
-  session_state String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-/* =========================
-   Engagement / Telemetry
-   ========================= */
-
-model SubscriptionEvent {
-  id        String   @id @default(cuid())
-  userId    String
-  userEmail String
-  event     String   // 'subscribed', 'cancelled', 'renewed', 'failed_payment'
-  timestamp DateTime @default(now())
-  metadata  Json?
-
-  // (kept as a loose reference; join by userId when needed)
-}
-
-model UserActivity {
-  id                 String   @id @default(cuid())
-  userId             String
-  subscriptionsCount Int
-  lastActiveDate     DateTime
-  totalSpent         Float    @default(0)
-  planType           String   // 'free' or 'pro'
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  // (kept as a loose reference; join by userId when needed)
-}
-
-/* =========================
-   Needix Core Data Models
-   ========================= */
 
 /// Cadences used by subscriptions and expense recurrence.
 /// We allow a shared enum so the API can map cleanly.
@@ -152,89 +201,4 @@ enum SubscriptionStatus {
   active
   paused
   canceled
-}
-
-model Subscription {
-  id            String             @id @default(cuid())
-  userId        String
-  name          String
-  amount        Decimal            @db.Decimal(12, 2)
-  currency      String             @default("USD")
-  interval      Recurrence         @default(monthly) // monthly is the common case
-  nextBillingAt DateTime?
-  notes         String?
-  category      String?
-  vendorUrl     String?
-  status        SubscriptionStatus @default(active)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Indexes
-  @@index([userId])
-  @@index([status])
-  @@index([interval])
-  @@index([userId, status])
-  @@index([userId, nextBillingAt])
-}
-
-model Order {
-  id        String   @id @default(cuid())
-  userId    String
-  merchant  String
-  total     Decimal  @db.Decimal(12, 2)
-  currency  String   @default("USD")
-  orderDate DateTime @default(now())
-  notes     String?
-  category  String?
-
-  items     OrderItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Indexes
-  @@index([userId])
-  @@index([orderDate])
-  @@index([merchant])
-  @@index([userId, orderDate])
-}
-
-model OrderItem {
-  id        String   @id @default(cuid())
-  orderId   String
-  name      String
-  qty       Int      @default(1)
-  unitPrice Decimal? @db.Decimal(12, 2)
-
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([orderId])
-}
-
-model Expense {
-  id          String     @id @default(cuid())
-  userId      String
-  description String
-  amount      Decimal     @db.Decimal(12, 2)
-  currency    String      @default("USD")
-  date        DateTime    @default(now())
-  merchant    String?
-  category    String?
-  recurrence  Recurrence  @default(none)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Indexes
-  @@index([userId])
-  @@index([date])
-  @@index([recurrence])
-  @@index([userId, date])
 }

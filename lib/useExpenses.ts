@@ -1,20 +1,22 @@
-// lib/useExpenses.ts
+// lib/useExpenses.ts - FIXED TYPE ERRORS (lines 52, 230, 280)
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Expense, ExpenseTotals, ExpenseFrequency } from '@/lib/types';
+import { Expense, ExpenseTotals, ExpenseFrequency, ExpenseCategory } from '@/lib/types/expenses';
 
 const KEY = 'needix-expenses';
 
-type BackendExpense = {
+/** Backend expense shape with isEssential */
+type ApiExpense = {
   id: string;
   description: string;
   amount: number | string;
   currency: string;
-  category: string | null;
+  date: string;
+  merchant?: string | null;
+  category?: string | null;
   recurrence: string;
-  date?: string | null;
-  notes?: string | null;
+  isEssential: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -31,10 +33,8 @@ export function useExpenses() {
         const localData = localStorage.getItem(KEY);
         if (localData) {
           try {
-            const parsedUnknown: unknown = JSON.parse(localData);
-            if (Array.isArray(parsedUnknown)) {
-              setItems(parsedUnknown as Expense[]);
-            }
+            const parsed = JSON.parse(localData) as Expense[];
+            setItems(parsed);
           } catch (e) {
             console.error('Error parsing local expenses:', e);
           }
@@ -42,16 +42,15 @@ export function useExpenses() {
 
         const response = await fetch('/api/expenses');
         if (response.ok) {
-          const dataUnknown: unknown = await response.json();
-          if (Array.isArray(dataUnknown)) {
-            const backendData = dataUnknown as BackendExpense[];
-            const convertedData: Expense[] = backendData.map((expense) => ({
+          const backendData = (await response.json()) as ApiExpense[];
+          if (Array.isArray(backendData)) {
+            const convertedData = backendData.map((expense): Expense => ({
               id: expense.id,
               name: expense.description,
               amount: Number(expense.amount),
               currency: expense.currency,
-              category: mapBackendCategory(expense.category),
-              frequency: mapBackendFrequency(expense.recurrence),
+              category: mapCategoryFromApi(expense.category),
+              frequency: mapFrequencyFromRecurrence(expense.recurrence),
               dueDate: expense.date ? new Date(expense.date).toISOString().split('T')[0] : undefined,
               nextPaymentDate:
                 expense.recurrence !== 'none'
@@ -60,8 +59,8 @@ export function useExpenses() {
                     : undefined
                   : undefined,
               isRecurring: expense.recurrence !== 'none',
-              notes: expense.notes ?? undefined,
-              isEssential: false,
+              notes: expense.merchant || undefined,
+              isEssential: Boolean(expense.isEssential),
               createdAt: expense.createdAt,
               updatedAt: expense.updatedAt,
             }));
@@ -145,22 +144,21 @@ export function useExpenses() {
           amount: expense.amount,
           currency: expense.currency,
           date: expense.dueDate ? new Date(expense.dueDate).toISOString() : new Date().toISOString(),
-          merchant: null,
+          merchant: expense.notes,
           category: expense.category,
-          recurrence: mapFrequencyToBackend(expense.frequency)
+          recurrence: mapFrequencyToRecurrence(expense.frequency),
+          isEssential: expense.isEssential || false,
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create expense');
-      }
+      if (!response.ok) throw new Error('Failed to create expense');
 
-      const createdUnknown: unknown = await response.json();
-      const created = createdUnknown as { id: string; createdAt: string; updatedAt: string };
-      
+      const created = (await response.json()) as ApiExpense;
+
       const newExpense: Expense = {
         ...expense,
         id: created.id,
+        isEssential: Boolean(created.isEssential),
         createdAt: created.createdAt,
         updatedAt: created.updatedAt,
       };
@@ -181,64 +179,56 @@ export function useExpenses() {
     }
   };
 
-  const updateExpense = async (id: string, updates: Partial<Expense>) => {
+  const updateExpense = async (id: string, patch: Partial<Expense>) => {
     try {
       const response = await fetch(`/api/expenses/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          description: updates.name,
-          amount: updates.amount,
-          currency: updates.currency,
-          date: updates.dueDate ? new Date(updates.dueDate).toISOString() : undefined,
-          category: updates.category,
-          recurrence: updates.frequency ? mapFrequencyToBackend(updates.frequency) : undefined
+          description: patch.name,
+          amount: patch.amount,
+          currency: patch.currency,
+          date: patch.dueDate ? new Date(patch.dueDate).toISOString() : undefined,
+          merchant: patch.notes,
+          category: patch.category,
+          recurrence: patch.frequency ? mapFrequencyToRecurrence(patch.frequency) : undefined,
+          isEssential: patch.isEssential,
         })
       });
-
-      if (!response.ok) {
-        console.error('Failed to update expense in backend');
-      }
+      if (!response.ok) console.error('Failed to update expense in backend');
     } catch (error) {
       console.error('Error updating expense:', error);
     }
 
-    const updated = items.map((expense) =>
-      expense.id === id
-        ? { ...expense, ...updates, updatedAt: new Date().toISOString() }
-        : expense,
+    const next = items.map((expense): Expense =>
+      expense.id === id ? { ...expense, ...patch, updatedAt: new Date().toISOString() } : expense
     );
-    persist(updated);
+    persist(next);
   };
 
   const deleteExpense = async (id: string) => {
     try {
       const response = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
-      if (!response.ok) {
-        console.error('Failed to delete expense from backend');
-      }
+      if (!response.ok) console.error('Failed to delete expense from backend');
     } catch (error) {
       console.error('Error deleting expense:', error);
     }
-
-    const updated = items.filter((expense) => expense.id !== id);
-    persist(updated);
+    persist(items.filter((expense) => expense.id !== id));
   };
 
   const refresh = async () => {
     try {
       const response = await fetch('/api/expenses');
       if (response.ok) {
-        const dataUnknown: unknown = await response.json();
-        if (Array.isArray(dataUnknown)) {
-          const backendData = dataUnknown as BackendExpense[];
-          const convertedData: Expense[] = backendData.map((expense) => ({
+        const backendData = (await response.json()) as ApiExpense[];
+        if (Array.isArray(backendData)) {
+          const convertedData = backendData.map((expense): Expense => ({
             id: expense.id,
             name: expense.description,
             amount: Number(expense.amount),
             currency: expense.currency,
-            category: mapBackendCategory(expense.category),
-            frequency: mapBackendFrequency(expense.recurrence),
+            category: mapCategoryFromApi(expense.category),
+            frequency: mapFrequencyFromRecurrence(expense.recurrence),
             dueDate: expense.date ? new Date(expense.date).toISOString().split('T')[0] : undefined,
             nextPaymentDate:
               expense.recurrence !== 'none'
@@ -247,12 +237,11 @@ export function useExpenses() {
                   : undefined
                 : undefined,
             isRecurring: expense.recurrence !== 'none',
-            notes: expense.notes ?? undefined,
-            isEssential: false,
+            notes: expense.merchant || undefined,
+            isEssential: Boolean(expense.isEssential),
             createdAt: expense.createdAt,
             updatedAt: expense.updatedAt,
           }));
-          
           setItems(convertedData);
           localStorage.setItem(KEY, JSON.stringify(convertedData));
         }
@@ -262,42 +251,41 @@ export function useExpenses() {
     }
   };
 
-  return {
-    items,
-    totals,
-    loading,
-    addExpense,
-    updateExpense,
-    deleteExpense,
-    refresh,
-  };
+  return { items, totals, addExpense, updateExpense, deleteExpense, loading, refresh };
 }
 
 // Helper functions to map between frontend and backend formats
-function mapFrequencyToBackend(frequency: ExpenseFrequency): string {
-  switch (frequency) {
-    case 'monthly': return 'monthly';
-    case 'yearly': return 'yearly';
-    case 'weekly': return 'weekly';
-    case 'quarterly': return 'custom'; // backend doesn't have quarterly
-    case 'bi-weekly': return 'custom';
-    case 'one-time': return 'none';
-    default: return 'none';
-  }
-}
-
-function mapBackendFrequency(recurrence: string): ExpenseFrequency {
+function mapFrequencyFromRecurrence(recurrence: string): ExpenseFrequency {
   switch (recurrence) {
+    case 'weekly': return 'weekly';
     case 'monthly': return 'monthly';
     case 'yearly': return 'yearly';
-    case 'weekly': return 'weekly';
     case 'none': return 'one-time';
-    case 'custom': return 'monthly'; // fallback
-    default: return 'one-time';
+    default: return 'monthly';
   }
 }
 
-// 🔧 Type-safe category mapper (fixes "string not assignable to ExpenseCategory")
-function mapBackendCategory(category: string | null): Expense['category'] {
-  return (category as Expense['category']) ?? ('Other' as Expense['category']);
+function mapFrequencyToRecurrence(frequency: ExpenseFrequency): string {
+  switch (frequency) {
+    case 'weekly': return 'weekly';
+    case 'monthly': return 'monthly';
+    case 'yearly': return 'yearly';
+    case 'quarterly': return 'monthly'; // Map quarterly to monthly for backend
+    case 'bi-weekly': return 'weekly'; // Map bi-weekly to weekly for backend
+    case 'one-time': return 'none';
+    default: return 'monthly';
+  }
+}
+
+function mapCategoryFromApi(category: string | null | undefined): ExpenseCategory {
+  const validCategories: ExpenseCategory[] = [
+    'Housing', 'Transportation', 'Utilities', 'Insurance', 
+    'Food & Groceries', 'Healthcare', 'Debt Payments', 'Childcare',
+    'Education', 'Personal Care', 'Entertainment', 'Savings & Investments', 'Other'
+  ];
+  
+  if (category && validCategories.includes(category as ExpenseCategory)) {
+    return category as ExpenseCategory;
+  }
+  return 'Other';
 }

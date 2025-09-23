@@ -1,14 +1,21 @@
+// app/api/expenses/route.ts - TYPE SAFE VERSION
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import type { Recurrence } from '@prisma/client';
+import { Recurrence } from '@prisma/client';
 
-function toRecurrence(val: unknown): Recurrence | undefined {
-  const allowed: Recurrence[] = ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'];
-  return allowed.includes(val as Recurrence) ? (val as Recurrence) : undefined;
+interface CreateExpenseBody {
+  description: string;
+  amount: number;
+  currency?: string;
+  date?: string;
+  merchant?: string | null;
+  category?: string | null;
+  recurrence?: string;
+  isEssential?: boolean;
 }
 
-export async function GET() {
+export const GET = async () => {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -17,25 +24,24 @@ export async function GET() {
 
     const expenses = await prisma.expense.findMany({
       where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { date: 'desc' },
     });
 
     return NextResponse.json(expenses);
-  } catch (error) {
-    console.error('Error fetching expenses:', error);
+  } catch (err) {
+    console.error('Error fetching expenses:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+};
 
-export async function POST(req: NextRequest) {
+export const POST = async (req: NextRequest) => {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Avoid assigning `any`
-    const raw: unknown = await req.json();
+    const body = (await req.json()) as CreateExpenseBody;
     const {
       description,
       amount,
@@ -43,45 +49,40 @@ export async function POST(req: NextRequest) {
       date,
       merchant,
       category,
-      recurrence = 'none'
-    } = raw as {
-      description: string;
-      amount: number;
-      currency?: string;
-      date?: string;
-      merchant?: string | null;
-      category?: string | null;
-      recurrence?: unknown;
-    };
+      recurrence = 'none',
+      isEssential = false,
+    } = body;
 
-    await prisma.user.upsert({
-      where: { id: session.user.id },
-      update: {},
-      create: {
-        id: session.user.id,
-        email: session.user.email ?? null,
-        name: session.user.name ?? null,
-      },
-    });
+    if (!description || amount === undefined) {
+      return NextResponse.json(
+        { error: 'Description and amount are required' },
+        { status: 400 }
+      );
+    }
 
-    const rec: Recurrence = toRecurrence(recurrence) ?? 'none';
+    // Validate recurrence
+    const validRecurrences: Recurrence[] = ['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom'];
+    const mappedRecurrence: Recurrence = validRecurrences.includes(recurrence as Recurrence) 
+      ? (recurrence as Recurrence) 
+      : 'none';
 
     const expense = await prisma.expense.create({
       data: {
         userId: session.user.id,
-        description,
-        amount,
-        currency,
+        description: String(description),
+        amount: Number(amount),
+        currency: String(currency),
         date: date ? new Date(date) : new Date(),
-        merchant: merchant ?? null,
-        category: category ?? null,
-        recurrence: rec
-      }
+        merchant: merchant ? String(merchant) : null,
+        category: category ? String(category) : null,
+        recurrence: mappedRecurrence,
+        isEssential: Boolean(isEssential),
+      },
     });
 
-    return NextResponse.json(expense);
-  } catch (error) {
-    console.error('Error creating expense:', error);
+    return NextResponse.json(expense, { status: 201 });
+  } catch (err) {
+    console.error('Error creating expense:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+};
