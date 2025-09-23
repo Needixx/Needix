@@ -38,7 +38,7 @@ export default function SettingsPage() {
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <span className="text-3xl">⚙️</span>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple to cyan/70 bg-clip-text text-transparent">
             Settings
           </h1>
         </div>
