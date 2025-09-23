@@ -19,10 +19,10 @@ export default function SettingsPage() {
 
   if (status === "loading") {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 text-center">
+      <main className="mx-auto max-w-6xl px-4 py-10 text-center">
         <div className="flex items-center justify-center gap-2">
           <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-          <span>Loading...</span>
+          <span>Loading settings...</span>
         </div>
       </main>
     );
@@ -33,14 +33,21 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          ⚙️ Settings
-        </h1>
-        <p className="text-white/60 mt-1">Manage your account preferences and data</p>
+    <main className="mx-auto max-w-6xl px-4 py-10">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="text-3xl">⚙️</span>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
+            Settings
+          </h1>
+        </div>
+        <p className="text-white/60 text-lg">
+          Customize your Needix experience and manage your account preferences
+        </p>
       </div>
 
+      {/* Settings Content */}
       <SettingsClient user={session.user} />
     </main>
   );

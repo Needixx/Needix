@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, X, DollarSign } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, DollarSign } from 'lucide-react';
 import { useSubscriptions } from '@/lib/useSubscriptions';
 import { useOrders } from '@/lib/useOrders';
 import { useExpenses } from '@/lib/useExpenses';
