@@ -1,4 +1,4 @@
-// app/api/orders/route.ts - TYPE SAFE VERSION
+// app/api/orders/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -14,6 +14,7 @@ interface CreateOrderBody {
   total: number;
   currency?: string;
   orderDate?: string;
+  status?: 'active' | 'completed' | 'cancelled';
   notes?: string | null;
   category?: string | null;
   items?: OrderItemInput[];
@@ -53,6 +54,7 @@ export const POST = async (req: NextRequest) => {
       total,
       currency = 'USD',
       orderDate,
+      status = 'active',
       notes,
       category,
       items = [],
@@ -66,24 +68,28 @@ export const POST = async (req: NextRequest) => {
       );
     }
 
-    const order = await prisma.order.create({
-      data: {
-        userId: session.user.id,
-        merchant: String(merchant),
-        total: Number(total),
-        currency: String(currency),
-        orderDate: orderDate ? new Date(orderDate) : new Date(),
-        notes: notes ? String(notes) : null,
-        category: category ? String(category) : null,
-        isEssential: Boolean(isEssential),
-        items: {
-          create: Array.isArray(items) ? items.map((item: OrderItemInput) => ({
-            name: String(item.name),
-            qty: Number(item.qty) || 1,
-            unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
-          })) : [],
-        },
+    // Create order data with status field
+    const orderData = {
+      userId: session.user.id,
+      merchant: String(merchant),
+      total: Number(total),
+      currency: String(currency),
+      orderDate: orderDate ? new Date(orderDate) : new Date(),
+      status: status,
+      notes: notes ? String(notes) : null,
+      category: category ? String(category) : null,
+      isEssential: Boolean(isEssential),
+      items: {
+        create: Array.isArray(items) ? items.map((item: OrderItemInput) => ({
+          name: String(item.name),
+          qty: Number(item.qty) || 1,
+          unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
+        })) : [],
       },
+    };
+
+    const order = await prisma.order.create({
+      data: orderData,
       include: { items: true },
     });
 

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         function: {
           name: "emit_intake_payload",
           description:
-            "Emit strictly-typed intake payload: subscriptions (recurring), orders (merchant/items), expenses (one-offs). Use USD default. ISO dates.",
+            "Emit strictly-typed intake payload: subscriptions (recurring), orders (merchant/items), expenses (one-offs). Use USD default. Orders are always created as 'active' status.",
           parameters: {
             type: "object",
             properties: {
@@ -140,8 +140,47 @@ export async function POST(req: NextRequest) {
       },
     ];
 
-    const system =
-      "You are a precise financial intake parser for Needix. Convert user free text into structured subscriptions, orders, and expenses. Use USD if currency absent. Use ISO 8601 dates if present. Do not invent missing amounts or dates; omit instead.";
+    // Get current date for better AI context
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1; // JS months are 0-based
+    const currentDay = currentDate.getDate();
+    const monthName = currentDate.toLocaleString('default', { month: 'long' });
+
+    const system = `You are a precise financial intake parser for Needix. Convert user free text into structured subscriptions, orders, and expenses. 
+
+CURRENT DATE CONTEXT:
+- Today is ${monthName} ${currentDay}, ${currentYear}
+- Current month is ${monthName} ${currentYear}
+- When user says "this month" they mean ${monthName} ${currentYear}
+- When user says "last month" they mean the previous month
+- When user says "next month" they mean the month after ${monthName}
+
+CLASSIFICATION RULES:
+SUBSCRIPTIONS = Recurring services that automatically charge the user (Netflix, Spotify, ChatGPT Pro, etc.)
+- Keywords: "subscription", "charged me", "renews", "monthly billing", "auto-pay"
+- Examples: "Netflix charged me", "ChatGPT Pro subscription", "Spotify renews monthly"
+
+ORDERS = One-time or planned purchases from merchants
+- Keywords: "need to order", "want to buy", "planning to purchase", "going to order"
+- Examples: "need to order groceries", "want to buy a laptop", "planning to order supplies"
+
+EXPENSES = One-time costs or bills (rent, utilities, groceries bought, etc.)
+- Keywords: "paid for", "spent on", "bought", "bill", "invoice"
+- Examples: "paid rent", "bought groceries", "electricity bill"
+
+DATE RULES:
+- Use ISO 8601 dates (YYYY-MM-DD format)
+- If user says "charged me this month on the 15th", use ${currentYear}-${currentMonth.toString().padStart(2, '0')}-15
+- If user says "renews monthly", calculate next billing date from the last charge date
+- If no specific date given, omit the date field entirely
+- ALWAYS use ${currentYear} for current year unless explicitly told otherwise
+
+IMPORTANT: 
+- All orders should be created in 'active' status so users can mark them as completed when they actually make the purchase
+- Use USD if currency absent
+- Do not invent missing amounts or dates; omit instead
+- Pay close attention to past tense vs future tense to distinguish subscriptions vs orders`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -202,23 +241,27 @@ export async function POST(req: NextRequest) {
 
       const createdOrders: string[] = [];
       for (const orderInput of parsed.orders) {
-        const order = await tx.order.create({
-          data: {
-            userId,
-            merchant: orderInput.merchant,
-            total: orderInput.total,
-            currency: orderInput.currency ?? "USD",
-            orderDate: orderInput.orderDate ? new Date(orderInput.orderDate) : new Date(),
-            notes: orderInput.notes ?? null,
-            category: orderInput.category ?? null,
-            items: {
-              create: (orderInput.items ?? []).map((i) => ({
-                name: i.name,
-                qty: i.qty ?? 1,
-                unitPrice: i.unitPrice ?? null,
-              })),
-            },
+        // Create order data with active status
+        const orderData = {
+          userId,
+          merchant: orderInput.merchant,
+          total: orderInput.total,
+          currency: orderInput.currency ?? "USD",
+          orderDate: orderInput.orderDate ? new Date(orderInput.orderDate) : new Date(),
+          status: "active" as const,
+          notes: orderInput.notes ?? null,
+          category: orderInput.category ?? null,
+          items: {
+            create: (orderInput.items ?? []).map((i) => ({
+              name: i.name,
+              qty: i.qty ?? 1,
+              unitPrice: i.unitPrice ?? null,
+            })),
           },
+        };
+
+        const order = await tx.order.create({
+          data: orderData,
           select: { id: true },
         });
         createdOrders.push(order.id);
