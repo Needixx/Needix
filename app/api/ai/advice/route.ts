@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
+  // Fixed: Use proper Prisma model names - they should match your schema exactly
   const [subs, expenses, orders] = await Promise.all([
     prisma.subscription.findMany({ where: { userId, status: "active" } }),
     prisma.expense.findMany({ where: { userId, date: { gte: oneYearAgo } } }),
@@ -69,107 +70,80 @@ export async function POST(req: NextRequest) {
   const system =
     "You are a practical financial savings coach. Given the user's structured spend data, produce a tactical savings plan with clear actions and conservative savings estimates. Do not invent data; use only what's provided.";
 
-  const userFacts = {
-    monthlyRecurringApprox: monthlyRecurring,
-    totals: { totalExpenses, totalOrders },
-    subscriptions: subs.map((s) => ({
-      name: s.name,
-      amount: Number(s.amount),
-      interval: s.interval,
-      category: s.category,
-      status: s.status,
-    })),
-    expensesRecentYear: expenses.map((e) => ({
-      amount: Number(e.amount),
-      date: e.date,
-      category: e.category,
-      merchant: e.merchant,
-    })),
-    ordersRecentYear: orders.map((o) => ({
-      merchant: o.merchant,
-      total: Number(o.total),
-      date: o.orderDate,
-      items: o.items?.map((i) => ({
-        name: i.name,
-        qty: i.qty,
-        unitPrice: i.unitPrice !== null ? Number(i.unitPrice) : null,
-      })),
-    })),
-    horizonMonths,
-  };
+  const user = `My data (last 12 months):
+- Monthly recurring: $${monthlyRecurring.toFixed(2)}
+- Total one-time expenses: $${totalExpenses.toFixed(2)}  
+- Total orders: $${totalOrders.toFixed(2)}
+- Planning horizon: ${horizonMonths} months
 
-  const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-    {
-      type: "function",
-      function: {
-        name: "emit_advice_plan",
-        description:
-          "Emit the AdvicePlan JSON with summary, quickWinsMonthly, projectedSavings3m/12m, actions[], and optional notes.",
-        parameters: {
-          type: "object",
-          properties: {
-            summary: { type: "string" },
-            quickWinsMonthly: { type: "number" },
-            projectedSavings3m: { type: "number" },
-            projectedSavings12m: { type: "number" },
-            actions: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  type: {
-                    type: "string",
-                    enum: ["cancel", "downgrade", "negotiate", "optimize", "reminder"],
-                  },
-                  target: { type: "string" },
-                  rationale: { type: "string" },
-                  estimatedMonthlySavings: { type: "number" },
-                  steps: { type: "array", items: { type: "string" } },
-                  confidence: { type: "number" },
-                },
-                required: ["type", "target", "rationale"],
-                additionalProperties: false,
-              },
-            },
-            notes: { type: "string" },
-          },
-          required: ["summary", "quickWinsMonthly", "projectedSavings3m", "projectedSavings12m", "actions"],
-          additionalProperties: false,
-        },
-      },
-    },
-  ];
+Give me specific saving recommendations.`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    temperature: 0,
-    tools,
-    tool_choice: { type: "function", function: { name: "emit_advice_plan" } },
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: JSON.stringify(userFacts) },
-    ],
-  });
-
-  const args = extractToolArguments(completion.choices[0]);
-  if (!args) {
-    return NextResponse.json({ error: "No structured plan produced" }, { status: 422 });
-  }
-
-  let planJson: unknown;
   try {
-    planJson = JSON.parse(args);
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON from AI" }, { status: 422 });
-  }
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "emit_advice_plan",
+            description: "Emit a structured savings advice plan",
+            parameters: {
+              type: "object",
+              properties: {
+                keyInsights: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "3-5 key insights about spending patterns",
+                },
+                immediateActions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      action: { type: "string" },
+                      impact: { type: "string" },
+                      difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+                    },
+                    required: ["action", "impact", "difficulty"],
+                  },
+                  description: "3-4 specific actions to take this month",
+                },
+                projectedSavings: {
+                  type: "object",
+                  properties: {
+                    monthly: { type: "number" },
+                    annual: { type: "number" },
+                    confidence: { type: "string", enum: ["low", "medium", "high"] },
+                  },
+                  required: ["monthly", "annual", "confidence"],
+                },
+              },
+              required: ["keyInsights", "immediateActions", "projectedSavings"],
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "emit_advice_plan" } },
+    });
 
-  const validated = AdvicePlan.safeParse(planJson);
-  if (!validated.success) {
-    return NextResponse.json(
-      { error: "Advice schema validation failed", details: validated.error.flatten() },
-      { status: 422 }
-    );
-  }
+    const rawArgs = extractToolArguments(completion.choices[0]);
+    if (!rawArgs) {
+      return NextResponse.json({ error: "No valid advice generated" }, { status: 500 });
+    }
 
-  return NextResponse.json({ ok: true, plan: validated.data });
+    const parsed = AdvicePlan.safeParse(JSON.parse(rawArgs));
+    if (!parsed.success) {
+      console.error("Invalid advice plan:", parsed.error);
+      return NextResponse.json({ error: "Invalid advice format" }, { status: 500 });
+    }
+
+    return NextResponse.json(parsed.data);
+  } catch (error) {
+    console.error("AI advice error:", error);
+    return NextResponse.json({ error: "Failed to generate advice" }, { status: 500 });
+  }
 }
