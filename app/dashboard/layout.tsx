@@ -1,4 +1,5 @@
 // app/dashboard/layout.tsx
+
 "use client";
 
 import { ReactNode } from "react";
@@ -6,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import DashboardTabsBar from "@/components/DashboardTabsBar";
+import NotificationManager from "@/components/NotificationManager";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
@@ -37,6 +39,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="mx-auto max-w-6xl px-4 py-6">
       <DashboardTabsBar />
       {children}
+      
+      {/* Add the NotificationManager to handle automatic notification setup */}
+      <NotificationManager 
+        autoInit={true}
+        autoSetupReminders={true}
+        showStatus={process.env.NODE_ENV === 'development'} // Only show status in dev
+      />
     </div>
   );
 }

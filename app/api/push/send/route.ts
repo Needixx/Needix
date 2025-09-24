@@ -1,64 +1,89 @@
 // app/api/push/send/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import webpush from 'web-push';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import webpush from "web-push";
+import type { PushSubscription as WebPushSubscription } from "web-push"; // ✅ type-only import
 
-function ensureWebPushConfigured(): void {
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@needix.app';
-  if (!publicKey || !privateKey) throw new Error('Missing VAPID keys');
+const publicKey = process.env.VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+const subject = process.env.VAPID_SUBJECT || "mailto:admin@needix.app";
+
+if (publicKey && privateKey) {
   webpush.setVapidDetails(subject, publicKey, privateKey);
 }
 
-const PushSubscriptionSchema = z
-  .object({
-    endpoint: z.string().url(),
-    keys: z.object({
-      p256dh: z.string(),
-      auth: z.string(),
-    }),
-    expirationTime: z.number().nullable().optional(),
-  })
-  .passthrough();
-
-const BodySchema = z.object({
-  subscription: PushSubscriptionSchema,
-  title: z.string().optional(),
-  body: z.string().optional(),
-});
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const raw = (await req.json()) as unknown;
-    const parsed = BodySchema.safeParse(raw);
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!publicKey || !privateKey)
+      return NextResponse.json({ error: "Push notifications not configured" }, { status: 500 });
 
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Missing subscription' },
-        { status: 400 }
-      );
+    const { title, body, icon, tag, data, url } = (await request.json()) as {
+      title: string;
+      body: string;
+      icon?: string;
+      tag?: string;
+      data?: Record<string, unknown>;
+      url?: string;
+    };
+
+    if (!title || !body) return NextResponse.json({ error: "Title and body are required" }, { status: 400 });
+
+    const pushSubscription = await prisma.pushSubscription.findUnique({
+      where: { userId: session.user.id },
+    });
+    if (!pushSubscription) {
+      return NextResponse.json({ error: "No push subscription found for user" }, { status: 404 });
     }
 
-    const { subscription, title, body } = parsed.data;
+    const payload = JSON.stringify({
+      title,
+      body,
+      icon: icon || "/icons/icon-192.png",
+      badge: "/icons/badge-72.png",
+      tag: tag || "needix-notification",
+      data: { ...(data ?? {}), url: url || "/dashboard", timestamp: Date.now() },
+    });
 
-    ensureWebPushConfigured();
+    // ✅ Properly typed, no `any`
+    const subscription: WebPushSubscription = {
+      endpoint: pushSubscription.endpoint,
+      keys: { p256dh: pushSubscription.p256dh, auth: pushSubscription.auth },
+    };
 
-    await webpush.sendNotification(
-      subscription as unknown as webpush.PushSubscription,
-      JSON.stringify({
-        title: title ?? 'Needix',
-        body: body ?? 'Update',
-      })
-    );
+    await webpush.sendNotification(subscription, payload);
 
-    return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('push send error', msg);
-    return NextResponse.json(
-      { error: 'Push send failed', details: msg },
-      { status: 500 }
-    );
+    void prisma.notificationLog
+      .create({ data: { userId: session.user.id, type: "push", title, body, sentAt: new Date() } })
+      .catch(() => {});
+
+    return NextResponse.json({ success: true, message: "Push notification sent" });
+  } catch (error) {
+    console.error("Failed to send push notification:", error);
+    return NextResponse.json({ error: "Failed to send push notification" }, { status: 500 });
   }
+}
+
+export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const test = {
+    title: "Test Notification",
+    body: "This is a test push notification from Needix!",
+    icon: "/icons/icon-192.png",
+    tag: "test",
+    data: { type: "test", timestamp: Date.now() },
+    url: "/dashboard",
+  };
+
+  return POST(
+    new NextRequest(request.url, {
+      method: "POST",
+      body: JSON.stringify(test),
+      headers: request.headers,
+    })
+  );
 }
