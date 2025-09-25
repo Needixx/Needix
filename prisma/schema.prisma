@@ -33,18 +33,24 @@ model User {
   planStatus               PlanStatus?
   currentPeriodEnd         DateTime?
   cancelAtPeriodEnd        Boolean?       @default(false)
+  
+  // Relations
   accounts                 Account[]
   expenses                 Expense[]
   orders                   Order[]
   sessions                 Session[]
   subscriptions            Subscription[]
 
-  // New notification-related relations
+  // Notification-related relations
   pushSubscription         PushSubscription?
   notificationSettings     NotificationSettings?
   notificationLogs         NotificationLog[]
   reminderSnapshots        ReminderSnapshot[]
   scheduledNotifications   ScheduledNotification[]
+
+  @@index([email])
+  @@index([stripeCustomerId])
+  @@index([isPro])
 }
 
 model Account {
@@ -63,6 +69,7 @@ model Account {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Session {
@@ -71,6 +78,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -88,6 +97,9 @@ model SubscriptionEvent {
   event     String
   timestamp DateTime @default(now())
   metadata  Json?
+
+  @@index([userId])
+  @@index([timestamp])
 }
 
 model UserActivity {
@@ -99,6 +111,9 @@ model UserActivity {
   planType           String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@index([userId])
+  @@index([lastActiveDate])
 }
 
 model Subscription {
@@ -125,6 +140,8 @@ model Subscription {
   @@index([isEssential])
   @@index([userId, status])
   @@index([userId, nextBillingAt])
+  @@index([nextBillingAt])
+  @@index([nextBillingDate])
 }
 
 model Order {
@@ -236,6 +253,10 @@ model NotificationLog {
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  @@index([userId])
+  @@index([sentAt])
+  @@index([status])
+  @@index([type])
   @@map("notification_logs")
 }
 
@@ -251,6 +272,9 @@ model ReminderSnapshot {
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  @@index([userId])
+  @@index([isActive])
+  @@index([createdAt])
   @@map("reminder_snapshots")
 }
 
@@ -271,6 +295,11 @@ model ScheduledNotification {
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  @@index([userId])
+  @@index([scheduledFor])
+  @@index([status])
+  @@index([subscriptionId])
+  @@index([scheduledFor, status]) // Compound index for cron jobs
   @@map("scheduled_notifications")
 }
 

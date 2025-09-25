@@ -19,10 +19,18 @@ export default function Navbar() {
         const { Capacitor } = await import('@capacitor/core');
         setIsMobile(Capacitor.isNativePlatform());
       } catch {
-        setIsMobile(false);
+        // Also check for small screens
+        setIsMobile(window.innerWidth < 768);
       }
     };
     void checkMobile();
+
+    // Listen for window resize to update mobile state
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return (
@@ -31,7 +39,10 @@ export default function Navbar() {
         <Link href="/" className="text-lg font-semibold">Needix</Link>
         <div className="flex items-center gap-2">
           <DashboardLink />
-          <CalendarLink />
+          {/* Hide Calendar button on mobile screens (show only in menu) */}
+          <div className="hidden md:block">
+            <CalendarLink />
+          </div>
           <UserStatus />
           <MenuSheet />
         </div>
@@ -75,7 +86,7 @@ function UserStatus() {
   const name = session.user.name || session.user.email || "user";
   return (
     <div className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1 text-sm">
-      <span className="text-white/80">@{name.split("@")[0]}</span>
+      <span className="text-white/80 truncate max-w-24 md:max-w-none">@{name.split("@")[0]}</span>
       <span className={"rounded-full px-2 py-0.5 text-xs " + (isPro ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "bg-white/10 text-white/70 border border-white/20")}>{isPro ? "Pro" : "Free"}</span>
     </div>
   );
@@ -103,7 +114,7 @@ function MenuSheet() {
     <>
       <button 
         onClick={() => setOpen(true)} 
-        className="flex items-center justify-center rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
+        className="flex items-center justify-center rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target min-w-[60px]"
       >
         Menu
       </button>

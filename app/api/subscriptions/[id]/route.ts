@@ -1,113 +1,166 @@
-// app/api/subscriptions/[id]/route.ts - TYPE SAFE VERSION
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
-import { Recurrence } from '@prisma/client';
+// app/api/subscriptions/[id]/route.ts
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
-interface UpdateSubscriptionBody {
-  name?: string;
-  amount?: number;
-  currency?: string;
-  interval?: string;
-  nextBillingAt?: string | null;
-  category?: string | null;
-  notes?: string | null;
-  vendorUrl?: string | null;
-  isEssential?: boolean;
-  status?: 'active' | 'paused' | 'canceled';
-}
+// Keep in sync with your schema
+type Interval = "monthly" | "yearly" | "weekly" | "custom";
 
-function getId(req: NextRequest): string | null {
-  const pathname = req.nextUrl.pathname;
-  const segments = pathname.split('/');
-  const id = segments[segments.length - 1];
-  return id && id !== 'route.ts' ? id : null;
-}
+type PatchBody = {
+  name?: unknown;
+  amount?: unknown;
+  currency?: unknown;
+  interval?: unknown;          // Interval
+  nextBillingAt?: unknown;     // ISO string
+  nextBillingDate?: unknown;   // "YYYY-MM-DD"
+  category?: unknown;
+  notes?: unknown;
+  vendorUrl?: unknown;
+  isEssential?: unknown;
+};
 
-function asStatus(value: unknown): 'active' | 'paused' | 'canceled' | null {
-  if (value === 'active' || value === 'paused' || value === 'canceled') {
-    return value;
-  }
+// ---------- small validators ----------
+const toNumber = (v: unknown): number | null => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) return Number(v);
   return null;
-}
+};
 
-export const PATCH = async (req: NextRequest) => {
+const toStringOrNull = (v: unknown): string | null => (typeof v === "string" ? v : null);
+
+const toInterval = (v: unknown): Interval | null => {
+  if (typeof v !== "string") return null;
+  const x = v as Interval;
+  return ["monthly", "yearly", "weekly", "custom"].includes(x) ? x : null;
+};
+
+const toBool = (v: unknown): boolean => v === true || v === "true" || v === 1 || v === "1";
+
+const toDateOrNull = (v: unknown): Date | null => {
+  if (typeof v !== "string") return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+// -------------------------------------
+
+export async function GET(req: Request, ctx: unknown) {
   try {
+    const { params } = ctx as { params: { id: string } };
+
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const id = getId(req);
-    if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-
-    // Ensure it belongs to the user
-    const existing = await prisma.subscription.findUnique({
-      where: { id },
-      select: { userId: true },
+    const sub = await prisma.subscription.findFirst({
+      where: { id: params.id, userId: session.user.id },
     });
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (existing.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    if (!sub) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const payload = (await req.json()) as UpdateSubscriptionBody;
-    const data: Prisma.SubscriptionUpdateInput = {};
+    return NextResponse.json(sub);
+  } catch (err) {
+    console.error("GET /api/subscriptions/[id] failed:", err);
+    return NextResponse.json({ error: "Failed to load subscription" }, { status: 500 });
+  }
+}
 
-    if (payload.name !== undefined) data.name = String(payload.name);
-    if (payload.amount !== undefined) data.amount = Number(payload.amount);
-    if (payload.currency !== undefined) data.currency = String(payload.currency);
-    if (payload.interval !== undefined) data.interval = payload.interval as Prisma.EnumRecurrenceFieldUpdateOperationsInput | Recurrence;
-    if (payload.isEssential !== undefined) data.isEssential = Boolean(payload.isEssential);
+export async function PATCH(req: Request, ctx: unknown) {
+  try {
+    const { params } = ctx as { params: { id: string } };
 
-    if (payload.nextBillingAt !== undefined) {
-      data.nextBillingAt = payload.nextBillingAt ? new Date(payload.nextBillingAt) : null;
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (payload.category !== undefined) data.category = payload.category ?? null;
-    if (payload.notes !== undefined) data.notes = payload.notes ?? null;
-    if (payload.vendorUrl !== undefined) data.vendorUrl = payload.vendorUrl ?? null;
+    const raw = (await req.json()) as PatchBody;
 
-    const st = asStatus(payload.status);
-    if (st) data.status = st;
+    // Build a strictly-typed update object. No undefined leaks into Prisma.
+    const data: {
+      name?: string;
+      amount?: number;
+      currency?: string;
+      interval?: Interval;
+      nextBillingAt?: Date | null;
+      nextBillingDate?: string | null;
+      category?: string | null;
+      notes?: string | null;
+      vendorUrl?: string | null;
+      isEssential?: boolean;
+      updatedAt?: Date;
+    } = { updatedAt: new Date() };
 
-    const subscription = await prisma.subscription.update({
-      where: { id },
+    const name = toStringOrNull(raw.name);
+    if (name !== null) data.name = name;
+
+    const amount = toNumber(raw.amount);
+    if (amount !== null) data.amount = amount;
+
+    const currency = toStringOrNull(raw.currency);
+    if (currency !== null) data.currency = currency;
+
+    const interval = toInterval(raw.interval);
+    if (interval !== null) data.interval = interval;
+
+    const nba = toDateOrNull(raw.nextBillingAt);
+    if (nba !== null) data.nextBillingAt = nba;
+
+    const nbd = toStringOrNull(raw.nextBillingDate);
+    if (nbd !== null) data.nextBillingDate = nbd;
+
+    const category = toStringOrNull(raw.category);
+    if (category !== null) data.category = category;
+
+    const notes = toStringOrNull(raw.notes);
+    if (notes !== null) data.notes = notes;
+
+    const vendorUrl = toStringOrNull(raw.vendorUrl);
+    if (vendorUrl !== null) data.vendorUrl = vendorUrl;
+
+    if (typeof raw.isEssential !== "undefined") {
+      data.isEssential = toBool(raw.isEssential);
+    }
+
+    const updated = await prisma.subscription.update({
+      where: { id: params.id, userId: session.user.id },
       data,
     });
 
-    return NextResponse.json(subscription);
+    return NextResponse.json(updated);
   } catch (err) {
-    console.error('Error updating subscription:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("PATCH /api/subscriptions/[id] failed:", err);
+    const message = err instanceof Error ? err.message : "Failed to update subscription";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-};
+}
 
-export const DELETE = async (req: NextRequest) => {
+export async function DELETE(req: Request, ctx: unknown) {
   try {
+    const { params } = ctx as { params: { id: string } };
+
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const id = getId(req);
-    if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-
-    // Ensure it belongs to the user
-    const existing = await prisma.subscription.findUnique({
-      where: { id },
-      select: { userId: true },
+    // Ensure the subscription belongs to the user
+    const existing = await prisma.subscription.findFirst({
+      where: { id: params.id, userId: session.user.id },
+      select: { id: true },
     });
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (existing.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await prisma.subscription.delete({ where: { id } });
+    await prisma.subscription.delete({ where: { id: params.id } });
+
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error('Error deleting subscription:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("DELETE /api/subscriptions/[id] failed:", err);
+    return NextResponse.json({ error: "Failed to delete subscription" }, { status: 500 });
   }
-};
+}

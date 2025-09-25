@@ -27,10 +27,11 @@ class NotificationService {
   private static instance: NotificationService;
 
   private isNative = false;
-  private webPushSubscription: PushSubscription | null = null; // DOM type
+  private webPushSubscription: PushSubscription | null = null;
   private vapidPublicKey: string | null = null;
+  private registration: ServiceWorkerRegistration | null = null;
 
-  // Track setTimeout handles for web-delayed notifications
+  // Track setTimeout handles for web-delayed notifications (browser timers are numbers)
   private timers: Map<number, number> = new Map();
 
   private constructor() {
@@ -108,245 +109,59 @@ class NotificationService {
       throw new Error("Web notification permission denied");
     }
 
-    // Only try Push when we have a VAPID key and a SW
-    if ("serviceWorker" in navigator && this.vapidPublicKey) {
-      await this.initializeWebPush();
+    // Register service worker for push notifications
+    if ("serviceWorker" in navigator) {
+      try {
+        this.registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+        await navigator.serviceWorker.ready;
+        console.log("Service worker registered for notifications");
+
+        // Set up push subscription if VAPID key is available
+        if (this.vapidPublicKey) {
+          await this.initializeWebPush();
+        }
+      } catch (error) {
+        console.error("Failed to register service worker:", error);
+        // Continue without push support
+      }
     }
   }
 
   /** Subscribe to Push and save subscription server-side */
   private async initializeWebPush(): Promise<void> {
     try {
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      await navigator.serviceWorker.ready;
+      if (!this.registration || !this.vapidPublicKey) {
+        throw new Error("Service worker or VAPID key not available");
+      }
 
-      const subscription = await registration.pushManager.subscribe({
+      // Convert Base64 VAPID to Uint8Array, then cast to BufferSource for older DOM typings
+      const appServerKey = this.urlB64ToUint8Array(this.vapidPublicKey) as unknown as BufferSource;
+
+      const subscription = await this.registration.pushManager.subscribe({
         userVisibleOnly: true,
-        // TS DOM lib can be picky; Uint8Array is fine, cast to BufferSource to satisfy types
-        applicationServerKey: this.urlB64ToUint8Array(this.vapidPublicKey!) as unknown as BufferSource,
+        applicationServerKey: appServerKey,
       });
 
       this.webPushSubscription = subscription;
 
-      // Persist subscription on the server
-      await fetch("/api/push/save-subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(subscription),
-      });
+      // Send subscription to server (aligns with your existing route name)
+      try {
+        await fetch("/api/push/save-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(subscription), // .toJSON() not necessary
+        });
+        console.log("Push subscription saved to server");
+      } catch (error) {
+        console.error("Failed to save push subscription:", error);
+      }
     } catch (error) {
-      console.error("Failed to initialize web push:", error);
+      console.error("Failed to setup push notifications:", error);
+      throw error;
     }
   }
 
-  /** Public helper to send 'now' */
-  async sendNotification(payload: NotificationPayload): Promise<boolean> {
-    return this.scheduleNotification(payload, new Date());
-  }
-
-  /** Schedule a notification at a specific time */
-  async scheduleNotification(payload: NotificationPayload, scheduledTime: Date): Promise<boolean> {
-    try {
-      if (this.isNative) {
-        return await this.scheduleNativeNotification(payload, scheduledTime);
-      }
-      return await this.scheduleWebNotification(payload, scheduledTime);
-    } catch (error) {
-      console.error("Failed to schedule notification:", error);
-      return false;
-    }
-  }
-
-  /** Native scheduling (Capacitor) */
-  private async scheduleNativeNotification(payload: NotificationPayload, scheduledTime: Date): Promise<boolean> {
-    const options: ScheduleOptions = {
-      notifications: [
-        {
-          id: payload.id, // Capacitor expects number
-          title: payload.title,
-          body: payload.body,
-          schedule: { at: scheduledTime },
-          extra: payload.data,
-          channelId: this.getChannelId(payload.tag),
-        },
-      ],
-    };
-
-    await LocalNotifications.schedule(options);
-    return true;
-  }
-
-  /** Web scheduling with simple delayed timers; >24h goes to server */
-  private async scheduleWebNotification(payload: NotificationPayload, scheduledTime: Date): Promise<boolean> {
-    const delay = scheduledTime.getTime() - Date.now();
-
-    if (delay <= 0) {
-      return this.sendImmediateWebNotification(payload);
-    }
-
-    // Use setTimeout for up to 24h delays
-    if (delay < 24 * 60 * 60 * 1000) {
-      const timerId = window.setTimeout(() => {
-        void this.sendImmediateWebNotification(payload);
-        this.timers.delete(payload.id);
-      }, delay);
-      this.timers.set(payload.id, timerId);
-      return true;
-    }
-
-    // Longer than 24h → defer to server scheduling
-    return this.saveReminder(payload, scheduledTime);
-  }
-
-  /** Immediate, in-tab web notification (relies on Notification API) */
-  private sendImmediateWebNotification(payload: NotificationPayload): boolean {
-    try {
-      const n = new Notification(payload.title, {
-        body: payload.body,
-        icon: payload.icon || "/icons/icon-192.png",
-        badge: payload.badge || "/icons/badge-72.png",
-        tag: payload.tag,
-        data: payload.data,
-      });
-
-      n.onclick = () => {
-        window.focus();
-        const url = (payload.data?.url as string | undefined) ?? "/dashboard";
-        window.location.href = url;
-        n.close();
-      };
-
-      return true;
-    } catch (error) {
-      console.error("Failed to send web notification:", error);
-      return false;
-    }
-  }
-
-  /** Cancel a single scheduled notification by its id */
-  async cancelNotification(id: number): Promise<void> {
-    if (this.isNative) {
-      await LocalNotifications.cancel({ notifications: [{ id }] });
-    } else {
-      const timer = this.timers.get(id);
-      if (typeof timer === "number") {
-        window.clearTimeout(timer);
-      }
-      this.timers.delete(id);
-    }
-  }
-
-  /** Cancel all scheduled notifications */
-  async cancelAllNotifications(): Promise<void> {
-    if (this.isNative) {
-      const pending = await LocalNotifications.getPending();
-
-      // Build typed descriptors with hard guards — no number|undefined unions
-      const descriptors: Array<{ id: number }> = [];
-      for (const n of pending.notifications) {
-        const raw = n.id as unknown;
-        let idNum: number | null = null;
-
-        if (typeof raw === "number") {
-          idNum = raw;
-        } else if (typeof raw === "string") {
-          const parsed = Number(raw);
-          if (Number.isFinite(parsed)) idNum = parsed;
-        }
-
-        if (idNum !== null) {
-          descriptors.push({ id: idNum });
-        }
-      }
-
-      if (descriptors.length > 0) {
-        await LocalNotifications.cancel({ notifications: descriptors });
-      }
-    } else {
-      this.timers.forEach((t) => window.clearTimeout(t));
-      this.timers.clear();
-    }
-  }
-
-  /** Quick sanity test */
-  async testNotification(): Promise<boolean> {
-    const testPayload: NotificationPayload = {
-      id: Date.now(),
-      title: "Test Notification",
-      body: "This is a test notification from Needix",
-      icon: "/icons/icon-192.png",
-      tag: "test",
-    };
-    return this.sendNotification(testPayload);
-  }
-
-  /** Current platform + permission status */
-  async getPermissionStatus(): Promise<{
-    supported: boolean;
-    granted: boolean;
-    platform: "web" | "native";
-  }> {
-    if (this.isNative) {
-      const permission = await LocalNotifications.checkPermissions();
-      return { supported: true, granted: permission.display === "granted", platform: "native" };
-    }
-    return {
-      supported: "Notification" in window,
-      granted: Notification.permission === "granted",
-      platform: "web",
-    };
-  }
-
-  /** Bulk schedule reminders based on subscriptions + settings */
-  async setupSubscriptionReminders(
-    subscriptions: Array<{ id: string; name: string; nextBillingDate?: string; nextBillingAt?: string }>,
-    settings: ReminderSettings
-  ): Promise<void> {
-    if (!settings.enabled) return;
-
-    await this.cancelAllNotifications();
-
-    const now = new Date();
-    let notificationId = 1;
-
-    for (const sub of subscriptions) {
-      const billingDateStr = sub.nextBillingDate || sub.nextBillingAt;
-      if (!billingDateStr) continue;
-
-      const billingDate = new Date(billingDateStr);
-
-      for (const leadDays of settings.leadDays) {
-        const reminderDate = new Date(billingDate);
-        reminderDate.setDate(reminderDate.getDate() - leadDays);
-
-        // Robust parsing: always produce numbers, never undefined
-        const [hStr, mStr] = settings.timeOfDay.split(":");
-        const hours: number = Number.isFinite(Number(hStr)) ? Number(hStr) : 9;
-        const minutes: number = Number.isFinite(Number(mStr)) ? Number(mStr) : 0;
-
-        reminderDate.setHours(hours, minutes, 0, 0);
-
-        if (reminderDate > now) {
-          const payload: NotificationPayload = {
-            id: notificationId++,
-            title: leadDays === 0 ? "Subscription Renews Today!" : "Subscription Renewal Reminder",
-            body:
-              leadDays === 0
-                ? `${sub.name} renews today`
-                : `${sub.name} renews in ${leadDays} day${leadDays === 1 ? "" : "s"}`,
-            icon: "/icons/subscription.png",
-            tag: "subscription-renewal",
-            data: { subscriptionId: sub.id, type: "renewal-reminder", url: "/dashboard" },
-          };
-
-          await this.scheduleNotification(payload, reminderDate);
-        }
-      }
-    }
-  }
-
-  /** Utils */
-
+  /** Convert VAPID key */
   private urlB64ToUint8Array(base64String: string): Uint8Array {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -358,8 +173,92 @@ class NotificationService {
     return outputArray;
   }
 
+  /** Send immediate notification */
+  async sendNotification(payload: NotificationPayload): Promise<boolean> {
+    try {
+      if (this.isNative) {
+        return await this.sendNativeNotification(payload);
+      } else {
+        return this.sendWebNotification(payload);
+      }
+    } catch (error) {
+      console.error("Failed to send notification:", error);
+      return false;
+    }
+  }
+
+  /** Capacitor local notification */
+  private async sendNativeNotification(payload: NotificationPayload): Promise<boolean> {
+    try {
+      const options: ScheduleOptions = {
+        notifications: [
+          {
+            id: payload.id,
+            title: payload.title,
+            body: payload.body,
+            largeIcon: payload.icon,
+            smallIcon: payload.badge,
+            extra: payload.data,
+            channelId: this.getChannelId(payload.tag),
+          },
+        ],
+      };
+
+      await LocalNotifications.schedule(options);
+      return true;
+    } catch (error) {
+      console.error("Native notification failed:", error);
+      return false;
+    }
+  }
+
+  /** Web notification */
+  private sendWebNotification(payload: NotificationPayload): boolean {
+    try {
+      if (Notification.permission !== "granted") {
+        console.error("Notification permission not granted");
+        return false;
+      }
+
+      const options: NotificationOptions = {
+        body: payload.body,
+        icon: payload.icon || "/icons/icon-192.png",
+        badge: payload.badge || "/icons/badge-72.png",
+        tag: payload.tag || "default",
+        data: payload.data,
+        requireInteraction: true,
+      };
+
+      const notification = new Notification(payload.title, options);
+
+      // Handle click events
+      notification.onclick = () => {
+        const url = (payload.data?.url as string | undefined) ?? "/dashboard";
+        window.focus();
+        window.location.href = url;
+        notification.close();
+      };
+
+      // Auto-close after 10 seconds
+      const timerId = window.setTimeout(() => {
+        notification.close();
+      }, 10000);
+      // track & auto-clean
+      this.timers.set(payload.id, timerId);
+
+      return true;
+    } catch (error) {
+      console.error("Web notification failed:", error);
+      return false;
+    }
+  }
+
+  /** Get appropriate channel ID for native notifications */
   private getChannelId(tag?: string): string {
     switch (tag) {
+      case "subscription":
+      case "billing":
+        return "subscriptions";
       case "price-alert":
         return "price-alerts";
       case "digest":
@@ -369,21 +268,224 @@ class NotificationService {
     }
   }
 
-  private async saveReminder(payload: NotificationPayload, scheduledTime: Date): Promise<boolean> {
+  /** Schedule future notification */
+  async scheduleNotification(payload: NotificationPayload, scheduledTime: Date): Promise<boolean> {
     try {
-      await fetch("/api/reminders/schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          payload,
-          scheduledTime: scheduledTime.toISOString(),
-        }),
-      });
-      return true;
+      if (this.isNative) {
+        return await this.scheduleNativeNotification(payload, scheduledTime);
+      } else {
+        return this.scheduleWebNotification(payload, scheduledTime);
+      }
     } catch (error) {
-      console.error("Failed to save reminder:", error);
+      console.error("Failed to schedule notification:", error);
       return false;
     }
+  }
+
+  /** Schedule native notification */
+  private async scheduleNativeNotification(payload: NotificationPayload, scheduledTime: Date): Promise<boolean> {
+    try {
+      const options: ScheduleOptions = {
+        notifications: [
+          {
+            id: payload.id,
+            title: payload.title,
+            body: payload.body,
+            largeIcon: payload.icon,
+            smallIcon: payload.badge,
+            extra: payload.data,
+            channelId: this.getChannelId(payload.tag),
+            schedule: { at: scheduledTime },
+          },
+        ],
+      };
+
+      await LocalNotifications.schedule(options);
+      return true;
+    } catch (error) {
+      console.error("Failed to schedule native notification:", error);
+      return false;
+    }
+  }
+
+  /** Schedule web notification using setTimeout */
+  private scheduleWebNotification(payload: NotificationPayload, scheduledTime: Date): boolean {
+    try {
+      const delay = scheduledTime.getTime() - Date.now();
+
+      if (delay <= 0) {
+        // Send immediately if time has passed
+        return this.sendWebNotification(payload);
+      }
+
+      const timerId = window.setTimeout(() => {
+        this.sendWebNotification(payload);
+        this.timers.delete(payload.id);
+      }, delay);
+
+      this.timers.set(payload.id, timerId);
+      return true;
+    } catch (error) {
+      console.error("Failed to schedule web notification:", error);
+      return false;
+    }
+  }
+
+  /** Cancel scheduled notification */
+  async cancelNotification(id: number): Promise<void> {
+    try {
+      if (this.isNative) {
+        await LocalNotifications.cancel({ notifications: [{ id }] });
+      } else {
+        const timer = this.timers.get(id);
+        if (typeof timer === "number") {
+          window.clearTimeout(timer);
+          this.timers.delete(id);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to cancel notification:", error);
+    }
+  }
+
+  /** Cancel all scheduled notifications */
+  async cancelAllNotifications(): Promise<void> {
+    try {
+      if (this.isNative) {
+        const pending = await LocalNotifications.getPending();
+        const notifications = pending.notifications
+          .map((n) => ({ id: Number(n.id) }))
+          .filter((n) => !Number.isNaN(n.id));
+
+        if (notifications.length > 0) {
+          await LocalNotifications.cancel({ notifications });
+        }
+      } else {
+        this.timers.forEach((timer) => window.clearTimeout(timer));
+        this.timers.clear();
+      }
+    } catch (error) {
+      console.error("Failed to cancel all notifications:", error);
+    }
+  }
+
+  /** Parse "HH:MM" safely and clamp to 09:00 defaults */
+  private parseTimeOfDay(time: string): { hour: number; minute: number } {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(time ?? "");
+    let hour = 9;
+    let minute = 0;
+    if (m) {
+      const h = Number(m[1]);
+      const mm = Number(m[2]);
+      if (Number.isFinite(h) && h >= 0 && h <= 23) hour = h;
+      if (Number.isFinite(mm) && mm >= 0 && mm <= 59) minute = mm;
+    }
+    return { hour, minute };
+  }
+
+  /** Test notification functionality */
+  async testNotification(): Promise<boolean> {
+    const testPayload: NotificationPayload = {
+      id: Date.now(),
+      title: "🔔 Test Notification",
+      body:
+        "Your notifications are working! You'll receive reminders for your subscriptions.",
+      icon: "/icons/icon-192.png",
+      tag: "test",
+      data: { url: "/dashboard" },
+    };
+
+    return this.sendNotification(testPayload);
+  }
+
+  /** Current platform + permission status */
+  async getPermissionStatus(): Promise<{
+    supported: boolean;
+    granted: boolean;
+    platform: "web" | "native";
+  }> {
+    if (this.isNative) {
+      const permission = await LocalNotifications.checkPermissions();
+      return {
+        supported: true,
+        granted: permission.display === "granted",
+        platform: "native",
+      };
+    }
+
+    return {
+      supported: "Notification" in window,
+      granted: Notification.permission === "granted",
+      platform: "web",
+    };
+  }
+
+  /** Bulk schedule reminders based on subscriptions + settings */
+  async setupSubscriptionReminders(
+    subscriptions: Array<{
+      id: string;
+      name: string;
+      nextBillingDate?: string;
+      nextBillingAt?: string;
+    }>,
+    settings: ReminderSettings
+  ): Promise<void> {
+    if (!settings.enabled) {
+      await this.cancelAllNotifications();
+      return;
+    }
+
+    // Clear existing reminders
+    await this.cancelAllNotifications();
+
+    const now = new Date();
+    const { hour, minute } = this.parseTimeOfDay(settings.timeOfDay);
+
+    for (const sub of subscriptions) {
+      const billingDate = sub.nextBillingDate || sub.nextBillingAt;
+      if (!billingDate) continue;
+
+      const billing = new Date(billingDate);
+      if (billing <= now) continue;
+
+      for (const leadDays of settings.leadDays) {
+        const reminderDate = new Date(billing);
+        reminderDate.setDate(reminderDate.getDate() - leadDays);
+        // hour/minute are always numbers now
+        reminderDate.setHours(hour, minute, 0, 0);
+
+        if (reminderDate <= now) continue;
+
+        const payload: NotificationPayload = {
+          id: this.hashString(`${sub.id}-${leadDays}-${billingDate}`),
+          title: `💰 ${sub.name} Renewal`,
+          body:
+            leadDays === 0
+              ? `Your ${sub.name} subscription renews today!`
+              : `Your ${sub.name} subscription renews in ${leadDays} day${leadDays > 1 ? "s" : ""}`,
+          icon: "/icons/icon-192.png",
+          tag: "subscription",
+          data: {
+            subscriptionId: sub.id,
+            leadDays,
+            url: "/dashboard",
+          },
+        };
+
+        await this.scheduleNotification(payload, reminderDate);
+      }
+    }
+  }
+
+  /** Generate consistent hash for notification IDs */
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash |= 0; // Convert to 32-bit int
+    }
+    return Math.abs(hash);
   }
 }
 

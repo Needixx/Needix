@@ -1,28 +1,24 @@
 // lib/hooks/useNotifications.ts
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import NotificationService from "@/lib/notifications/NotificationService";
-import type { ReminderSettings, NotificationPayload } from "@/lib/notifications/NotificationService";
+import NotificationService, { type NotificationPayload, type ReminderSettings } from "@/lib/notifications/NotificationService";
 
 interface NotificationHookReturn {
-  // Permissions and support
+  // Status
   isSupported: boolean;
   hasPermission: boolean;
   platform: "web" | "native" | "unknown";
-  
-  // Settings
   settings: ReminderSettings;
-  updateSettings: (newSettings: Partial<ReminderSettings>) => Promise<void>;
   
   // Actions
   initialize: () => Promise<boolean>;
+  updateSettings: (settings: Partial<ReminderSettings>) => Promise<void>;
   requestPermission: () => Promise<boolean>;
   testNotification: () => Promise<boolean>;
-  setupReminders: (subscriptions: Array<{ 
-    id: string; 
-    name: string; 
+  setupReminders: (subscriptions: Array<{
+    id: string;
+    name: string;
     nextBillingDate?: string;
     nextBillingAt?: string;
   }>) => Promise<void>;
@@ -56,7 +52,10 @@ export function useNotifications(): NotificationHookReturn {
   const [error, setError] = useState<string | null>(null);
   const [lastTestResult, setLastTestResult] = useState<boolean | null>(null);
   
-  const notificationService = NotificationService.getInstance();
+  // Get notification service instance
+  const getNotificationService = useCallback((): NotificationService => {
+    return NotificationService.getInstance();
+  }, []);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -74,8 +73,9 @@ export function useNotifications(): NotificationHookReturn {
 
   // Check initial permission status
   useEffect(() => {
-    const checkStatus = async () => {
+    const checkStatus = async (): Promise<void> => {
       try {
+        const notificationService = getNotificationService();
         const status = await notificationService.getPermissionStatus();
         setIsSupported(status.supported);
         setHasPermission(status.granted);
@@ -87,7 +87,7 @@ export function useNotifications(): NotificationHookReturn {
     };
 
     void checkStatus();
-  }, [notificationService]);
+  }, [getNotificationService]);
 
   // Save settings to localStorage
   const saveSettings = useCallback((newSettings: ReminderSettings) => {
@@ -106,6 +106,7 @@ export function useNotifications(): NotificationHookReturn {
     setError(null);
     
     try {
+      const notificationService = getNotificationService();
       const success = await notificationService.initialize();
       
       if (success) {
@@ -124,7 +125,7 @@ export function useNotifications(): NotificationHookReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [notificationService]);
+  }, [getNotificationService]);
 
   // Request notification permission
   const requestPermission = useCallback(async (): Promise<boolean> => {
@@ -134,6 +135,7 @@ export function useNotifications(): NotificationHookReturn {
     try {
       const success = await initialize();
       if (success) {
+        const notificationService = getNotificationService();
         const status = await notificationService.getPermissionStatus();
         setHasPermission(status.granted);
         
@@ -152,7 +154,7 @@ export function useNotifications(): NotificationHookReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [initialize, notificationService, settings, saveSettings]);
+  }, [initialize, getNotificationService, settings, saveSettings]);
 
   // Update notification settings
   const updateSettings = useCallback(async (newSettings: Partial<ReminderSettings>): Promise<void> => {
@@ -200,6 +202,7 @@ export function useNotifications(): NotificationHookReturn {
         }
       }
       
+      const notificationService = getNotificationService();
       const success = await notificationService.testNotification();
       setLastTestResult(success);
       
@@ -216,7 +219,7 @@ export function useNotifications(): NotificationHookReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [hasPermission, requestPermission, notificationService]);
+  }, [hasPermission, requestPermission, getNotificationService]);
 
   // Setup subscription reminders
   const setupReminders = useCallback(async (
@@ -235,6 +238,7 @@ export function useNotifications(): NotificationHookReturn {
     setError(null);
     
     try {
+      const notificationService = getNotificationService();
       await notificationService.setupSubscriptionReminders(subscriptions, settings);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to setup reminders";
@@ -243,7 +247,7 @@ export function useNotifications(): NotificationHookReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [settings, hasPermission, notificationService]);
+  }, [settings, hasPermission, getNotificationService]);
 
   // Send immediate notification
   const sendNotification = useCallback(async (payload: NotificationPayload): Promise<boolean> => {
@@ -259,6 +263,7 @@ export function useNotifications(): NotificationHookReturn {
         }
       }
       
+      const notificationService = getNotificationService();
       const success = await notificationService.sendNotification(payload);
       
       if (!success) {
@@ -273,7 +278,7 @@ export function useNotifications(): NotificationHookReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [hasPermission, requestPermission, notificationService]);
+  }, [hasPermission, requestPermission, getNotificationService]);
 
   return {
     isSupported,
