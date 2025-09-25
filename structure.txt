@@ -1,0 +1,165 @@
+.
+├── app
+│   ├── analytics
+│   │   └── page.tsx
+│   ├── billing
+│   │   └── page.tsx
+│   ├── calendar
+│   │   └── page.tsx
+│   ├── dashboard
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── delete-account
+│   │   └── page.tsx
+│   ├── forgot-password
+│   │   └── page.tsx
+│   ├── globals.css
+│   ├── how-it-works
+│   │   └── page.tsx
+│   ├── layout.tsx
+│   ├── page.tsx
+│   ├── privacy
+│   │   └── page.tsx
+│   ├── renewals
+│   │   └── page.tsx
+│   ├── reset-password
+│   │   └── page.tsx
+│   ├── signin
+│   │   └── page.tsx
+│   ├── terms
+│   │   └── page.tsx
+│   └── verify-request
+│       └── page.tsx
+├── capacitor.config.ts
+├── components
+│   ├── AddExpenseDialog.tsx
+│   ├── AddOrderDialog.tsx
+│   ├── AddSubscriptionDialog.tsx
+│   ├── AIAssist.tsx
+│   ├── AnalyticsDashboard.tsx
+│   ├── AuroraBackground.tsx
+│   ├── BillingPage.tsx
+│   ├── BillingStatus.tsx
+│   ├── CalendarClient.tsx
+│   ├── ClientLayoutWrapper.tsx
+│   ├── CompareTable.tsx
+│   ├── CTA.tsx
+│   ├── DashboardClient.tsx
+│   ├── DashboardLink.tsx
+│   ├── DashboardOverview.tsx
+│   ├── DashboardTabs.tsx
+│   ├── DashboardTabsBar.tsx
+│   ├── EditOrderDialog.tsx
+│   ├── ExpenseTable.tsx
+│   ├── FAQ.tsx
+│   ├── FeatureGrid.tsx
+│   ├── Footer.tsx
+│   ├── Hero.tsx
+│   ├── ImportCsv.tsx
+│   ├── ImportCsvDialog.tsx
+│   ├── MobileNavigation.tsx
+│   ├── Navbar.tsx
+│   ├── NavUser.tsx
+│   ├── NotificationCenter.tsx
+│   ├── NotificationManager.tsx
+│   ├── OfflineIndicator.tsx
+│   ├── OrdersClient.tsx
+│   ├── PricingTable.tsx
+│   ├── RenewalsLink.tsx
+│   ├── ReorderList.tsx
+│   ├── ScrollGuard.tsx
+│   ├── SessionProvider.tsx
+│   ├── settings
+│   │   ├── AccountSettings.tsx
+│   │   ├── AISettings.tsx
+│   │   ├── BillingSettings.tsx
+│   │   ├── DataSettings.tsx
+│   │   ├── index.ts
+│   │   ├── IntegrationsSettings.tsx
+│   │   ├── NotificationsSettings.tsx
+│   │   ├── PreferencesSettings.tsx
+│   │   ├── SecuritySettings.tsx
+│   │   ├── SettingsLayout.tsx
+│   │   ├── SettingsSidebar.tsx
+│   │   └── types.ts
+│   ├── SettingsClient.tsx
+│   ├── StatsCards.tsx
+│   ├── SubscriptionList.tsx
+│   ├── SubscriptionTable.tsx
+│   ├── ui
+│   │   ├── Button.tsx
+│   │   ├── Portal.tsx
+│   │   ├── Section.tsx
+│   │   └── Toast.tsx
+│   ├── UpcomingRenewals.tsx
+│   ├── UpgradeButton.tsx
+│   └── UserMenu.tsx
+├── eslint.config.mjs
+├── lib
+│   ├── ai
+│   │   ├── advice.ts
+│   │   └── schemas.ts
+│   ├── auth.ts
+│   ├── demo.ts
+│   ├── env.ts
+│   ├── format.ts
+│   ├── hooks
+│   │   └── useNotifications.ts
+│   ├── migrateEssentialStatus.ts
+│   ├── notifications
+│   │   ├── NotificationService.ts
+│   │   └── pushNotifications.ts
+│   ├── offline-storage.ts
+│   ├── prisma.ts
+│   ├── pushClient.ts
+│   ├── serverStore.ts
+│   ├── stripe.ts
+│   ├── type.ts
+│   ├── types
+│   │   └── expenses.ts
+│   ├── types-orders.ts
+│   ├── types.ts
+│   ├── useComprehensiveLimits.ts
+│   ├── useEnvelopes.ts
+│   ├── useExpenses.ts
+│   ├── useMobileStorage.ts
+│   ├── useOrders.ts
+│   ├── useRecurringEvents.ts
+│   ├── useReminders.ts
+│   ├── useSubscriptionLimit.ts
+│   ├── useSubscriptions.ts
+│   └── validation.ts
+├── manifest.json
+├── next-env.d.ts
+├── next.config.ts
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── prisma
+│   ├── migrations
+│   │   └── migration_lock.toml
+│   └── schema.prisma
+├── public
+│   ├── favicon.ico
+│   ├── icons
+│   │   ├── badge-72.png.svg
+│   │   ├── icon-192.png.svg
+│   │   ├── icon-512.png.svg
+│   │   └── subscription.png.svg
+│   ├── robots.txt
+│   └── sw.js
+├── README.md
+├── replacements.txt
+├── scripts
+│   ├── build-mobile.sh
+│   ├── cleanup-api-folders.sh
+│   ├── create-notification-icons.sh
+│   ├── fix-users.ts
+│   └── pre-commit.sh
+├── tailwind.config.ts
+├── tsconfig.json
+├── types
+│   └── prisma-augment.d.ts
+└── vercel.json
+
+29 directories, 134 files

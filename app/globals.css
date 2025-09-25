@@ -13,37 +13,41 @@
     --safe-area-inset-right: env(safe-area-inset-right);
   }
 
+  /* Ensure the viewport can scroll on iOS (WKWebView) */
   html,
   body {
-    /* Allow vertical scrolling globally */
     min-height: 100%;
     height: auto;
-    overflow-y: auto;
     overflow-x: hidden;
+    overflow-y: auto;
     -webkit-text-size-adjust: 100%;
+    /* Let vertical pan gestures scroll; prevents accidental locking */
+    touch-action: pan-y;
   }
 
   body {
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* Prevent aggressive pull-to-refresh without disabling scroll */
+    /* So pull-to-refresh doesn’t yank the whole page but scrolling still works */
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Capacitor / Mobile hint (class is added to <body>) */
+  /* Helpful defaults that prevent unexpected layout overflow */
+  *, *::before, *::after { min-width: 0; }
+  img, video { max-width: 100%; height: auto; }
+
+  /* If you add this class from native (optional), don’t lock the page */
   body.mobile-app {
-    /* Do NOT lock the page — just ensure normal scrolling */
     position: static;
     height: auto;
     width: 100%;
     overflow-y: auto;
-    /* Touch tweaks */
     -webkit-user-select: none;
     -webkit-touch-callout: none;
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Inputs at 16px to avoid iOS zoom */
+  /* Inputs at 16px to avoid Safari zoom on focus */
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -59,11 +63,8 @@
     transform: translateZ(0);
   }
 
-  /* Some UI libs toggle body.overflow-hidden for modals;
-     if a stray class remains, don't brick scrolling. */
-  body.overflow-hidden {
-    overflow-y: auto !important;
-  }
+  /* Some modal libs toggle body.overflow-hidden; don’t brick scroll */
+  body.overflow-hidden { overflow-y: auto !important; }
 }
 
 /* -------------------- COMPONENTS -------------------- */
@@ -90,31 +91,18 @@
 /* -------------------- UTILITIES -------------------- */
 @layer utilities {
   /* Safe Area Utilities for Mobile */
-  .pt-safe-top {
-    padding-top: max(1rem, env(safe-area-inset-top));
-  }
+  .pt-safe-top { padding-top: max(1rem, env(safe-area-inset-top)); }
+  .pb-safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .pl-safe-left { padding-left: max(1rem, env(safe-area-inset-left)); }
+  .pr-safe-right { padding-right: max(1rem, env(safe-area-inset-right)); }
+  .h-safe-top { height: env(safe-area-inset-top); }
+  .h-safe-bottom { height: env(safe-area-inset-bottom); }
 
-  .pb-safe-bottom {
-    padding-bottom: max(1rem, env(safe-area-inset-bottom));
-  }
+  /* Dynamic viewport helpers (iOS-safe) */
+  .h-dvh { height: 100dvh; }
+  .min-h-dvh { min-height: 100dvh; }
 
-  .pl-safe-left {
-    padding-left: max(1rem, env(safe-area-inset-left));
-  }
-
-  .pr-safe-right {
-    padding-right: max(1rem, env(safe-area-inset-right));
-  }
-
-  .h-safe-top {
-    height: env(safe-area-inset-top);
-  }
-
-  .h-safe-bottom {
-    height: env(safe-area-inset-bottom);
-  }
-
-  /* Mobile-first responsive helpers */
+  /* Common mobile helpers */
   .mobile-touch-target {
     @apply min-h-[44px] min-w-[44px];
     -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
@@ -138,7 +126,6 @@
   transition: all 0.3s ease;
   transform: translateY(0);
 }
-
 .subscription-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15);
@@ -146,8 +133,5 @@
 
 /* iOS niceties (no scroll lock here) */
 @supports (-webkit-touch-callout: none) {
-  /* Optional helper if you need a full-height container */
-  .ios-viewport-fix {
-    height: -webkit-fill-available;
-  }
+  .ios-viewport-fix { height: -webkit-fill-available; }
 }

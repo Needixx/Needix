@@ -1,40 +1,15 @@
 // capacitor.config.ts
-import type { CapacitorConfig } from '@capacitor/cli';
+import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: 'com.needix.app',
-  appName: 'Needix',
-  webDir: 'out',
+  appId: "com.needix.subtracker",
+  appName: "Needix",
+  webDir: "out", // not used when server.url is set
   server: {
-    androidScheme: 'https',
-  },
-  ios: {
-    contentInset: 'never',
-    scrollEnabled: false,
-    backgroundColor: '#000000',
-    preferredContentMode: 'mobile',
-  },
-  android: {
-    backgroundColor: '#000000',
-    allowMixedContent: true,
-    captureInput: true,
-  },
-  plugins: {
-    StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#000000',
-      overlaysWebView: false,
-    },
-    SplashScreen: {
-      launchShowDuration: 2000,
-      backgroundColor: '#000000',
-      showSpinner: false,
-    },
-    Keyboard: {
-      resize: 'body',
-      style: 'DARK',
-    },
-  },
+    // ⬇️ use your real deployed URL here (no trailing slash)
+    url: "https://needix.vercel.app",
+    cleartext: true
+  }
 };
 
 export default config;
