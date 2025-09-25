@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@auth/core": "^0.40.0",
+    "@auth/prisma-adapter": "^2.10.0",
     "@capacitor/android": "^7.4.3",
     "@capacitor/browser": "^7.0.2",
     "@capacitor/core": "^7.4.3",

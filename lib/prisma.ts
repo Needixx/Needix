@@ -1,15 +1,29 @@
 // lib/prisma.ts
+import { PrismaClient } from '@prisma/client';
 
-import { PrismaClient } from "@prisma/client";
+declare global {
+  var prisma: PrismaClient | undefined;
+}
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+// Only enable query logging in development when explicitly requested
+const prismaClientSingleton = () => {
+  // Determine log levels based on environment
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const enableQueryLogging = process.env.PRISMA_LOG === 'true';
+
+  if (isDevelopment && enableQueryLogging) {
+    return new PrismaClient({
+      log: ['query', 'error', 'warn'],
+    });
+  }
+
+  return new PrismaClient({
+    log: ['error', 'warn'],
+  });
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ["query"],
-  });
+export const prisma = globalThis.prisma ?? prismaClientSingleton();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') {
+  globalThis.prisma = prisma;
+}

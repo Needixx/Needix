@@ -3,6 +3,7 @@ import NextAuth from 'next-auth';
 import type { User } from 'next-auth';
 import Google from 'next-auth/providers/google';
 import Credentials from 'next-auth/providers/credentials';
+import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
@@ -14,10 +15,12 @@ export const {
 } = NextAuth({
   trustHost: true,
   session: { strategy: 'jwt' },
+  adapter: PrismaAdapter(prisma),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      allowDangerousEmailAccountLinking: true,
     }),
     Credentials({
       name: 'credentials',
@@ -55,52 +58,80 @@ export const {
         };
       },
     }),
-    ...(process.env.ENABLE_DEV_AUTH === '1'
-      ? [
-          Credentials({
-            name: 'Dev Login',
-            credentials: {
-              email: { label: 'Email', type: 'text' },
-              name: { label: 'Name', type: 'text' },
-            },
-            // No await inside → make it sync to satisfy require-await
-            authorize(credentials): User | null {
-              const email = credentials?.email as string | undefined;
-              const name =
-                (credentials?.name as string | undefined) ||
-                (email ? email.split('@')[0] : undefined);
-              if (!email) return null;
-              const user: User = { id: email, email, name };
-              return user;
-            },
-          }),
-        ]
-      : []),
   ],
   pages: {
     signIn: '/signin',
     error: '/signin',
   },
   callbacks: {
-    // No await → make these sync to satisfy require-await
+    async signIn({ user, account }) {
+      // For OAuth providers, ensure user exists in database
+      if (account?.provider && account.provider !== 'credentials') {
+        try {
+          await prisma.user.upsert({
+            where: { email: user.email || '' },
+            update: {
+              name: user.name,
+              image: user.image,
+            },
+            create: {
+              email: user.email || '',
+              name: user.name,
+              image: user.image,
+            },
+          });
+        } catch (error) {
+          console.error('Error creating/updating user:', error);
+          return false;
+        }
+      }
+      return true;
+    },
     redirect({ url, baseUrl }) {
       if (url.includes('/app') || url === baseUrl) {
         return `${baseUrl}/dashboard`;
       }
       return url.startsWith(baseUrl) ? url : baseUrl;
     },
-    session({ session, token }) {
-      if (session.user && token.sub) {
-        // augment the session with user id
-        (session.user as User & { id?: string }).id = token.sub;
+    async session({ session, token: _token }) {
+      if (session.user && session.user.email) {
+        // Get the actual user ID from the database
+        const dbUser = await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true },
+        });
+        
+        if (dbUser) {
+          const userWithId = session.user as User & { id?: string };
+          userWithId.id = dbUser.id;
+        }
       }
       return session;
     },
-    jwt({ token, user }) {
-      if (user) {
-        token.sub = user.id;
+    async jwt({ token, user, account }) {
+      // Initial sign in
+      if (account && user) {
+        // For OAuth, get the database user ID
+        if (account.provider !== 'credentials') {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: user.email || '' },
+            select: { id: true },
+          });
+          if (dbUser) {
+            token.sub = dbUser.id;
+          }
+        } else {
+          // For credentials, use the ID from authorize
+          token.sub = user.id;
+        }
       }
       return token;
     },
   },
+  events: {
+    signIn({ user, account }) {
+      console.log(`User signed in: ${user.email} via ${account?.provider}`);
+    },
+  },
+  debug: process.env.NODE_ENV === 'development',
 });
