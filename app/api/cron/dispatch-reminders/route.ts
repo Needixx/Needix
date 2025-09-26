@@ -1,35 +1,42 @@
+// app/api/cron/dispatch-reminders/route.ts
 import { NextResponse } from 'next/server';
-import { listSnapshots, getSubscription, wasSent, markSent } from '@/lib/serverStore';
-import webpush from 'web-push';
-import type { PushSubscription as WPPushSubscription } from 'web-push';
 
-function ensureWebPushConfigured() {
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@needix.app';
-  if (!publicKey || !privateKey) throw new Error('Missing VAPID keys');
-  webpush.setVapidDetails(subject, publicKey, privateKey);
-}
+// Configure for static export compatibility
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-function scheduledUtcMs(ymd: string, timeHHMM: string, tzOffsetMinutes: number, lead: number) {
-  const parts = ymd.split('-');
-  const y = Number(parts[0] ?? '0');
-  const m = Number(parts[1] ?? '1');
-  const d = Number(parts[2] ?? '1');
-  const tparts = timeHHMM.split(':');
-  const hh = Number(tparts[0] ?? '9');
-  const mm = Number(tparts[1] ?? '0');
-  const date = new Date(Date.UTC(y, (m - 1), d, hh, mm));
-  date.setUTCDate(date.getUTCDate() - lead);
-  const utcMs = date.getTime() - tzOffsetMinutes * 60_000;
-  return utcMs;
-}
-
-export async function GET() {
+// Use dynamic imports to avoid edge runtime issues
+async function dispatchReminders() {
   try {
+    // Dynamic imports for server-side modules
+    const webpush = require('web-push');
+    const { listSnapshots, getSubscription, wasSent, markSent } = await import('@/lib/serverStore');
+
+    function ensureWebPushConfigured() {
+      const publicKey = process.env.VAPID_PUBLIC_KEY;
+      const privateKey = process.env.VAPID_PRIVATE_KEY;
+      const subject = process.env.VAPID_SUBJECT || 'mailto:admin@needix.app';
+      if (!publicKey || !privateKey) throw new Error('Missing VAPID keys');
+      webpush.setVapidDetails(subject, publicKey, privateKey);
+    }
+
+    function scheduledUtcMs(ymd: string, timeHHMM: string, tzOffsetMinutes: number, lead: number) {
+      const parts = ymd.split('-');
+      const y = Number(parts[0] ?? '0');
+      const m = Number(parts[1] ?? '1');
+      const d = Number(parts[2] ?? '1');
+      const tparts = timeHHMM.split(':');
+      const hh = Number(tparts[0] ?? '9');
+      const mm = Number(tparts[1] ?? '0');
+      const date = new Date(Date.UTC(y, (m - 1), d, hh, mm));
+      date.setUTCDate(date.getUTCDate() - lead);
+      const utcMs = date.getTime() - tzOffsetMinutes * 60_000;
+      return utcMs;
+    }
+
     ensureWebPushConfigured();
     const snaps = await listSnapshots();
-    if (!snaps.length) return NextResponse.json({ ok: true, processed: 0 });
+    if (!snaps.length) return { ok: true, processed: 0 };
 
     const now = Date.now();
     const windowMs = 5 * 60_000;
@@ -50,7 +57,7 @@ export async function GET() {
             const sub = await getSubscription(snap.id);
             if (!sub) continue;
             try {
-              await webpush.sendNotification(sub.data as WPPushSubscription, JSON.stringify({
+              await webpush.sendNotification(sub.data, JSON.stringify({
                 title: 'Upcoming subscription renewal',
                 body: lead > 0 ? `${item.name} renews in ${lead} day${lead === 1 ? '' : 's'} (${ymd})` : `${item.name} renews today (${ymd})`,
               }));
@@ -64,8 +71,21 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ ok: true, processed: sent });
+    return { ok: true, processed: sent };
   } catch (e: unknown) {
-    return NextResponse.json({ error: 'Cron failed', details: String((e as Error)?.message || e) }, { status: 500 });
+    throw new Error(`Cron failed: ${String((e as Error)?.message || e)}`);
+  }
+}
+
+export async function GET() {
+  try {
+    const result = await dispatchReminders();
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Dispatch reminders error:', error);
+    return NextResponse.json(
+      { error: 'Cron failed', details: String(error) }, 
+      { status: 500 }
+    );
   }
 }

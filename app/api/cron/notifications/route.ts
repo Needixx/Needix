@@ -1,6 +1,10 @@
 // app/api/cron/notifications/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { PushNotificationService } from "@/lib/notifications/pushNotifications";
+import { NextRequest, NextResponse } from 'next/server';
+import { PushNotificationService } from '@/lib/notifications/pushNotifications';
+
+// Configure for proper static export compatibility
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // This endpoint should be called by a cron job (e.g., Vercel Cron or external service)
 export async function POST(request: NextRequest) {
@@ -15,14 +19,16 @@ export async function POST(request: NextRequest) {
 
     console.log('Running notification cron job...');
 
-    // Send subscription reminders
-    await PushNotificationService.sendSubscriptionReminders();
+    // Send subscription reminders (if PushNotificationService exists)
+    if (typeof PushNotificationService !== 'undefined') {
+      await PushNotificationService.sendSubscriptionReminders();
 
-    // Clean up expired push subscriptions (run weekly)
-    const now = new Date();
-    const isWeekly = now.getDay() === 0 && now.getHours() === 2; // Sunday at 2 AM
-    if (isWeekly) {
-      await PushNotificationService.cleanupExpiredSubscriptions();
+      // Clean up expired push subscriptions (run weekly)
+      const now = new Date();
+      const isWeekly = now.getDay() === 0 && now.getHours() === 2; // Sunday at 2 AM
+      if (isWeekly) {
+        await PushNotificationService.cleanupExpiredSubscriptions();
+      }
     }
 
     console.log('Notification cron job completed successfully');
@@ -45,7 +51,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Health check endpoint (remove async to avoid ESLint error)
+// Health check endpoint
 export function GET() {
   return NextResponse.json({ 
     status: "healthy", 

@@ -1,159 +1,167 @@
-import crypto from "crypto";
-import type { Subscription } from "@/lib/types";
+// lib/serverStore.ts
+import { Redis } from '@upstash/redis';
 
-type KVClient = {
-  get<T = unknown>(key: string): Promise<T | null>;
-  set(key: string, value: unknown, opts?: { ex?: number }): Promise<void>;
-  del(key: string): Promise<void>;
-  sadd(key: string, member: string): Promise<void>;
-  smembers(key: string): Promise<string[]>;
-};
+// Initialize Redis client if environment variables are available
+let redis: Redis | null = null;
 
-function hashId(input: string): string {
-  return crypto.createHash("sha1").update(input).digest("hex").slice(0, 16);
-}
-
-function kvAvailable(): boolean {
-  return !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN;
-}
-
-let kv: KVClient | null = null;
-
-async function getKV(): Promise<KVClient> {
-  if (kv) return kv;
-  if (!kvAvailable()) throw new Error("KV not configured");
-  const { Redis } = await import("@upstash/redis");
-  const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-  });
-
-  kv = {
-    async get<T = unknown>(key: string): Promise<T | null> {
-      const res = await redis.get(key);
-      return (res as T) ?? null;
-    },
-    async set(key, value, opts) {
-      const options = opts?.ex ? ({ ex: opts.ex } as { ex: number }) : undefined;
-      await (redis as unknown as { set: (k: string, v: unknown, o?: { ex?: number }) => Promise<unknown> }).set(
-        key,
-        value,
-        options,
-      );
-    },
-    async del(key) {
-      await redis.del(key);
-    },
-    async sadd(key, member) {
-      await redis.sadd(key, member);
-    },
-    async smembers(key) {
-      return (await redis.smembers(key)) as unknown as string[];
-    },
-  };
-  return kv;
-}
-
-export type PushSubscriptionRecord = {
-  id: string; // hash of endpoint
-  endpoint: string;
-  data: unknown; // full PushSubscription JSON
-  userEmail?: string | null;
-  createdAt: number;
-  updatedAt: number;
-};
-
-export type ReminderSnapshot = {
-  id: string; // same as subscription id
-  userEmail?: string | null;
-  tzOffsetMinutes: number; // user's local timezone offset in minutes
-  settings: { leadDays: number[]; timeOfDay: string };
-  items: { id: string; name: string; nextBillingDate?: string }[];
-  updatedAt: number;
-};
-
-const SET_SUBS = "needix:push:subs";
-const SET_SNAPS = "needix:reminder:snaps";
-const KEY_SUB = (id: string) => `needix:push:sub:${id}`;
-const KEY_SNAP = (id: string) => `needix:reminder:snap:${id}`;
-const KEY_SENT = (id: string, ymd: string, lead: number) => `needix:lastsent:${id}:${ymd}:${lead}`;
-const KEY_USER_SUBS = (email: string) => `needix:user:subs:${email}`;
-
-export function makeSubId(endpoint: string): string {
-  return hashId(endpoint);
-}
-
-export async function saveSubscription(
-  record: Omit<PushSubscriptionRecord, "id" | "createdAt" | "updatedAt"> & { id?: string },
-) {
-  if (!kvAvailable()) return;
-  const store = await getKV();
-  const id = record.id ?? makeSubId(record.endpoint);
-  const now = Date.now();
-  const rec: PushSubscriptionRecord = {
-    id,
-    endpoint: record.endpoint,
-    data: record.data,
-    userEmail: record.userEmail ?? null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await store.set(KEY_SUB(id), rec);
-  await store.sadd(SET_SUBS, id);
-}
-
-export async function saveSnapshot(snap: ReminderSnapshot) {
-  if (!kvAvailable()) return;
-  const store = await getKV();
-  const copy: ReminderSnapshot = { ...snap, updatedAt: Date.now() };
-  await store.set(KEY_SNAP(copy.id), copy);
-  await store.sadd(SET_SNAPS, copy.id);
-}
-
-export async function listSnapshots(): Promise<ReminderSnapshot[]> {
-  if (!kvAvailable()) return [];
-  const store = await getKV();
-  const ids = await store.smembers(SET_SNAPS);
-  const results: ReminderSnapshot[] = [];
-  for (const id of ids) {
-    const s = await store.get<ReminderSnapshot>(KEY_SNAP(id));
-    if (s) results.push(s);
+try {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
   }
-  return results;
+} catch (error) {
+  console.warn('Redis not configured or unavailable:', error);
 }
 
-export async function getSubscription(id: string): Promise<PushSubscriptionRecord | null> {
-  if (!kvAvailable()) return null;
-  const store = await getKV();
-  return (await store.get<PushSubscriptionRecord>(KEY_SUB(id))) || null;
+type SnapshotItem = {
+  name: string;
+  nextBillingDate: string | null;
+};
+
+type SnapshotSettings = {
+  leadDays: number[];
+  timeOfDay: string;
+};
+
+type Snapshot = {
+  id: string;
+  items: SnapshotItem[];
+  settings: SnapshotSettings;
+  tzOffsetMinutes: number;
+};
+
+type StoredSubscription = {
+  data: any; // PushSubscription data
+};
+
+export async function listSnapshots(): Promise<Snapshot[]> {
+  if (!redis) {
+    console.warn('Redis not available, returning empty snapshots');
+    return [];
+  }
+
+  try {
+    const keys = await redis.keys('snapshot:*');
+    const snapshots: Snapshot[] = [];
+
+    for (const key of keys) {
+      const snapshot = await redis.get(key);
+      if (snapshot && typeof snapshot === 'object') {
+        snapshots.push(snapshot as Snapshot);
+      }
+    }
+
+    return snapshots;
+  } catch (error) {
+    console.error('Error listing snapshots:', error);
+    return [];
+  }
 }
 
-export async function markSent(id: string, ymd: string, lead: number) {
-  if (!kvAvailable()) return;
-  const store = await getKV();
-  await store.set(KEY_SENT(id, ymd, lead), 1, { ex: 60 * 60 * 24 * 7 });
+export async function getSubscription(snapshotId: string): Promise<StoredSubscription | null> {
+  if (!redis) {
+    console.warn('Redis not available, cannot get subscription');
+    return null;
+  }
+
+  try {
+    const subscription = await redis.get(`subscription:${snapshotId}`);
+    return subscription ? (subscription as StoredSubscription) : null;
+  } catch (error) {
+    console.error('Error getting subscription:', error);
+    return null;
+  }
 }
 
-export async function wasSent(id: string, ymd: string, lead: number): Promise<boolean> {
-  if (!kvAvailable()) return false;
-  const store = await getKV();
-  const val = await store.get<number>(KEY_SENT(id, ymd, lead));
-  return !!val;
+export async function wasSent(snapshotId: string, ymd: string, lead: number): Promise<boolean> {
+  if (!redis) {
+    console.warn('Redis not available, assuming not sent');
+    return false;
+  }
+
+  try {
+    const key = `sent:${snapshotId}:${ymd}:${lead}`;
+    const result = await redis.get(key);
+    return !!result;
+  } catch (error) {
+    console.error('Error checking if sent:', error);
+    return false;
+  }
 }
 
-export function kvConfigured(): boolean {
-  return kvAvailable();
+export async function markSent(snapshotId: string, ymd: string, lead: number): Promise<void> {
+  if (!redis) {
+    console.warn('Redis not available, cannot mark as sent');
+    return;
+  }
+
+  try {
+    const key = `sent:${snapshotId}:${ymd}:${lead}`;
+    // Mark as sent with 7 day expiry
+    await redis.setex(key, 7 * 24 * 60 * 60, '1');
+  } catch (error) {
+    console.error('Error marking as sent:', error);
+  }
 }
 
-export async function saveUserSubscriptions(email: string, items: Subscription[]) {
-  if (!kvAvailable()) return;
-  const store = await getKV();
-  await store.set(KEY_USER_SUBS(email), { items, updatedAt: Date.now() });
+// Store snapshot for cron processing
+export async function storeSnapshot(id: string, snapshot: Omit<Snapshot, 'id'>): Promise<void> {
+  if (!redis) {
+    console.warn('Redis not available, cannot store snapshot');
+    return;
+  }
+
+  try {
+    await redis.set(`snapshot:${id}`, { id, ...snapshot });
+  } catch (error) {
+    console.error('Error storing snapshot:', error);
+  }
 }
 
-export async function loadUserSubscriptions(email: string): Promise<Subscription[] | null> {
-  if (!kvAvailable()) return null;
-  const store = await getKV();
-  const data = await store.get<{ items: Subscription[] }>(KEY_USER_SUBS(email));
-  return data?.items ?? null;
+// Store push subscription
+export async function storeSubscription(id: string, subscription: StoredSubscription): Promise<void> {
+  if (!redis) {
+    console.warn('Redis not available, cannot store subscription');
+    return;
+  }
+
+  try {
+    await redis.set(`subscription:${id}`, subscription);
+  } catch (error) {
+    console.error('Error storing subscription:', error);
+  }
+}
+
+// Save snapshot (alias for storeSnapshot)
+export const saveSnapshot = storeSnapshot;
+
+// User subscription functions
+export async function loadUserSubscriptions(userId: string): Promise<any[]> {
+  if (!redis) {
+    console.warn('Redis not available, returning empty subscriptions');
+    return [];
+  }
+
+  try {
+    const subscriptions = await redis.get(`user_subscriptions:${userId}`);
+    return subscriptions ? (subscriptions as any[]) : [];
+  } catch (error) {
+    console.error('Error loading user subscriptions:', error);
+    return [];
+  }
+}
+
+export async function saveUserSubscriptions(userId: string, subscriptions: any[]): Promise<void> {
+  if (!redis) {
+    console.warn('Redis not available, cannot save user subscriptions');
+    return;
+  }
+
+  try {
+    await redis.set(`user_subscriptions:${userId}`, subscriptions);
+  } catch (error) {
+    console.error('Error saving user subscriptions:', error);
+  }
 }

@@ -8,6 +8,7 @@ export function Button({
   variant = 'primary',
   size = 'md',
   className,
+  disabled,
   ...props
 }: {
   children: ReactNode;
@@ -15,7 +16,7 @@ export function Button({
   variant?: 'primary' | 'secondary' | 'ghost' | 'outline';
   size?: 'sm' | 'md' | 'lg';
 } & ComponentPropsWithoutRef<'button'>) {
-  const base = 'inline-flex items-center justify-center rounded-2xl font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed';
+  const base = 'inline-flex items-center justify-center rounded-2xl font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900';
   
   const sizes = {
     sm: 'px-3 py-1.5 text-xs',
@@ -30,16 +31,22 @@ export function Button({
     outline: 'bg-transparent text-white border border-white/20 hover:bg-white/10 hover:border-white/30',
   };
 
+  const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : '';
+
   if (asChild) {
     return (
-      <span className={clsx(base, sizes[size], variants[variant], className)} {...props}>
+      <span className={clsx(base, sizes[size], variants[variant], disabledClasses, className)} {...props}>
         {children}
       </span>
     );
   }
   
   return (
-    <button className={clsx(base, sizes[size], variants[variant], className)} {...props}>
+    <button 
+      className={clsx(base, sizes[size], variants[variant], disabledClasses, className)} 
+      disabled={disabled}
+      {...props}
+    >
       {children}
     </button>
   );

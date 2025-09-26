@@ -1,26 +1,25 @@
 // lib/auth.ts
 import NextAuth from 'next-auth';
-import type { User } from 'next-auth';
 import Google from 'next-auth/providers/google';
 import Credentials from 'next-auth/providers/credentials';
-import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
+
+// Use require for bcrypt to avoid edge runtime issues
+const bcrypt = require('bcryptjs');
 
 export const {
   auth,
   signIn,
   signOut,
-  handlers: { GET, POST },
+  handlers,
 } = NextAuth({
   trustHost: true,
-  session: { strategy: 'jwt' },
-  adapter: PrismaAdapter(prisma),
+  session: { strategy: 'jwt' }, // Use JWT instead of database sessions
+  // Remove adapter to avoid Prisma on edge runtime
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      allowDangerousEmailAccountLinking: true,
     }),
     Credentials({
       name: 'credentials',
@@ -28,7 +27,7 @@ export const {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials): Promise<User | null> {
+      authorize: async (credentials) => {
         if (!credentials?.email || !credentials?.password) {
           throw new Error('Email and password are required');
         }
@@ -37,8 +36,14 @@ export const {
           where: { email: credentials.email as string },
         });
 
-        if (!user || !user.password) {
-          throw new Error('Invalid email or password');
+        if (!user) {
+          throw new Error('No account found with this email');
+        }
+
+        // If user doesn't have a password, they originally signed up with Google
+        // But we'll allow them to set a password now
+        if (!user.password) {
+          throw new Error('This account was created with Google. Please sign in with Google, or use "Forgot Password" to set a password for email login.');
         }
 
         const isPasswordValid = await bcrypt.compare(
@@ -64,74 +69,109 @@ export const {
     error: '/signin',
   },
   callbacks: {
-    async signIn({ user, account }) {
-      // For OAuth providers, ensure user exists in database
-      if (account?.provider && account.provider !== 'credentials') {
+    signIn: async (params) => {
+      const { user, account } = params;
+      
+      // Only handle database operations for Google provider
+      if (account?.provider === 'google') {
         try {
-          await prisma.user.upsert({
+          // Check if user exists
+          const existingUser = await prisma.user.findUnique({
             where: { email: user.email || '' },
-            update: {
-              name: user.name,
-              image: user.image,
-            },
-            create: {
-              email: user.email || '',
-              name: user.name,
-              image: user.image,
-            },
           });
+
+          if (existingUser) {
+            // Update existing user - allow Google login even if they have a password
+            await prisma.user.update({
+              where: { email: user.email || '' },
+              data: {
+                name: user.name || existingUser.name,
+                image: user.image || existingUser.image,
+                emailVerified: new Date(), // Mark as verified since Google verified it
+              },
+            });
+          } else {
+            // Create new user
+            await prisma.user.create({
+              data: {
+                email: user.email || '',
+                name: user.name,
+                image: user.image,
+                emailVerified: new Date(),
+              },
+            });
+          }
+          return true;
         } catch (error) {
-          console.error('Error creating/updating user:', error);
+          console.error('Error handling Google sign-in:', error);
           return false;
         }
       }
       return true;
     },
-    redirect({ url, baseUrl }) {
-      if (url.includes('/app') || url === baseUrl) {
-        return `${baseUrl}/dashboard`;
-      }
-      return url.startsWith(baseUrl) ? url : baseUrl;
-    },
-    async session({ session, token: _token }) {
-      if (session.user && session.user.email) {
-        // Get the actual user ID from the database
-        const dbUser = await prisma.user.findUnique({
-          where: { email: session.user.email },
-          select: { id: true },
-        });
-        
-        if (dbUser) {
-          const userWithId = session.user as User & { id?: string };
-          userWithId.id = dbUser.id;
+    redirect: async (params) => {
+      const { url, baseUrl } = params;
+      
+      // Always redirect to dashboard after successful sign-in
+      if (url.startsWith(baseUrl)) {
+        if (url === baseUrl || url === `${baseUrl}/` || url === `${baseUrl}/signin`) {
+          return `${baseUrl}/dashboard`;
         }
+        return url;
       }
-      return session;
+      
+      return `${baseUrl}/dashboard`;
     },
-    async jwt({ token, user, account }) {
-      // Initial sign in
-      if (account && user) {
-        // For OAuth, get the database user ID
-        if (account.provider !== 'credentials') {
+    jwt: async (params) => {
+      const { token, user, account } = params;
+      
+      // Add user info to token on sign-in
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
+        token.picture = user.image;
+      }
+
+      // For Google sign-in, get the user ID from database
+      if (account?.provider === 'google' && user?.email) {
+        try {
           const dbUser = await prisma.user.findUnique({
-            where: { email: user.email || '' },
+            where: { email: user.email },
             select: { id: true },
           });
           if (dbUser) {
-            token.sub = dbUser.id;
+            token.id = dbUser.id;
           }
-        } else {
-          // For credentials, use the ID from authorize
-          token.sub = user.id;
+        } catch (error) {
+          console.error('Error getting user ID:', error);
         }
       }
+      
       return token;
+    },
+    session: async (params) => {
+      const { session, token } = params;
+      
+      // Add user ID and other info from token to session
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        session.user.email = token.email as string;
+        session.user.name = token.name as string;
+        session.user.image = token.picture as string;
+      }
+      
+      return session;
     },
   },
   events: {
-    signIn({ user, account }) {
+    signIn: (params) => {
+      const { user, account } = params;
       console.log(`User signed in: ${user.email} via ${account?.provider}`);
     },
   },
   debug: process.env.NODE_ENV === 'development',
 });
+
+// Export handlers for the API route
+export const { GET, POST } = handlers;
