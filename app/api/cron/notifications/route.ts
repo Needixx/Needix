@@ -1,6 +1,7 @@
 // app/api/cron/notifications/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { PushNotificationService } from '@/lib/notifications/pushNotifications';
+import { debug } from '@/lib/debug';
 
 // Configure for proper static export compatibility
 export const runtime = 'nodejs';
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log('Running notification cron job...');
+    debug.log('Running notification cron job...');
 
     // Send subscription reminders (if PushNotificationService exists)
     if (typeof PushNotificationService !== 'undefined') {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('Notification cron job completed successfully');
+    debug.log('Notification cron job completed successfully');
     
     return NextResponse.json({ 
       success: true, 

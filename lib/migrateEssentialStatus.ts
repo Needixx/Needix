@@ -1,6 +1,7 @@
 // lib/migrateEssentialStatus.ts - FIXED TYPE ERRORS
 'use client';
 
+import { debug } from '@/lib/debug';
 /**
  * Migrate essential status from localStorage to database
  * This should be called once after the database schema is updated
@@ -30,8 +31,8 @@ export async function migrateEssentialStatusToDatabase(): Promise<{
     const expenseEssentials = getEssentialStatus('needix-expenses-essential');
     const orderEssentials = getEssentialStatus('needix-orders-essential');
 
-    console.log('🚀 Starting essential status migration...');
-    console.log('📊 Found essential items:', {
+    debug.log('🚀 Starting essential status migration...');
+    debug.log('📊 Found essential items:', {
       subscriptions: Object.keys(subscriptionEssentials).length,
       expenses: Object.keys(expenseEssentials).length,
       orders: Object.keys(orderEssentials).length,
@@ -49,7 +50,7 @@ export async function migrateEssentialStatusToDatabase(): Promise<{
           
           if (response.ok) {
             results.migrated.subscriptions++;
-            console.log(`✅ Migrated subscription ${id} as essential`);
+            debug.log(`✅ Migrated subscription ${id} as essential`);
           } else {
             const errorText = await response.text();
             results.errors.push(`Failed to migrate subscription ${id}: ${response.statusText} - ${errorText}`);
@@ -76,7 +77,7 @@ export async function migrateEssentialStatusToDatabase(): Promise<{
           
           if (response.ok) {
             results.migrated.expenses++;
-            console.log(`✅ Migrated expense ${id} as essential`);
+            debug.log(`✅ Migrated expense ${id} as essential`);
           } else {
             const errorText = await response.text();
             results.errors.push(`Failed to migrate expense ${id}: ${response.statusText} - ${errorText}`);
@@ -103,7 +104,7 @@ export async function migrateEssentialStatusToDatabase(): Promise<{
           
           if (response.ok) {
             results.migrated.orders++;
-            console.log(`✅ Migrated order ${id} as essential`);
+            debug.log(`✅ Migrated order ${id} as essential`);
           } else {
             const errorText = await response.text();
             results.errors.push(`Failed to migrate order ${id}: ${response.statusText} - ${errorText}`);
@@ -121,10 +122,10 @@ export async function migrateEssentialStatusToDatabase(): Promise<{
     const totalMigrated = results.migrated.subscriptions + results.migrated.expenses + results.migrated.orders;
     
     if (totalMigrated > 0) {
-      console.log('🎉 Migration completed successfully!', results.migrated);
-      console.log(`📈 Total items migrated: ${totalMigrated}`);
+      debug.log('🎉 Migration completed successfully!', results.migrated);
+      debug.log(`📈 Total items migrated: ${totalMigrated}`);
     } else {
-      console.log('ℹ️ No essential items found to migrate');
+      debug.log('ℹ️ No essential items found to migrate');
     }
 
     // Clean up localStorage after successful migration (only if no errors)
@@ -132,7 +133,7 @@ export async function migrateEssentialStatusToDatabase(): Promise<{
       localStorage.removeItem('needix-subscriptions-essential');
       localStorage.removeItem('needix-expenses-essential');
       localStorage.removeItem('needix-orders-essential');
-      console.log('🧹 Cleaned up localStorage essential status');
+      debug.log('🧹 Cleaned up localStorage essential status');
     } else if (results.errors.length > 0) {
       console.warn('⚠️ Keeping localStorage data due to migration errors');
       results.success = false;
@@ -210,11 +211,11 @@ export async function runMigration(): Promise<{
   migrated: { subscriptions: number; expenses: number; orders: number };
   errors: string[];
 }> {
-  console.log('🔄 Starting manual migration...');
+  debug.log('🔄 Starting manual migration...');
   
   const summary = getMigrationSummary();
   if (summary.total === 0) {
-    console.log('ℹ️ No essential data found to migrate.');
+    debug.log('ℹ️ No essential data found to migrate.');
     return {
       success: true,
       migrated: { subscriptions: 0, expenses: 0, orders: 0 },
@@ -222,13 +223,13 @@ export async function runMigration(): Promise<{
     };
   }
   
-  console.log('📊 Will migrate:', summary);
+  debug.log('📊 Will migrate:', summary);
   
   const result = await migrateEssentialStatusToDatabase();
   
   if (result.success) {
-    console.log('✅ Migration completed successfully!');
-    console.log('📈 Migrated:', result.migrated);
+    debug.log('✅ Migration completed successfully!');
+    debug.log('📈 Migrated:', result.migrated);
   } else {
     console.error('❌ Migration failed with errors:');
     result.errors.forEach(error => console.error('  -', error));

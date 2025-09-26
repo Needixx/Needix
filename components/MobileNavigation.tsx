@@ -1,49 +1,69 @@
+// components/MobileNavigation.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { debug } from "@/lib/debug";
+
+declare global {
+  interface Window {
+    StatusBar?: {
+      setBackgroundColor: (color: { hex: string }) => void;
+      setStyle: (style: { style: string }) => void;
+    };
+  }
+}
 
 export default function MobileNavigation() {
-  const [isCapacitor, setIsCapacitor] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const checkCapacitor = async () => {
+    // Set status bar for mobile
+    if (typeof window !== "undefined") {
       try {
-        const { Capacitor } = await import("@capacitor/core");
-        const native = Capacitor.isNativePlatform();
-        setIsCapacitor(native);
-
-        if (native) {
-          document.body.classList.add("mobile-app");
-
-          try {
-            // Import defensively; the plugin may not be installed
-            const statusBarModule = await import("@capacitor/status-bar").catch(
-              () => null
-            );
-            if (statusBarModule) {
-              const { StatusBar, Style } = statusBarModule;
-              await StatusBar.setStyle({ style: Style.Dark });
-              await StatusBar.setBackgroundColor({ color: "#000000" });
-            }
-          } catch {
-            // Optional plugin, ignore if missing
-            console.log("StatusBar not available");
-          }
+        if (window.StatusBar) {
+          window.StatusBar.setBackgroundColor({ hex: "#000000" });
+          window.StatusBar.setStyle({ style: "LIGHT" });
+        } else {
+          debug.log("StatusBar not available");
         }
-      } catch {
-        console.log("Capacitor not available, running in web mode");
-        setIsCapacitor(false);
+      } catch (error) {
+        debug.log("Capacitor not available, running in web mode");
       }
-    };
-
-    // Avoid no-floating-promises
-    void checkCapacitor();
+    }
   }, []);
 
-  // Client-only component, but keep this guard harmlessly
-  if (typeof window === "undefined") return null;
+  const navItems = [
+    { path: "/dashboard", label: "Dashboard", icon: "🏠" },
+    { path: "/dashboard/subscriptions", label: "Subscriptions", icon: "💳" },
+    { path: "/dashboard/orders", label: "Orders", icon: "📦" },
+    { path: "/dashboard/expenses", label: "Expenses", icon: "💰" },
+    { path: "/calendar", label: "Calendar", icon: "📅" },
+  ];
 
-  return <>{isCapacitor && <div className="h-safe-top bg-black" />}</>;
+  const handleNavigation = (path: string) => {
+    router.push(path);
+  };
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-white/10 z-50">
+      <div className="flex items-center justify-around px-2 py-3 max-w-md mx-auto">
+        {navItems.map(({ path, label, icon }) => (
+          <button
+            key={path}
+            onClick={() => handleNavigation(path)}
+            className={`flex flex-col items-center py-2 px-3 rounded-lg transition-colors min-w-0 ${
+              pathname === path
+                ? "text-cyan-400 bg-cyan-400/10"
+                : "text-white/60 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <span className="text-lg mb-1">{icon}</span>
+            <span className="text-xs font-medium text-center leading-tight">{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }

@@ -1,97 +1,100 @@
-// lib/useOrders.ts - Updated with improved workflow
-'use client';
+// lib/useOrders.ts
 
-import { useState, useEffect, useMemo } from 'react';
-import { OrderStatus } from '@/lib/types';
+"use client";
 
-const KEY = 'needix-orders';
+import { useEffect, useState } from 'react';
+import { debug } from './debug';
 
 export interface OrderFormData {
   name: string;
-  type: 'one-time' | 'recurring';
+  vendor?: string;
+  type: 'one-time' | 'subscription';
   amount?: number;
-  currency?: string;
-  status?: OrderStatus;
+  currency: string;
+  category?: string;
   scheduledDate?: string;
   nextDate?: string;
-  priceCeiling?: number;
-  currentPrice?: number;
-  vendor?: string;
-  category?: string;
   notes?: string;
   isEssential?: boolean;
+  priceCeiling?: number;
+  currentPrice?: number;
 }
 
 export interface OrderItem {
   id: string;
   name: string;
   vendor?: string;
-  type: 'recurring' | 'one-time';
-  status: 'active' | 'paused' | 'completed' | 'cancelled';
+  type: 'one-time' | 'subscription';
+  status: 'active' | 'completed' | 'cancelled';
   currency: string;
   isEssential: boolean;
   category?: string;
-  productUrl?: string;
   amount?: number;
   priceCeiling?: number;
   currentPrice?: number;
-  cadence?: string;
-  nextDate?: string;
   scheduledDate?: string;
-  usage?: string;
-  leadTimeDays?: number;
-  envelopeId?: string;
+  nextDate?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-/** Shape returned by our Orders API */
-type ApiOrder = {
+export interface ApiOrder {
   id: string;
   merchant: string;
+  total: number;
   currency: string;
-  category?: string | null;
-  total: number | string;
-  orderDate?: string | null;
-  status?: 'active' | 'completed' | 'cancelled';
-  notes?: string | null;
+  orderDate: string;
+  status: 'active' | 'completed' | 'cancelled';
+  notes?: string;
+  category?: string;
   isEssential: boolean;
   createdAt: string;
   updatedAt: string;
-};
+}
+
+export interface OrderTotals {
+  active: number;
+  completed: number;
+  monthly: number;
+}
+
+const KEY = 'needix-orders';
 
 export function useOrders() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Calculate totals - only include completed orders
-  const totals = useMemo(() => {
-    const completedOrders = items.filter(order => order.status === 'completed');
-    const monthly = completedOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
-    return { monthly, completed: completedOrders.length, active: items.filter(o => o.status === 'active').length };
-  }, [items]);
+  const persist = (data: OrderItem[]) => {
+    setItems(data);
+    localStorage.setItem(KEY, JSON.stringify(data));
+  };
 
-  const persist = (next: OrderItem[]) => {
-    setItems(next);
-    localStorage.setItem(KEY, JSON.stringify(next));
+  const totals: OrderTotals = {
+    active: items.filter(item => item.status === 'active').length,
+    completed: items.filter(item => item.status === 'completed').length,
+    monthly: items
+      .filter(item => {
+        if (item.status !== 'completed') return false;
+        const now = new Date();
+        const itemDate = new Date(item.updatedAt);
+        return itemDate.getMonth() === now.getMonth() && 
+               itemDate.getFullYear() === now.getFullYear();
+      })
+      .reduce((sum, item) => sum + (item.amount || 0), 0)
   };
 
   useEffect(() => {
     const loadData = async () => {
+      setLoading(true);
+      
       try {
-        setLoading(true);
-
-        const localData = localStorage.getItem(KEY);
-        if (localData) {
-          try {
-            const parsed = JSON.parse(localData) as OrderItem[];
-            setItems(parsed);
-          } catch (e) {
-            console.error('Error parsing local orders:', e);
-          }
+        const stored = localStorage.getItem(KEY);
+        if (stored) {
+          setItems(JSON.parse(stored));
         }
 
+        // Try to fetch from backend
         const response = await fetch('/api/orders');
         if (response.ok) {
           const backendData = (await response.json()) as ApiOrder[];
@@ -101,14 +104,13 @@ export function useOrders() {
               name: order.merchant,
               vendor: order.merchant,
               type: 'one-time' as const,
-              // Use actual status from API, default to 'active' for new orders
               status: (order.status || 'active') as 'active' | 'completed' | 'cancelled',
               currency: order.currency,
               isEssential: Boolean(order.isEssential),
-              category: order.category ?? undefined,
-              amount: Number(order.total),
+              category: order.category || undefined,
+              amount: order.total ? Number(order.total) : undefined,
               scheduledDate: order.orderDate ? new Date(order.orderDate).toISOString().split('T')[0] : undefined,
-              notes: order.notes ?? undefined,
+              notes: order.notes || undefined,
               createdAt: order.createdAt,
               updatedAt: order.updatedAt,
             }));
@@ -117,7 +119,7 @@ export function useOrders() {
           }
         }
       } catch (error) {
-        console.error('Error loading orders:', error);
+        debug.error('Error loading orders:', error);
       } finally {
         setLoading(false);
       }
@@ -135,7 +137,8 @@ export function useOrders() {
           merchant: formData.name,
           total: formData.amount || 0,
           currency: formData.currency || 'USD',
-          orderDate: formData.scheduledDate ? new Date(formData.scheduledDate).toISOString() : new Date().toISOString(),
+          orderDate: formData.scheduledDate ? 
+            new Date(formData.scheduledDate).toISOString() : new Date().toISOString(),
           status: 'active', // Always start as active
           category: formData.category,
           notes: formData.notes,
@@ -153,7 +156,7 @@ export function useOrders() {
       const newOrder: OrderItem = {
         id: created.id,
         name: formData.name,
-        vendor: formData.vendor,
+        vendor: formData.vendor || formData.name,
         type: formData.type,
         status: 'active', // Always start as active
         currency: formData.currency || 'USD',
@@ -173,11 +176,11 @@ export function useOrders() {
       persist(updated);
       return created;
     } catch (error) {
-      console.error('Error adding order:', error);
+      debug.error('Error adding order:', error);
       const newOrder: OrderItem = {
         id: crypto.randomUUID(),
         name: formData.name,
-        vendor: formData.vendor,
+        vendor: formData.vendor || formData.name,
         type: formData.type,
         status: 'active', // Always start as active
         currency: formData.currency || 'USD',
@@ -198,13 +201,25 @@ export function useOrders() {
   };
 
   const remove = async (id: string) => {
+    debug.log('🗑️ Attempting to delete order:', id);
     try {
       const response = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-      if (!response.ok) console.error('Failed to delete order from backend');
+      debug.log('🗑️ Delete response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        debug.error('Failed to delete order from backend:', response.status, errorText);
+      } else {
+        debug.log('✅ Order deleted from backend successfully');
+      }
     } catch (error) {
-      console.error('Error deleting order:', error);
+      debug.error('Error deleting order:', error);
     }
-    persist(items.filter((item) => item.id !== id));
+    
+    // Update local state regardless of backend result
+    const newItems = items.filter((item) => item.id !== id);
+    debug.log('💾 Removing order from local state. Before:', items.length, 'After:', newItems.length);
+    persist(newItems);
   };
 
   // New method to mark order as completed
@@ -213,35 +228,57 @@ export function useOrders() {
   };
 
   const update = async (id: string, patch: Partial<OrderItem>) => {
+    debug.log('🔄 useOrders.update called with:', { id, patch });
+    
     try {
+      // Build the API payload with correct field mapping
+      const apiPayload: Record<string, any> = {};
+      
+      // Only include defined fields in the API call
+      if (patch.name !== undefined) apiPayload.merchant = patch.name;
+      if (patch.amount !== undefined) apiPayload.total = patch.amount;
+      if (patch.currency !== undefined) apiPayload.currency = patch.currency;
+      if (patch.scheduledDate !== undefined) {
+        apiPayload.orderDate = patch.scheduledDate ? 
+          new Date(patch.scheduledDate).toISOString() : undefined;
+      }
+      if (patch.status !== undefined) apiPayload.status = patch.status;
+      if (patch.category !== undefined) apiPayload.category = patch.category;
+      if (patch.notes !== undefined) apiPayload.notes = patch.notes;
+      if (patch.isEssential !== undefined) apiPayload.isEssential = patch.isEssential;
+
+      debug.log('📡 Sending API payload:', JSON.stringify(apiPayload, null, 2));
+
       const response = await fetch(`/api/orders/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          merchant: patch.name,
-          total: patch.amount,
-          currency: patch.currency,
-          orderDate: patch.scheduledDate ? new Date(patch.scheduledDate).toISOString() : undefined,
-          status: patch.status,
-          category: patch.category,
-          notes: patch.notes,
-          isEssential: patch.isEssential,
-        })
+        body: JSON.stringify(apiPayload)
       });
+      
+      debug.log('📡 Response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Failed to update order in backend:', response.status, errorText);
+        debug.error('❌ API Error:', response.status, errorText);
+        throw new Error(`API Error: ${response.status} ${errorText}`);
       }
+      
+      const responseData = await response.json();
+      debug.log('✅ API Response:', responseData);
+      
     } catch (error) {
-      console.error('Error updating order:', error);
+      debug.error('❌ Error updating order:', error);
+      throw error; // Re-throw so calling code can handle the error
     }
 
+    // Update local state
     const next = items.map((item) =>
       item.id === id
         ? { ...item, ...patch, updatedAt: new Date().toISOString() }
         : item,
     );
+    
+    debug.log('💾 Updated local state for order:', id, 'new status:', patch.status);
     persist(next);
   };
 
@@ -259,10 +296,10 @@ export function useOrders() {
             status: (order.status || 'active') as 'active' | 'completed' | 'cancelled',
             currency: order.currency,
             isEssential: Boolean(order.isEssential),
-            category: order.category ?? undefined,
-            amount: Number(order.total),
+            category: order.category || undefined,
+            amount: order.total ? Number(order.total) : undefined,
             scheduledDate: order.orderDate ? new Date(order.orderDate).toISOString().split('T')[0] : undefined,
-            notes: order.notes ?? undefined,
+            notes: order.notes || undefined,
             createdAt: order.createdAt,
             updatedAt: order.updatedAt,
           }));
@@ -271,7 +308,7 @@ export function useOrders() {
         }
       }
     } catch (error) {
-      console.error('Error refreshing orders:', error);
+      debug.error('Error refreshing orders:', error);
     }
   };
 

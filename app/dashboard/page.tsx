@@ -127,7 +127,7 @@ export default function DashboardPage() {
     const ordersTotal = orders.reduce((sum, o) => {
       if (!o.amount || o.status !== "active") return sum;
       const d =
-        o.type === "recurring"
+        o.type === "subscription"
           ? o.nextDate
             ? new Date(`${o.nextDate}T00:00:00`)
             : null

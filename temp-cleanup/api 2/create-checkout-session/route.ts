@@ -6,7 +6,7 @@ import type Stripe from 'stripe';
 
 export async function POST(req: NextRequest) {
   try {
-    console.log('=== Checkout Session API Called ===');
+    debug.log('=== Checkout Session API Called ===');
     
     // Check environment variables first
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     const session = await auth();
-    console.log('Session check:', session?.user?.email ? 'Authenticated' : 'Not authenticated');
+    debug.log('Session check:', session?.user?.email ? 'Authenticated' : 'Not authenticated');
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
@@ -26,13 +26,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { priceId, mode = 'subscription' } = body;
 
-    console.log('Request body:', { priceId, mode });
-    console.log('User email:', session.user.email);
+    debug.log('Request body:', { priceId, mode });
+    debug.log('User email:', session.user.email);
 
     // Validate the price ID exists in Stripe
     try {
       const price = await stripe.prices.retrieve(priceId || 'price_1S4Ut40WmSMb2aa0kCC1Bcdb');
-      console.log('Price found:', price.id, price.unit_amount);
+      debug.log('Price found:', price.id, price.unit_amount);
     } catch (priceError) {
       console.error('Invalid price ID:', priceError);
       return NextResponse.json({ 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    console.log('Creating checkout session...');
+    debug.log('Creating checkout session...');
     
     // Build session config with proper Stripe types
     const sessionConfig: Stripe.Checkout.SessionCreateParams = {
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     const checkoutSession = await stripe.checkout.sessions.create(sessionConfig);
 
-    console.log('Checkout session created successfully:', checkoutSession.id);
+    debug.log('Checkout session created successfully:', checkoutSession.id);
     return NextResponse.json({ sessionId: checkoutSession.id });
     
   } catch (error: unknown) {

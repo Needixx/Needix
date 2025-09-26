@@ -12,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('Fetching analytics data...');
+    debug.log('Fetching analytics data...');
 
     // Get all customers from Stripe
     const customers = await stripe.customers.list({
@@ -63,7 +63,7 @@ export async function GET() {
       avgRevenuePerUser: totalActiveSubscriptions > 0 ? mrr / totalActiveSubscriptions : 0,
     };
 
-    console.log('Analytics metrics:', metrics);
+    debug.log('Analytics metrics:', metrics);
     return NextResponse.json(metrics);
     
   } catch (error: unknown) {

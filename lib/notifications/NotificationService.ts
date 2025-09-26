@@ -3,6 +3,7 @@
 
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications, type ScheduleOptions } from "@capacitor/local-notifications";
+import { debug } from '@/lib/debug';
 
 /** Minimal payload we use across web + native */
 export type NotificationPayload = {
@@ -114,7 +115,7 @@ class NotificationService {
       try {
         this.registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
         await navigator.serviceWorker.ready;
-        console.log("Service worker registered for notifications");
+        debug.log("Service worker registered for notifications");
 
         // Set up push subscription if VAPID key is available
         if (this.vapidPublicKey) {
@@ -151,7 +152,7 @@ class NotificationService {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(subscription), // .toJSON() not necessary
         });
-        console.log("Push subscription saved to server");
+        debug.log("Push subscription saved to server");
       } catch (error) {
         console.error("Failed to save push subscription:", error);
       }

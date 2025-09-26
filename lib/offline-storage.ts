@@ -1,4 +1,5 @@
 import { Preferences } from "@capacitor/preferences";
+import { debug } from '@/lib/debug';
 
 export interface CachedSubscription {
   id: string;
@@ -56,7 +57,7 @@ class OfflineStorageManager {
         key: OfflineStorageManager.STORAGE_KEY,
         value: JSON.stringify(offlineData),
       });
-      console.log("Subscriptions cached offline successfully");
+      debug.log("Subscriptions cached offline successfully");
     } catch (error) {
       console.error("Failed to cache subscriptions:", error);
     }
@@ -116,7 +117,7 @@ class OfflineStorageManager {
       await Preferences.remove({
         key: OfflineStorageManager.STORAGE_KEY,
       });
-      console.log("Offline data cleared");
+      debug.log("Offline data cleared");
     } catch (error) {
       console.error("Failed to clear offline data:", error);
     }

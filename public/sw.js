@@ -153,7 +153,7 @@ self.addEventListener('sync', (event) => {
 async function handleBackgroundSync() {
   try {
     // Handle any queued actions while offline
-    console.log('Background sync triggered');
+    debug.log('Background sync triggered');
   } catch (error) {
     console.error('Background sync failed:', error);
   }

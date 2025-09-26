@@ -25,7 +25,7 @@ export default function DashboardOverview() {
     const renewals = subs.filter((s) => s.nextBillingDate && inRange(new Date(`${s.nextBillingDate}T00:00:00`), now, daysFromNow(30))).length;
     const ordersTotal = orders.reduce((sum, o) => {
       if (!o.amount || o.status !== 'active') return sum;
-      const d = o.type === 'recurring' ? (o.nextDate ? new Date(`${o.nextDate}T00:00:00`) : null) : (o.scheduledDate ? new Date(`${o.scheduledDate}T00:00:00`) : null);
+      const d = o.type === 'subscription' ? (o.nextDate ? new Date(`${o.nextDate}T00:00:00`) : null) : (o.scheduledDate ? new Date(`${o.scheduledDate}T00:00:00`) : null);
       if (d && d >= monthStart && d <= monthEnd) return sum + o.amount;
       return sum;
     }, 0);

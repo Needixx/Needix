@@ -6,6 +6,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { debug } from '@/lib/debug';
 
 export const {
   auth,
@@ -110,7 +111,7 @@ export const {
       return true;
     },
     async redirect({ url, baseUrl }) {
-      console.log('Auth redirect:', { url, baseUrl });
+      debug.log('Auth redirect:', { url, baseUrl });
       
       // Handle mobile app redirects
       if (typeof window !== 'undefined') {
@@ -172,7 +173,7 @@ export const {
   },
   events: {
     async signIn({ user, account }) {
-      console.log('User signed in:', { 
+      debug.log('User signed in:', { 
         userId: user.id, 
         provider: account?.provider,
         email: user.email 

@@ -1,4 +1,5 @@
 // app/dashboard/orders/page.tsx
+
 "use client";
 
 import { useState } from "react";
@@ -11,6 +12,15 @@ import OrdersTable from "@/components/OrdersTable";
 import UpgradeButton from "@/components/UpgradeButton";
 import AddOrderDialog from "@/components/AddOrderDialog";
 import EditOrderDialog from "@/components/EditOrderDialog";
+import { debug } from "@/lib/debug";
+
+// Type imports for conversion
+import type {
+  OrderFormData as UIOrderFormData,
+  OrderType as UIOrderType,
+  OrderStatus as UIOrderStatus,
+} from "@/lib/types-orders";
+import type { OrderFormData as HookOrderFormData } from "@/lib/useOrders";
 
 function StatCard({
   title,
@@ -32,8 +42,40 @@ function StatCard({
   );
 }
 
+/* ---------- UI -> hook adapters ---------- */
+const uiTypeToHook = (t: UIOrderType): "one-time" | "subscription" => {
+  // UI types: "recurring" | "future" | "one-time"
+  // Hook types: "one-time" | "subscription" 
+  if (t === "recurring") return "subscription";
+  return "one-time"; // Maps both "future" and "one-time" to "one-time"
+};
+
+const uiStatusToHook = (
+  s: UIOrderStatus
+): "active" | "completed" | "cancelled" => {
+  // UI types: "active" | "paused" | "completed" | "cancelled"
+  // Hook types: "active" | "completed" | "cancelled"
+  if (s === "paused") return "active"; // Map paused to active
+  return s as "active" | "completed" | "cancelled";
+};
+
+const uiFormToHookForm = (d: UIOrderFormData): HookOrderFormData => ({
+  name: d.name,
+  vendor: d.vendor || d.name, // Use name as vendor if vendor not provided
+  type: uiTypeToHook(d.type),
+  amount: d.amount || 0,
+  currency: d.currency,
+  category: d.category,
+  scheduledDate: d.scheduledDate,
+  nextDate: d.nextDate,
+  notes: d.notes,
+  isEssential: d.isEssential,
+  priceCeiling: d.priceCeiling,
+  currentPrice: d.currentPrice,
+});
+
 export default function OrdersPage() {
-  const { items: orders, remove, update, markCompleted, totals } = useOrders();
+  const { items: orders, remove, update, markCompleted, totals, add } = useOrders();
   const { isPro } = useSubscriptionLimit();
   const toast = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -43,7 +85,8 @@ export default function OrdersPage() {
   // Check if user can add more orders
   const canAddOrder = isPro || orders.length < 2;
 
-  const filteredOrders = filter === "all" ? orders : orders.filter((order) => order.status === filter);
+  const filteredOrders = filter === "all" ?
+    orders : orders.filter((order) => order.status === filter);
 
   const handleEdit = (order: any) => {
     setEditingOrder(order);
@@ -65,8 +108,62 @@ export default function OrdersPage() {
     }
   };
 
-  const handleAdd = (orderData: any) => {
-    toast(`Added ${orderData.name}`, "success");
+  // Handler for adding orders
+  const handleAdd = async (orderData: UIOrderFormData) => {
+    try {
+      debug.log('🔄 handleAdd called with:', orderData);
+      
+      // Convert UI form data to hook form data
+      const hookFormData = uiFormToHookForm(orderData);
+      debug.log('🔄 Converted to hook format:', hookFormData);
+      
+      // Add the order
+      await add(hookFormData);
+      
+      // Close the dialog
+      setShowAddDialog(false);
+      
+      // Show success toast
+      toast(`Added ${orderData.name}`, "success");
+      
+      debug.log('✅ Order added successfully');
+    } catch (error) {
+      console.error('❌ Error adding order:', error);
+      toast("Failed to add order", "error");
+    }
+  };
+
+  // Handler for updating orders
+  const handleUpdate = async (orderData: UIOrderFormData & { id: string }) => {
+    try {
+      debug.log('🔄 handleUpdate called with:', orderData);
+      
+      // Convert UI form data to hook form data and add the status field
+      const hookFormData = uiFormToHookForm(orderData);
+      
+      // Add the status field manually since it's not in the hook's OrderFormData type
+      // but the update function can accept it as part of Partial<OrderItem>
+      const updateData = {
+        ...hookFormData,
+        status: uiStatusToHook(orderData.status)
+      };
+      
+      debug.log('🔄 Converted to hook format with status:', updateData);
+      
+      // Update the order using the hook's update function
+      await update(orderData.id, updateData);
+      
+      // Close the dialog
+      setEditingOrder(null);
+      
+      // Show success toast
+      toast(`Updated ${orderData.name}`, "success");
+      
+      debug.log('✅ Order updated successfully');
+    } catch (error) {
+      console.error('❌ Error updating order:', error);
+      toast("Failed to update order", "error");
+    }
   };
 
   return (
@@ -186,7 +283,7 @@ export default function OrdersPage() {
         order={editingOrder}
         open={!!editingOrder}
         onOpenChange={(open) => !open && setEditingOrder(null)}
-        onUpdate={handleAdd}
+        onUpdate={handleUpdate}
       />
     </div>
   );

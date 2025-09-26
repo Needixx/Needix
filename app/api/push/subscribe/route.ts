@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { debug } from '@/lib/debug';
 
 interface PushSubscriptionKeys {
   p256dh: string;
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`Push subscription saved for user ${session.user.id}`);
+    debug.log(`Push subscription saved for user ${session.user.id}`);
     
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -91,7 +92,7 @@ export async function DELETE() {
       where: { userId: session.user.id },
     });
 
-    console.log(`Push subscription removed for user ${session.user.id}`);
+    debug.log(`Push subscription removed for user ${session.user.id}`);
     
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -2,6 +2,7 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { debug } from '@/lib/debug';
 
 const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
@@ -49,7 +50,7 @@ export class PushNotificationService {
       });
 
       if (!subscription) {
-        console.log(`No push subscription found for user ${userId}`);
+        debug.log(`No push subscription found for user ${userId}`);
         return false;
       }
 
@@ -79,7 +80,7 @@ export class PushNotificationService {
         { TTL: 24 * 60 * 60 } // 24 hours
       );
 
-      console.log(`Push notification sent to user ${userId}: ${payload.title}`);
+      debug.log(`Push notification sent to user ${userId}: ${payload.title}`);
       return true;
     } catch (error) {
       console.error("Failed to send push notification:", error);
@@ -88,7 +89,7 @@ export class PushNotificationService {
       if (error instanceof Error && (error.message.includes("410") || error.message.includes("invalid"))) {
         try {
           await prisma.pushSubscription.deleteMany({ where: { userId } });
-          console.log(`Removed invalid push subscription for user ${userId}`);
+          debug.log(`Removed invalid push subscription for user ${userId}`);
         } catch (deleteError) {
           console.error("Failed to remove invalid subscription:", deleteError);
         }
@@ -215,7 +216,7 @@ export class PushNotificationService {
         where: { updatedAt: { lt: cutoff } },
       });
 
-      console.log("Cleaned up expired push subscriptions");
+      debug.log("Cleaned up expired push subscriptions");
     } catch (error) {
       console.error("Failed to cleanup expired subscriptions:", error);
     }

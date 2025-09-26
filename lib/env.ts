@@ -35,7 +35,7 @@ export const mask = (value?: string): string =>
 
 /**
  * Diagnostic helper to check env setup without leaking secrets.
- * Example: console.log(envReport())
+ * Example: debug.log(envReport())
  */
 export const envReport = () => ({
   AUTH_SECRET: !!process.env.AUTH_SECRET,

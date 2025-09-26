@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
   switch (event.type) {
     case 'checkout.session.completed':
       const session = event.data.object;
-      console.log('Payment successful for session:', session.id);
+      debug.log('Payment successful for session:', session.id);
       
       if (session.customer_email) {
-        console.log(`User ${session.customer_email} is now Pro`);
+        debug.log(`User ${session.customer_email} is now Pro`);
         // In a real app, you'd save this to your database
         // For now, we'll rely on the success URL parameter
       }
@@ -38,25 +38,25 @@ export async function POST(req: NextRequest) {
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
       const subscription = event.data.object;
-      console.log('Subscription updated:', subscription.id);
+      debug.log('Subscription updated:', subscription.id);
       
       if (subscription.customer && typeof subscription.customer === 'string') {
         const customer = await stripe.customers.retrieve(subscription.customer);
         if (customer && !customer.deleted && customer.email) {
-          console.log(`Subscription ${subscription.status} for ${customer.email}`);
+          debug.log(`Subscription ${subscription.status} for ${customer.email}`);
         }
       }
       break;
 
     case 'customer.subscription.deleted':
       const deletedSubscription = event.data.object;
-      console.log('Subscription cancelled:', deletedSubscription.id);
+      debug.log('Subscription cancelled:', deletedSubscription.id);
       
       // Handle immediate cancellation
       if (deletedSubscription.customer && typeof deletedSubscription.customer === 'string') {
         const customer = await stripe.customers.retrieve(deletedSubscription.customer);
         if (customer && !customer.deleted && customer.email) {
-          console.log(`IMMEDIATE CANCELLATION: Removing Pro status for ${customer.email}`);
+          debug.log(`IMMEDIATE CANCELLATION: Removing Pro status for ${customer.email}`);
           
           // Here you would remove Pro status from your database
           // For localStorage approach, we'll create an API endpoint
@@ -67,24 +67,24 @@ export async function POST(req: NextRequest) {
 
     case 'invoice.payment_succeeded':
       const invoice = event.data.object;
-      console.log('Payment succeeded for invoice:', invoice.id);
+      debug.log('Payment succeeded for invoice:', invoice.id);
       break;
 
     case 'invoice.payment_failed':
       const failedInvoice = event.data.object;
-      console.log('Payment failed for invoice:', failedInvoice.id);
+      debug.log('Payment failed for invoice:', failedInvoice.id);
       
       // Handle failed payment - could downgrade immediately or after grace period
       if (failedInvoice.customer && typeof failedInvoice.customer === 'string') {
         const customer = await stripe.customers.retrieve(failedInvoice.customer);
         if (customer && !customer.deleted && customer.email) {
-          console.log(`Payment failed for ${customer.email} - consider downgrading`);
+          debug.log(`Payment failed for ${customer.email} - consider downgrading`);
         }
       }
       break;
 
     default:
-      console.log(`Unhandled event type: ${event.type}`);
+      debug.log(`Unhandled event type: ${event.type}`);
   }
 
   return NextResponse.json({ received: true });
@@ -96,7 +96,7 @@ async function removeProStatus(email: string) {
   // In a real app, this would update your database
   
   // For now, we'll log it and rely on the client to check subscription status
-  console.log(`Would remove Pro status for: ${email}`);
+  debug.log(`Would remove Pro status for: ${email}`);
   
   // You could also call Stripe to verify the subscription status
   // and update your database accordingly

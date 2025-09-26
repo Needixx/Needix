@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Use dynamic import to avoid edge runtime issues
-const bcrypt = require('bcryptjs');
+import bcrypt from 'bcryptjs';
 
 // Configure runtime
 export const runtime = 'nodejs';

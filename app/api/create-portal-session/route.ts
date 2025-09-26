@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe';
 import { auth } from '@/lib/auth';
 import type Stripe from 'stripe';
 import { z } from 'zod';
+import { debug } from '@/lib/debug';
 
 const BodySchema = z.object({
   email: z.string().email(),
@@ -11,7 +12,7 @@ const BodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    console.log('=== Portal Session API Called ===');
+    debug.log('=== Portal Session API Called ===');
 
     const session = await auth();
 
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     }
     const { email } = parsed.data;
 
-    console.log('Looking for customer with email:', email);
+    debug.log('Looking for customer with email:', email);
 
     // Find existing customer
     const existingCustomers = await stripe.customers.list({
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
       limit: 1,
     });
 
-    console.log('Found customers:', existingCustomers.data.length);
+    debug.log('Found customers:', existingCustomers.data.length);
 
     if (existingCustomers.data.length === 0) {
       return NextResponse.json(
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log('Customer found:', customer.id);
+    debug.log('Customer found:', customer.id);
 
     // Create portal session with proper typing
     const portalConfig: Stripe.BillingPortal.SessionCreateParams = {
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     const portalSession = await stripe.billingPortal.sessions.create(portalConfig);
 
-    console.log('Portal session created:', portalSession.id);
+    debug.log('Portal session created:', portalSession.id);
     return NextResponse.json({ url: portalSession.url });
   } catch (error: unknown) {
     console.error('=== Portal Session Error ===');
