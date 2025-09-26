@@ -107,7 +107,8 @@ function SignInForm() {
         if (result?.error) {
           setError("Account created but failed to sign in. Please try signing in manually.");
         } else if (result?.ok) {
-          // Force navigation for mobile
+          // Clear error and redirect
+          setError("");
           if (isNative) {
             window.location.href = "/dashboard";
           } else {
@@ -125,7 +126,8 @@ function SignInForm() {
         if (result?.error) {
           setError("Invalid email or password. Please check your credentials and try again.");
         } else if (result?.ok) {
-          // Force navigation for mobile
+          // Clear error and redirect
+          setError("");
           if (isNative) {
             window.location.href = "/dashboard";
           } else {
@@ -147,14 +149,12 @@ function SignInForm() {
       return;
     }
 
-    // Clear any errors and don't set loading to avoid state issues
     setError("");
-    
     try {
-      // Let NextAuth handle the entire flow with redirect
+      // Use redirect: true for Google sign-in to avoid issues
       await signIn("google", { 
-        callbackUrl: "/dashboard"
-        // No redirect: false - let NextAuth handle it completely
+        callbackUrl: "/dashboard", 
+        redirect: true 
       });
     } catch (err) {
       console.error("Google sign in error:", err);
@@ -174,6 +174,7 @@ function SignInForm() {
       });
       
       if (result?.ok) {
+        setError("");
         if (isNative) {
           window.location.href = "/dashboard";
         } else {
@@ -191,183 +192,202 @@ function SignInForm() {
   };
 
   return (
-    <main className="mx-auto grid max-w-md gap-6 px-4 py-16 min-h-screen">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold">
-          {mode === "signin" ? "Sign in to Needix" : "Create your Needix account"}
-        </h1>
-        <p className="text-white/70 mt-2">
-          {mode === "signin"
-            ? "Welcome back! Sign in to manage your subscriptions."
-            : "Join thousands of users managing their subscriptions smarter."}
-        </p>
-      </div>
-
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-          <p className="text-red-400 text-sm">{error}</p>
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Enhanced Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-purple-950/30 to-slate-950" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(120,119,198,0.15),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_70%,rgba(34,211,238,0.1),transparent_50%)]" />
+      
+      {/* Content */}
+      <main className="relative z-10 mx-auto grid max-w-md gap-6 px-4 py-16 min-h-screen justify-center">
+        {/* Logo/Header */}
+        <div className="text-center mb-4">
+          <div className="inline-block p-4 rounded-2xl bg-gradient-to-br from-purple-600/20 to-cyan-600/20 border border-purple-500/30 mb-4">
+            <span className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+              Needix
+            </span>
+          </div>
         </div>
-      )}
 
-      <div className="grid gap-4">
-        {/* Google Sign-in - Only show on web */}
-        {!isNative && (
-          <>
-            <Button
-              onClick={() => void handleGoogleSignIn()}
-              disabled={loading}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 h-11"
-            >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  Signing in...
-                </div>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  Continue with Google
-                </>
-              )}
-            </Button>
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold text-white">
+            {mode === "signin" ? "Welcome back" : "Join Needix"}
+          </h1>
+          <p className="text-white/70 mt-2">
+            {mode === "signin"
+              ? "Sign in to manage your subscriptions"
+              : "Start tracking your subscriptions smarter"}
+          </p>
+        </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-white/20"></div>
-              <span className="text-white/50 text-sm">or</span>
-              <div className="flex-1 h-px bg-white/20"></div>
-            </div>
-          </>
-        )}
-
-        {/* Mobile notice */}
-        {isNative && (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/70 text-center">
-            📱 Sign in with email and password on mobile
+        {error && (
+          <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4 backdrop-blur-sm">
+            <p className="text-red-300 text-sm">{error}</p>
           </div>
         )}
 
-        {/* Email/Password Form */}
-        <form onSubmit={handleCredentialsAuth} className="grid gap-4">
-          <div className="grid gap-2">
-            <label htmlFor="email" className="text-sm font-medium text-white/90">
-              Email address
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder:text-white/50 focus:border-white/40 focus:outline-none focus:ring-1 focus:ring-white/40"
-              placeholder="Enter your email"
-              required
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <label htmlFor="password" className="text-sm font-medium text-white/90">
-              Password
-            </label>
-            <div className="relative">
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 pr-10 text-white placeholder:text-white/50 focus:border-white/40 focus:outline-none focus:ring-1 focus:ring-white/40"
-                placeholder="Enter your password"
-                required
-                autoComplete={mode === "signin" ? "current-password" : "new-password"}
-              />
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white/80"
-                onClick={() => setShowPassword(!showPassword)}
+        <div className="grid gap-4">
+          {/* Google Sign-in - Only show on web */}
+          {!isNative && (
+            <>
+              <Button
+                onClick={() => void handleGoogleSignIn()}
+                disabled={loading}
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 h-12 backdrop-blur-sm"
               >
-                {showPassword ? (
-                  <EyeSlashIcon className="h-4 w-4" />
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Signing in...
+                  </div>
                 ) : (
-                  <EyeIcon className="h-4 w-4" />
+                  <>
+                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" aria-hidden="true">
+                      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Continue with Google
+                  </>
                 )}
-              </button>
-            </div>
-          </div>
+              </Button>
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 h-11"
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                {mode === "signin" ? "Signing in..." : "Creating account..."}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-white/20"></div>
+                <span className="text-white/50 text-sm">or</span>
+                <div className="flex-1 h-px bg-white/20"></div>
               </div>
-            ) : (
-              mode === "signin" ? "Sign in" : "Create account"
-            )}
-          </Button>
-        </form>
-
-        {/* Mode Toggle */}
-        <div className="text-center text-sm text-white/70">
-          {mode === "signin" ? (
-            <>
-              Don't have an account?{" "}
-              <button
-                onClick={() => {
-                  setMode("signup");
-                  setError("");
-                }}
-                className="text-white/90 hover:text-white underline"
-              >
-                Create one here
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{" "}
-              <button
-                onClick={() => {
-                  setMode("signin");
-                  setError("");
-                }}
-                className="text-white/90 hover:text-white underline"
-              >
-                Sign in here
-              </button>
             </>
           )}
-        </div>
 
-        {/* Development Login - Only if enabled */}
-        {process.env.NODE_ENV === "development" && 
-         process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH && (
-          <div className="mt-6 pt-4 border-t border-white/10">
-            <Button
-              onClick={() => void handleDevLogin()}
-              disabled={loading}
-              variant="ghost"
-              className="w-full text-yellow-400 border-yellow-400/20 hover:bg-yellow-400/10"
-            >
-              🚀 Development Login
-            </Button>
+          {/* Mobile notice */}
+          {isNative && (
+            <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4 text-sm text-purple-200 text-center backdrop-blur-sm">
+              📱 Sign in with email and password on mobile
+            </div>
+          )}
+
+          {/* Email/Password Form */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <form onSubmit={handleCredentialsAuth} className="grid gap-4">
+              <div className="grid gap-2">
+                <label htmlFor="email" className="text-sm font-medium text-white/90">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="rounded-lg border border-white/20 bg-white/10 px-3 py-3 text-white placeholder:text-white/50 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400/20 backdrop-blur-sm"
+                  placeholder="Enter your email"
+                  required
+                  autoComplete="email"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label htmlFor="password" className="text-sm font-medium text-white/90">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-3 pr-12 text-white placeholder:text-white/50 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400/20 backdrop-blur-sm"
+                    placeholder="Enter your password"
+                    required
+                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white/80 p-1"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeSlashIcon className="h-5 w-5" />
+                    ) : (
+                      <EyeIcon className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={loading}
+                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 h-12 mt-2"
+              >
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    {mode === "signin" ? "Signing in..." : "Creating account..."}
+                  </div>
+                ) : (
+                  mode === "signin" ? "Sign in" : "Create account"
+                )}
+              </Button>
+            </form>
           </div>
-        )}
-      </div>
-    </main>
+
+          {/* Mode Toggle */}
+          <div className="text-center text-sm text-white/70">
+            {mode === "signin" ? (
+              <>
+                Don't have an account?{" "}
+                <button
+                  onClick={() => {
+                    setMode("signup");
+                    setError("");
+                  }}
+                  className="text-purple-300 hover:text-purple-200 underline"
+                >
+                  Create one here
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  onClick={() => {
+                    setMode("signin");
+                    setError("");
+                  }}
+                  className="text-purple-300 hover:text-purple-200 underline"
+                >
+                  Sign in here
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Development Login - Only if enabled */}
+          {process.env.NODE_ENV === "development" && 
+           process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH && (
+            <div className="mt-6 pt-4 border-t border-white/20">
+              <Button
+                onClick={() => void handleDevLogin()}
+                disabled={loading}
+                variant="ghost"
+                className="w-full text-yellow-400 border-yellow-400/30 hover:bg-yellow-400/10"
+              >
+                🚀 Development Login
+              </Button>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }
 
 export default function SignInPage() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/30 to-slate-950">
         <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
       </div>
     }>

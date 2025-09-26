@@ -1,4 +1,4 @@
-// app/api/orders/[id]/route.ts - TYPE SAFE VERSION
+// app/api/orders/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -9,6 +9,7 @@ interface UpdateOrderBody {
   total?: number;
   currency?: string;
   orderDate?: string;
+  status?: 'active' | 'completed' | 'cancelled'; // ✅ Add status field
   notes?: string | null;
   category?: string | null;
   isEssential?: boolean;
@@ -48,6 +49,8 @@ export const PATCH = async (req: NextRequest) => {
     if (payload.total !== undefined) data.total = Number(payload.total);
     if (payload.currency !== undefined) data.currency = String(payload.currency);
     if (payload.orderDate !== undefined) data.orderDate = payload.orderDate ? new Date(payload.orderDate) : new Date();
+    // ✅ FIX: Handle status updates
+    if (payload.status !== undefined) data.status = payload.status;
     if (payload.notes !== undefined) data.notes = payload.notes ? String(payload.notes) : null;
     if (payload.category !== undefined) data.category = payload.category ? String(payload.category) : null;
     if (payload.isEssential !== undefined) data.isEssential = Boolean(payload.isEssential);

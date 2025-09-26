@@ -1,16 +1,10 @@
-// middleware.ts
-import { auth } from '@/lib/auth';
+// middleware.ts - Fix the import issue
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-export default auth((req) => {
-  const { pathname } = req.nextUrl;
-  const isLoggedIn = !!req.auth;
-
-  // Skip middleware for API routes to avoid edge runtime issues
-  if (pathname.startsWith('/api/')) {
-    return NextResponse.next();
-  }
-
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  
   // Public routes that don't require authentication
   const publicRoutes = [
     '/',
@@ -31,28 +25,33 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Simple session check using cookies instead of heavy auth import
+  const sessionToken = request.cookies.get('authjs.session-token') || 
+                      request.cookies.get('__Secure-authjs.session-token');
+  
   // Redirect to signin if not authenticated and trying to access protected route
-  if (!isLoggedIn && !isPublicRoute) {
-    const signinUrl = new URL('/signin', req.url);
+  if (!sessionToken && !isPublicRoute) {
+    const signinUrl = new URL('/signin', request.url);
     signinUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(signinUrl);
   }
 
   // If logged in and trying to access signin, redirect to dashboard
-  if (isLoggedIn && pathname === '/signin') {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
+  if (sessionToken && pathname === '/signin') {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [
-    /*
-     * Only match HTML pages that might need auth checks.
-     * Exclude ALL static assets, images, icons, API routes, and file extensions.
-     * This dramatically reduces edge function bundle size.
-     */
-    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|sw.js|manifest.json|robots.txt|.*\\.).*)',
+    // Only match essential protected pages to keep bundle size small
+    '/dashboard/:path*',
+    '/settings/:path*',
+    '/billing/:path*',
+    '/calendar/:path*',
+    '/analytics/:path*',
+    '/signin',
   ],
 };

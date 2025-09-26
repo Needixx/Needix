@@ -1,7 +1,7 @@
-// lib/useOrders.ts - FINAL DATABASE VERSION
+// lib/useOrders.ts - Updated with improved workflow
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { OrderStatus } from '@/lib/types';
 
 const KEY = 'needix-orders';
@@ -46,7 +46,7 @@ export interface OrderItem {
   updatedAt: string;
 }
 
-/** Shape returned by our Orders API with isEssential */
+/** Shape returned by our Orders API */
 type ApiOrder = {
   id: string;
   merchant: string;
@@ -54,8 +54,9 @@ type ApiOrder = {
   category?: string | null;
   total: number | string;
   orderDate?: string | null;
+  status?: 'active' | 'completed' | 'cancelled';
   notes?: string | null;
-  isEssential: boolean;  // ✅ Now included from backend
+  isEssential: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -63,6 +64,18 @@ type ApiOrder = {
 export function useOrders() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Calculate totals - only include completed orders
+  const totals = useMemo(() => {
+    const completedOrders = items.filter(order => order.status === 'completed');
+    const monthly = completedOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+    return { monthly, completed: completedOrders.length, active: items.filter(o => o.status === 'active').length };
+  }, [items]);
+
+  const persist = (next: OrderItem[]) => {
+    setItems(next);
+    localStorage.setItem(KEY, JSON.stringify(next));
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -88,9 +101,10 @@ export function useOrders() {
               name: order.merchant,
               vendor: order.merchant,
               type: 'one-time' as const,
-              status: 'completed' as const,
+              // Use actual status from API, default to 'active' for new orders
+              status: (order.status || 'active') as 'active' | 'completed' | 'cancelled',
               currency: order.currency,
-              isEssential: Boolean(order.isEssential),  // ✅ Use actual database value
+              isEssential: Boolean(order.isEssential),
               category: order.category ?? undefined,
               amount: Number(order.total),
               scheduledDate: order.orderDate ? new Date(order.orderDate).toISOString().split('T')[0] : undefined,
@@ -112,11 +126,6 @@ export function useOrders() {
     void loadData();
   }, []);
 
-  const persist = (next: OrderItem[]) => {
-    setItems(next);
-    localStorage.setItem(KEY, JSON.stringify(next));
-  };
-
   const add = async (formData: OrderFormData) => {
     try {
       const response = await fetch('/api/orders', {
@@ -126,11 +135,11 @@ export function useOrders() {
           merchant: formData.name,
           total: formData.amount || 0,
           currency: formData.currency || 'USD',
-          orderDate: formData.scheduledDate ?
-            new Date(formData.scheduledDate).toISOString() : new Date().toISOString(),
+          orderDate: formData.scheduledDate ? new Date(formData.scheduledDate).toISOString() : new Date().toISOString(),
+          status: 'active', // Always start as active
           category: formData.category,
           notes: formData.notes,
-          isEssential: formData.isEssential || false,  // ✅ Send to database
+          isEssential: formData.isEssential || false,
           items: []
         })
       });
@@ -146,9 +155,9 @@ export function useOrders() {
         name: formData.name,
         vendor: formData.vendor,
         type: formData.type,
-        status: formData.status || 'active',
+        status: 'active', // Always start as active
         currency: formData.currency || 'USD',
-        isEssential: Boolean(created.isEssential),  // ✅ Use database value
+        isEssential: Boolean(created.isEssential),
         category: formData.category,
         amount: formData.amount,
         priceCeiling: formData.priceCeiling,
@@ -170,7 +179,7 @@ export function useOrders() {
         name: formData.name,
         vendor: formData.vendor,
         type: formData.type,
-        status: formData.status || 'active',
+        status: 'active', // Always start as active
         currency: formData.currency || 'USD',
         isEssential: formData.isEssential || false,
         category: formData.category,
@@ -198,6 +207,11 @@ export function useOrders() {
     persist(items.filter((item) => item.id !== id));
   };
 
+  // New method to mark order as completed
+  const markCompleted = async (id: string) => {
+    await update(id, { status: 'completed' });
+  };
+
   const update = async (id: string, patch: Partial<OrderItem>) => {
     try {
       const response = await fetch(`/api/orders/${id}`, {
@@ -208,12 +222,17 @@ export function useOrders() {
           total: patch.amount,
           currency: patch.currency,
           orderDate: patch.scheduledDate ? new Date(patch.scheduledDate).toISOString() : undefined,
+          status: patch.status,
           category: patch.category,
           notes: patch.notes,
-          isEssential: patch.isEssential,  // ✅ Send to database
+          isEssential: patch.isEssential,
         })
       });
-      if (!response.ok) console.error('Failed to update order in backend');
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to update order in backend:', response.status, errorText);
+      }
     } catch (error) {
       console.error('Error updating order:', error);
     }
@@ -237,9 +256,9 @@ export function useOrders() {
             name: order.merchant,
             vendor: order.merchant,
             type: 'one-time' as const,
-            status: 'completed' as const,
+            status: (order.status || 'active') as 'active' | 'completed' | 'cancelled',
             currency: order.currency,
-            isEssential: Boolean(order.isEssential),  // ✅ Use database value
+            isEssential: Boolean(order.isEssential),
             category: order.category ?? undefined,
             amount: Number(order.total),
             scheduledDate: order.orderDate ? new Date(order.orderDate).toISOString().split('T')[0] : undefined,
@@ -256,5 +275,5 @@ export function useOrders() {
     }
   };
 
-  return { items, add, remove, update, loading, refresh };
+  return { items, totals, add, remove, update, markCompleted, loading, refresh };
 }
