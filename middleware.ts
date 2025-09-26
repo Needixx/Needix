@@ -49,13 +49,10 @@ export default auth((req) => {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     * - api routes (handled separately)
+     * Only match HTML pages that might need auth checks.
+     * Exclude ALL static assets, images, icons, API routes, and file extensions.
+     * This dramatically reduces edge function bundle size.
      */
-    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|sw.js|manifest.json|robots.txt|.*\\.).*)',
   ],
 };
