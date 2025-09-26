@@ -1,69 +1,66 @@
 // lib/mobile-auth.ts
 import { Capacitor } from '@capacitor/core';
-import { Preferences } from '@capacitor/preferences';
 
-export const isNativePlatform = () => {
-  return typeof window !== 'undefined' && Capacitor.isNativePlatform();
+export const isMobileApp = () => {
+  if (typeof window === 'undefined') return false;
+  return Capacitor.isNativePlatform();
 };
 
-export const getPlatform = () => {
-  return Capacitor.getPlatform();
+// Legacy export for compatibility
+export const isNativePlatform = isMobileApp;
+
+export const handleMobileAuth = async (result: any) => {
+  if (!isMobileApp()) {
+    return result;
+  }
+
+  // For mobile apps, we need to handle auth results differently
+  if (result?.ok) {
+    // Force a hard navigation for mobile
+    window.location.href = '/dashboard';
+    return result;
+  }
+
+  return result;
 };
 
-// Store session data for mobile
-export const storeSessionData = async (sessionData: any) => {
-  if (isNativePlatform()) {
-    try {
-      await Preferences.set({
-        key: 'user_session',
-        value: JSON.stringify(sessionData),
-      });
-    } catch (error) {
-      console.error('Failed to store session data:', error);
-    }
+export const mobileRedirect = (path: string) => {
+  if (isMobileApp()) {
+    // Use hard redirect for mobile
+    window.location.href = path;
+  } else {
+    // Use router for web
+    return path;
   }
 };
 
-// Retrieve session data for mobile
+// Check if we're running in development mode with dev auth enabled
+export const isDevAuthEnabled = () => {
+  return process.env.NODE_ENV === 'development' && 
+         process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH === '1';
+};
+
+// Mobile-safe session check
+export const checkMobileSession = async () => {
+  try {
+    const response = await fetch('/api/auth/session');
+    const session = await response.json();
+    return session;
+  } catch (error) {
+    console.error('Session check failed:', error);
+    return null;
+  }
+};
+
+// Get session data for mobile compatibility
 export const getSessionData = async () => {
-  if (isNativePlatform()) {
-    try {
-      const { value } = await Preferences.get({ key: 'user_session' });
-      return value ? JSON.parse(value) : null;
-    } catch (error) {
-      console.error('Failed to retrieve session data:', error);
-      return null;
-    }
-  }
-  return null;
-};
-
-// Clear session data for mobile
-export const clearSessionData = async () => {
-  if (isNativePlatform()) {
-    try {
-      await Preferences.remove({ key: 'user_session' });
-    } catch (error) {
-      console.error('Failed to clear session data:', error);
-    }
-  }
-};
-
-// Check if Google OAuth should be available
-export const isGoogleOAuthAvailable = () => {
-  // For now, disable Google OAuth on native platforms
-  // This can be enabled later with proper Google OAuth setup for mobile
-  return !isNativePlatform();
-};
-
-// Handle mobile-specific authentication flow
-export const handleMobileAuth = async (user: any) => {
-  if (isNativePlatform()) {
-    await storeSessionData(user);
-    
-    // You can add mobile-specific logic here
-    // Such as setting up local notifications, preferences, etc.
-    
-    console.log('Mobile authentication successful for:', user.email);
+  try {
+    const response = await fetch('/api/auth/session');
+    if (!response.ok) return null;
+    const session = await response.json();
+    return session;
+  } catch (error) {
+    console.error('Failed to get session data:', error);
+    return null;
   }
 };

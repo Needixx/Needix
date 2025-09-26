@@ -51,6 +51,7 @@ export default [
       // --- Turn off core rules that fight TypeScript ---
       'no-undef': 'off',
       'no-unused-vars': 'off',
+      'no-console': 'off',
 
       // --- TypeScript rules (keep as warnings for now) ---
       '@typescript-eslint/no-unused-vars': ['warn', {

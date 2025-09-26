@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import Portal from "@/components/ui/Portal";
 import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
+import { isMobileApp } from "@/lib/mobile-auth";
 
 export default function Navbar() {
   const [isMobile, setIsMobile] = useState(false);
@@ -16,10 +17,15 @@ export default function Navbar() {
   useEffect(() => {
     const checkMobile = async () => {
       try {
-        const { Capacitor } = await import('@capacitor/core');
-        setIsMobile(Capacitor.isNativePlatform());
+        const isMobileDevice = isMobileApp();
+        setIsMobile(isMobileDevice);
+        
+        // Also check for small screens if not mobile app
+        if (!isMobileDevice) {
+          setIsMobile(window.innerWidth < 768);
+        }
       } catch {
-        // Also check for small screens
+        // Fallback to screen size check
         setIsMobile(window.innerWidth < 768);
       }
     };
@@ -27,7 +33,9 @@ export default function Navbar() {
 
     // Listen for window resize to update mobile state
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+      if (!isMobileApp()) {
+        setIsMobile(window.innerWidth < 768);
+      }
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -43,8 +51,7 @@ export default function Navbar() {
           <div className="hidden md:block">
             <CalendarLink />
           </div>
-          <UserStatus />
-          <MenuSheet />
+          <UserStatusMenu />
         </div>
       </div>
     </nav>
@@ -68,31 +75,7 @@ function CalendarLink() {
   );
 }
 
-function UserStatus() {
-  const { data: session } = useSession();
-  const { isPro } = useSubscriptionLimit();
-  
-  if (!session?.user) {
-    return (
-      <Link 
-        href="/signin" 
-        className="flex items-center justify-center rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
-      >
-        Sign in
-      </Link>
-    );
-  }
-  
-  const name = session.user.name || session.user.email || "user";
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1 text-sm">
-      <span className="text-white/80 truncate max-w-24 md:max-w-none">@{name.split("@")[0]}</span>
-      <span className={"rounded-full px-2 py-0.5 text-xs " + (isPro ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "bg-white/10 text-white/70 border border-white/20")}>{isPro ? "Pro" : "Free"}</span>
-    </div>
-  );
-}
-
-function MenuSheet() {
+function UserStatusMenu() {
   const { data: session } = useSession();
   const { isPro } = useSubscriptionLimit();
   const [open, setOpen] = useState(false);
@@ -109,15 +92,33 @@ function MenuSheet() {
     setOpen(false);
     window.location.href = '/api/auth/signout';
   }
-
+  
+  if (!session?.user) {
+    return (
+      <Link 
+        href="/signin" 
+        className="flex items-center justify-center rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target"
+      >
+        Sign in
+      </Link>
+    );
+  }
+  
+  const name = session.user.name || session.user.email || "user";
+  
   return (
     <>
       <button 
         onClick={() => setOpen(true)} 
-        className="flex items-center justify-center rounded-xl border border-white/10 px-3 py-1 text-sm text-white/80 hover:bg-white/10 mobile-touch-target min-w-[60px]"
+        className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1 text-sm hover:bg-white/10 mobile-touch-target transition-colors"
       >
-        Menu
+        <span className="text-white/80 truncate max-w-24 md:max-w-none">@{name.split("@")[0]}</span>
+        <span className={"rounded-full px-2 py-0.5 text-xs " + (isPro ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "bg-white/10 text-white/70 border border-white/20")}>
+          {isPro ? "Pro" : "Free"}
+        </span>
+        <span className="text-white/60 text-xs">▾</span>
       </button>
+      
       {open && (
         <Portal>
           <div className="fixed inset-0 z-[60]">

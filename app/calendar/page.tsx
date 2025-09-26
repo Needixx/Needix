@@ -3,13 +3,15 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import CalendarClient from "@/components/CalendarClient";
 import AuroraBackground from "@/components/AuroraBackground";
+import { isMobileApp } from "@/lib/mobile-auth";
 
 export default function CalendarPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return; // Still loading
@@ -17,6 +19,17 @@ export default function CalendarPage() {
       router.push("/signin");
     }
   }, [session, status, router]);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = isMobileApp() || window.innerWidth < 768;
+      setIsMobile(mobile);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   if (status === "loading") {
     return (
@@ -34,11 +47,12 @@ export default function CalendarPage() {
   }
 
   return (
-    <main className="relative min-h-screen">
+    <main className={`relative ${isMobile ? 'min-h-screen' : 'min-h-screen'}`}>
       <div className="relative min-h-screen">
-        <AuroraBackground />
-      <div/>
-        <CalendarClient />
+        {!isMobile && <AuroraBackground />}
+        <div className={`relative z-10 ${isMobile ? '' : 'backdrop-blur-sm'}`}>
+          <CalendarClient />
+        </div>
       </div>
     </main>
   );

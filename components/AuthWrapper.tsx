@@ -2,83 +2,82 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { isNativePlatform, getSessionData, handleMobileAuth } from "@/lib/mobile-auth";
+import { useEffect, useState } from "react";
+import { isMobileApp } from "@/lib/mobile-auth";
 
 interface AuthWrapperProps {
-  children: React.ReactNode;
   requireAuth?: boolean;
+  children: React.ReactNode;
 }
 
-export function AuthWrapper({ children, requireAuth = false }: AuthWrapperProps) {
+export default function AuthWrapper({ 
+  requireAuth = false, 
+  children 
+}: AuthWrapperProps) {
   const { data: session, status } = useSession();
-  const [mobileSession, setMobileSession] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [shouldRedirect, setShouldRedirect] = useState(false);
   const router = useRouter();
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [mobileSession, setMobileSession] = useState(null);
 
+  // Check for mobile session if needed
   useEffect(() => {
-    const initAuth = async () => {
-      if (isNativePlatform()) {
-        // On mobile, check stored session data
-        const storedSession = await getSessionData();
-        setMobileSession(storedSession);
+    const checkMobileSession = async () => {
+      if (isMobileApp() && !session?.user) {
+        try {
+          const response = await fetch('/api/auth/session');
+          const data = await response.json();
+          setMobileSession(data?.user || null);
+        } catch (error) {
+          console.error('Failed to check mobile session:', error);
+          setMobileSession(null);
+        }
       }
       setIsLoading(false);
     };
 
-    initAuth();
-  }, []);
-
-  useEffect(() => {
-    // Handle mobile auth when web session is available
-    if (session?.user && isNativePlatform()) {
-      void handleMobileAuth(session.user);
+    if (status !== "loading") {
+      checkMobileSession();
     }
-  }, [session]);
+  }, [session, status]);
 
   // Handle redirect in a separate useEffect to avoid render-time state updates
   useEffect(() => {
-    const isAuthenticated = session?.user || (isNativePlatform() && mobileSession);
+    const isAuthenticated = session?.user || (isMobileApp() && mobileSession);
     
     if (requireAuth && !isAuthenticated && status !== "loading" && !isLoading) {
       setShouldRedirect(true);
     }
   }, [session, mobileSession, requireAuth, status, isLoading]);
 
-  // Handle the actual redirect
+  // Perform redirect
   useEffect(() => {
     if (shouldRedirect) {
-      router.push("/signin");
+      router.push('/signin');
     }
   }, [shouldRedirect, router]);
 
-  // Show loading while checking authentication
+  // Show loading state
   if (status === "loading" || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/70">Loading...</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          <span>Loading...</span>
         </div>
       </div>
     );
   }
 
-  // Check authentication state
-  const isAuthenticated = session?.user || (isNativePlatform() && mobileSession);
+  // Show nothing during redirect
+  if (shouldRedirect) {
+    return null;
+  }
 
-  // Show loading during redirect
-  if (requireAuth && !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/70">Redirecting to sign in...</p>
-        </div>
-      </div>
-    );
+  // Check authentication if required
+  if (requireAuth && !session?.user && !(isMobileApp() && mobileSession)) {
+    return null; // Will redirect
   }
 
   return <>{children}</>;

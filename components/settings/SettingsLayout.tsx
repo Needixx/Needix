@@ -6,6 +6,7 @@ import type { User } from "next-auth";
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useOrders } from "@/lib/useOrders";
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
+import { isMobileApp } from "@/lib/mobile-auth";
 
 import SettingsSidebar from "./SettingsSidebar";
 import NotificationsSettings from "./NotificationsSettings";
@@ -84,136 +85,138 @@ function normalizeId(idLike: unknown): string {
 
   if (idLike && typeof idLike === "object") {
     const obj = idLike as { id?: unknown; _id?: unknown; toString?: () => string };
-    if (typeof obj.id === "string" && obj.id) return obj.id;
-    if (typeof obj._id === "string" && obj._id) return obj._id;
-    if (typeof obj.toString === "function") {
-      const s = obj.toString(); // direct call; no unbound method reference
-      if (typeof s === "string" && s && s !== "[object Object]") return s;
-    }
+    if (obj.id) return normalizeId(obj.id);
+    if (obj._id) return normalizeId(obj._id);
+    if (obj.toString && typeof obj.toString === "function") return obj.toString();
   }
-  return crypto.randomUUID();
+
+  return String(idLike || "");
 }
 
 export default function SettingsLayout({ user }: SettingsLayoutProps) {
+  const [activeSection, setActiveSection] = useState<SectionKey>("notifications");
+  const [isMobile, setIsMobile] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  
+  // Settings state
   const [notifications, setNotifications] = useState<NotificationSettings>(DEFAULT_NOTIFICATIONS);
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [billing, setBilling] = useState<BillingInfo>(DEFAULT_BILLING);
   const [security, setSecurity] = useState<SettingsSecuritySettings>(DEFAULT_SECURITY);
   const [aiSettings, setAISettings] = useState<SettingsAISettings>(DEFAULT_AI);
   const [integrations, setIntegrations] = useState<IntegrationSettings>(DEFAULT_INTEGRATIONS);
-  const [activeSection, setActiveSection] = useState<SectionKey>("notifications");
 
-  // Raw data from hooks
   const { items: subscriptions } = useSubscriptions();
   const { items: orders } = useOrders();
   const { isPro } = useSubscriptionLimit();
 
-  // ---- Adapt raw models to the exact shapes the settings views expect ----
-  const billingSubscriptions: BillingBasicSubscription[] = subscriptions.map((s) => {
-    const src = s as unknown as Record<string, unknown>;
-    const price = Number(src.price ?? src.amount ?? 0);
-    const currency = (src.currency as string | undefined) ?? "USD";
-    const name =
-      (src.name as string | undefined) ??
-      (src.merchant as string | undefined) ??
-      "Subscription";
-    const billingCycle =
-      (src.billingCycle as BillingBasicSubscription["billingCycle"] | undefined) ??
-      (src.interval as BillingBasicSubscription["billingCycle"] | undefined) ??
-      "monthly";
-    const startedAt =
-      (src.startedAt as string | undefined) ??
-      (src.createdAt as string | undefined) ??
-      new Date().toISOString();
-
-    return {
-      id: normalizeId(src.id),
-      name,
-      price,
-      currency,
-      billingCycle,
-      startedAt,
+  // Check if mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = isMobileApp() || window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setShowSidebar(false); // Close sidebar when going to desktop
     };
-  });
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-  const billingOrders: BillingBasicOrder[] = orders.map((o) => {
-    const src = o as unknown as Record<string, unknown>;
-    const items = src.items as Array<Record<string, unknown>> | undefined;
-    const computedFromItems =
-      items?.reduce<number>((sum, it) => {
-        const p = Number(it.price ?? 0);
-        const q = Number((it.quantity as number | undefined) ?? (it.qty as number | undefined) ?? 1);
-        return sum + p * q;
-      }, 0) ?? 0;
+  // Transform data for child components
+  const billingSubscriptions: BillingBasicSubscription[] =
+    subscriptions?.map(sub => ({
+      id: normalizeId(sub.id),
+      name: sub.name,
+      price: typeof sub.price === "number" ? sub.price : 0,
+      currency: sub.currency || "USD",
+      billingCycle: sub.period as "daily" | "weekly" | "monthly" | "quarterly" | "yearly",
+      startedAt: sub.createdAt || new Date().toISOString(),
+    })) || [];
 
-    const vendor =
-      (src.vendor as string | undefined) ??
-      (src.merchant as string | undefined) ??
-      (src.store as string | undefined) ??
-      "Unknown";
+  const billingOrders: BillingBasicOrder[] =
+    orders?.map(order => ({
+      id: normalizeId(order.id),
+      name: order.name,
+      date: order.scheduledDate || order.nextDate || order.createdAt,
+      vendor: order.vendor || "Unknown",
+      total: order.amount || 0,
+    })) || [];
 
-    const name =
-      (src.name as string | undefined) ??
-      (src.title as string | undefined) ??
-      vendor;
+  const orderExports: OrderExport[] =
+    orders?.map(order => ({
+      id: normalizeId(order.id),
+      name: order.name,
+      amount: order.amount || 0,
+      scheduledDate: order.scheduledDate || order.nextDate || order.createdAt,
+      vendor: order.vendor || "Unknown",
+    })) || [];
 
-    const date =
-      (src.date as string | undefined) ??
-      (src.createdAt as string | undefined) ??
-      new Date().toISOString();
-
-    const total = Number(src.total ?? computedFromItems);
-
-    return {
-      id: normalizeId(src.id),
-      name,
-      date,
-      vendor,
-      total,
-    };
-  });
-
-  const orderExports: OrderExport[] = billingOrders.map((bo) => ({
-    id: bo.id,
-    name: bo.name,
-    date: bo.date,
-    vendor: bo.vendor,
-    total: bo.total,
-  }));
-  // -----------------------------------------------------------------------
-
+  // Load settings from localStorage
   useEffect(() => {
     try {
-      const savedNotifications = localStorage.getItem("needix_notifications");
-      if (savedNotifications) {
-        const parsed: unknown = JSON.parse(savedNotifications);
+      const stored = {
+        notifications: localStorage.getItem("needix_notifications"),
+        appSettings: localStorage.getItem("needix_app_settings"),
+        billing: localStorage.getItem("needix_billing"),
+        security: localStorage.getItem("needix_security"),
+        ai: localStorage.getItem("needix_ai"),
+        integrations: localStorage.getItem("needix_integrations"),
+      };
+
+      if (stored.notifications) {
+        const parsed = JSON.parse(stored.notifications);
         if (isNotificationSettings(parsed)) setNotifications(parsed);
       }
 
-      const savedAppSettings = localStorage.getItem("needix_app_settings");
-      if (savedAppSettings) {
-        const parsed: unknown = JSON.parse(savedAppSettings);
+      if (stored.appSettings) {
+        const parsed = JSON.parse(stored.appSettings);
         if (isAppSettings(parsed)) setAppSettings(parsed);
       }
 
-      setBilling({
+      if (stored.billing) {
+        const parsed = JSON.parse(stored.billing);
+        setBilling(prev => ({ ...prev, ...parsed }));
+      }
+
+      if (stored.security) {
+        const parsed = JSON.parse(stored.security);
+        setSecurity(prev => ({ ...prev, ...parsed }));
+      }
+
+      if (stored.ai) {
+        const parsed = JSON.parse(stored.ai);
+        setAISettings(prev => ({ ...prev, ...parsed }));
+      }
+
+      if (stored.integrations) {
+        const parsed = JSON.parse(stored.integrations);
+        setIntegrations(prev => ({ ...prev, ...parsed }));
+      }
+
+      // Update billing info dynamically
+      setBilling(prev => ({
+        ...prev,
         plan: isPro ? "pro" : "free",
         status: "active",
-        usageCount: subscriptions.length,
+        usageCount: subscriptions?.length || 0,
         usageLimit: isPro ? 999 : 2,
-      });
+      }));
 
       if ("Notification" in window && "serviceWorker" in navigator) {
-        setIntegrations((prev) => ({ ...prev, webPushSupported: true }));
+        setIntegrations(prev => ({ ...prev, webPushSupported: true }));
       }
     } catch {
       // fall back to defaults on any parsing error
     }
-  }, [isPro, subscriptions.length]);
+  }, [isPro, subscriptions?.length]);
 
   const handleSectionChange = (section: string) => {
     if ((SECTION_KEYS as readonly string[]).includes(section)) {
       setActiveSection(section as SectionKey);
+      if (isMobile) {
+        setShowSidebar(false); // Close sidebar on mobile after selecting
+      }
     }
   };
 
@@ -247,9 +250,75 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
     }
   };
 
+  const getSectionTitle = () => {
+    const section = {
+      notifications: "🔔 Notifications",
+      preferences: "⚙️ Preferences", 
+      billing: "💳 Billing",
+      security: "🔒 Security",
+      ai: "🤖 AI & Privacy",
+      integrations: "🔗 Integrations",
+      data: "📊 Data",
+      account: "👤 Account",
+    }[activeSection];
+    return section || "Settings";
+  };
+
+  if (isMobile) {
+    return (
+      <div className="relative">
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between mb-6 p-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl">
+          <h1 className="text-xl font-bold text-white">{getSectionTitle()}</h1>
+          <button
+            onClick={() => setShowSidebar(!showSidebar)}
+            className="p-2 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-colors mobile-touch-target"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Mobile Sidebar Overlay */}
+        {showSidebar && (
+          <div className="fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setShowSidebar(false)} />
+            <div className="absolute right-0 top-0 h-full w-80 max-w-[85vw] bg-neutral-900 border-l border-white/10 p-4 overflow-auto pt-safe-top">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-white">Settings Menu</h3>
+                <button 
+                  onClick={() => setShowSidebar(false)}
+                  className="rounded px-2 py-1 text-white/80 hover:bg-white/10 mobile-touch-target"
+                >
+                  ✕
+                </button>
+              </div>
+              <SettingsSidebar 
+                activeSection={activeSection} 
+                onSectionChange={handleSectionChange}
+                isMobile={true}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Content */}
+        <div className="px-4">
+          {renderActiveSection()}
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop Layout
   return (
     <div className="flex gap-8">
-      <SettingsSidebar activeSection={activeSection} onSectionChange={handleSectionChange} />
+      <SettingsSidebar 
+        activeSection={activeSection} 
+        onSectionChange={handleSectionChange}
+        isMobile={false}
+      />
       <div className="flex-1 max-w-4xl">{renderActiveSection()}</div>
     </div>
   );
