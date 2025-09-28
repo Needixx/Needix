@@ -11,16 +11,24 @@ interface Insight {
   description: string;
   action: string;
   potentialSavings: number;
+  category: string;
 }
 
 interface InsightsSummary {
   totalMonthly: number;
   totalAnnual: number;
   subscriptionCount: number;
+  orderCount: number;
+  expenseCount: number;
+  totalItemCount: number;
+  totalOrderValue?: number;
+  monthlySubscriptionTotal?: number;
+  monthlyExpenseTotal?: number;
   topCategories: Array<{
     name: string;
     count: number;
     total: number;
+    types?: string[];
   }>;
   message: string;
 }
@@ -69,7 +77,7 @@ export default function AIInsightsDashboard() {
       
       setInsights(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load insights');
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -79,36 +87,14 @@ export default function AIInsightsDashboard() {
     fetchInsights();
   }, []);
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'from-red-500/20 to-orange-500/20 border-red-500/40';
-      case 'medium': return 'from-yellow-500/20 to-orange-500/20 border-yellow-500/40';
-      case 'low': return 'from-blue-500/20 to-cyan-500/20 border-blue-500/40';
-      default: return 'from-gray-500/20 to-gray-600/20 border-gray-500/40';
-    }
-  };
-
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case 'high': return '🔴';
-      case 'medium': return '🟡';
-      case 'low': return '🔵';
-      default: return '⚪';
-    }
-  };
-
   if (loading) {
     return (
-      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-gradient-to-r from-purple/20 to-cyan/20 rounded-lg flex items-center justify-center">
-            <span className="text-lg">🤖</span>
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/15 via-pink-500/10 to-cyan-500/15 backdrop-blur-sm p-8">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin text-4xl mb-4">🤖</div>
+            <p className="text-white/70">Analyzing your financial data...</p>
           </div>
-          <h3 className="text-lg font-semibold text-white">AI Insights</h3>
-        </div>
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
-          <span className="ml-3 text-white/60">Analyzing your subscriptions...</span>
         </div>
       </div>
     );
@@ -116,50 +102,65 @@ export default function AIInsightsDashboard() {
 
   if (error) {
     return (
-      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-gradient-to-r from-purple/20 to-cyan/20 rounded-lg flex items-center justify-center">
-            <span className="text-lg">🤖</span>
-          </div>
-          <h3 className="text-lg font-semibold text-white">AI Insights</h3>
-        </div>
-        <div className="text-center py-8">
-          <div className="text-4xl mb-3">⚠️</div>
-          <p className="text-white/60 mb-4">{error}</p>
-          {error.includes('disabled') && (
-            <button
-              onClick={() => window.location.href = '/settings?tab=ai'}
-              className="px-4 py-2 bg-gradient-to-r from-purple to-cyan text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all"
-            >
-              Enable AI Analysis
-            </button>
-          )}
+      <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/15 to-pink-500/10 backdrop-blur-sm p-8">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h3 className="text-lg font-semibold text-white mb-2">AI Analysis Unavailable</h3>
+          <p className="text-white/70 mb-4">{error}</p>
+          <button
+            onClick={fetchInsights}
+            className="px-4 py-2 bg-red-500/20 border border-red-500/30 text-white rounded-lg hover:bg-red-500/30 transition-all"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
   }
 
-  if (!insights) {
-    return null;
-  }
+  if (!insights) return null;
 
   const totalPotentialSavings = insights.insights.reduce((sum, insight) => sum + insight.potentialSavings, 0);
 
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'border-red-400/30 bg-red-500/10';
+      case 'medium': return 'border-yellow-400/30 bg-yellow-500/10';
+      case 'low': return 'border-green-400/30 bg-green-500/10';
+      default: return 'border-white/20 bg-white/5';
+    }
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'subscriptions': return '📺';
+      case 'orders': return '📦';
+      case 'expenses': return '💰';
+      case 'budget': return '📊';
+      default: return '💡';
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'subscriptions': return 'bg-purple-500/20 text-purple-300';
+      case 'orders': return 'bg-cyan-500/20 text-cyan-300';
+      case 'expenses': return 'bg-green-500/20 text-green-300';
+      case 'budget': return 'bg-orange-500/20 text-orange-300';
+      default: return 'bg-gray-500/20 text-gray-300';
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header with Summary */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+      {/* Summary Header */}
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/15 via-pink-500/10 to-cyan-500/15 backdrop-blur-sm p-6">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-purple/20 to-cyan/20 rounded-lg flex items-center justify-center">
-              <span className="text-lg">🤖</span>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-white">AI Insights</h3>
-              <p className="text-sm text-white/60">
-                Last analyzed: {new Date(insights.lastAnalyzed).toLocaleString()}
-              </p>
-            </div>
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-1">🤖 AI Financial Analysis</h2>
+            <p className="text-sm text-white/60">
+              Last analyzed: {new Date(insights.lastAnalyzed).toLocaleString()}
+            </p>
           </div>
           <button
             onClick={fetchInsights}
@@ -169,19 +170,27 @@ export default function AIInsightsDashboard() {
           </button>
         </div>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        {/* Enhanced Summary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">{insights.summary.subscriptionCount}</div>
-            <div className="text-xs text-white/60">Active Subscriptions</div>
+            <div className="text-2xl font-bold text-white">{insights.summary.totalItemCount}</div>
+            <div className="text-xs text-white/60">Total Items</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-300">{insights.summary.subscriptionCount}</div>
+            <div className="text-xs text-white/60">Subscriptions</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-cyan-300">{insights.summary.orderCount}</div>
+            <div className="text-xs text-white/60">Orders</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-300">{insights.summary.expenseCount}</div>
+            <div className="text-xs text-white/60">Expenses</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-white">${insights.summary.totalMonthly.toFixed(0)}</div>
-            <div className="text-xs text-white/60">Monthly Total</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-white">${insights.summary.totalAnnual.toFixed(0)}</div>
-            <div className="text-xs text-white/60">Annual Total</div>
+            <div className="text-xs text-white/60">Monthly Recurring</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-green-400">${totalPotentialSavings.toFixed(0)}</div>
@@ -192,63 +201,134 @@ export default function AIInsightsDashboard() {
         <p className="text-white/70 text-sm">{insights.summary.message}</p>
       </div>
 
-      {/* Insights List */}
-      {insights.insights.length > 0 ? (
-        <div className="space-y-4">
-          {insights.insights.map((insight, index) => (
-            <div
-              key={index}
-              className={`bg-gradient-to-r ${getPriorityColor(insight.priority)} backdrop-blur-sm rounded-xl border p-5`}
-            >
-              <div className="flex items-start gap-4">
-                <div className="text-2xl">{getPriorityIcon(insight.priority)}</div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-white font-semibold">{insight.title}</h4>
-                    {insight.potentialSavings > 0 && (
-                      <div className="text-green-400 font-medium text-sm">
-                        💰 Save ${insight.potentialSavings.toFixed(0)}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-white/80 text-sm mb-3">{insight.description}</p>
-                  <div className="bg-white/10 rounded-lg p-3">
-                    <div className="text-xs text-white/60 mb-1">💡 Recommended Action:</div>
-                    <div className="text-white/90 text-sm">{insight.action}</div>
-                  </div>
+      {/* Breakdown by Type */}
+      {(insights.summary.monthlySubscriptionTotal || insights.summary.monthlyExpenseTotal || insights.summary.totalOrderValue) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {insights.summary.monthlySubscriptionTotal && (
+            <div className="rounded-xl border border-purple-400/20 bg-purple-500/10 backdrop-blur-sm p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-purple-300">Monthly Subscriptions</p>
+                  <p className="text-2xl font-bold text-white">${insights.summary.monthlySubscriptionTotal.toFixed(0)}</p>
                 </div>
+                <div className="text-2xl">📺</div>
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-8 text-center">
-          <div className="text-4xl mb-3">✨</div>
-          <h4 className="text-white font-semibold mb-2">All Optimized!</h4>
-          <p className="text-white/60">Your subscriptions look well-managed. Check back as you add more services.</p>
+          )}
+          
+          {insights.summary.monthlyExpenseTotal && (
+            <div className="rounded-xl border border-green-400/20 bg-green-500/10 backdrop-blur-sm p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-green-300">Monthly Expenses</p>
+                  <p className="text-2xl font-bold text-white">${insights.summary.monthlyExpenseTotal.toFixed(0)}</p>
+                </div>
+                <div className="text-2xl">💰</div>
+              </div>
+            </div>
+          )}
+
+          {insights.summary.totalOrderValue && (
+            <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 backdrop-blur-sm p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-cyan-300">Total Order Value</p>
+                  <p className="text-2xl font-bold text-white">${insights.summary.totalOrderValue.toFixed(0)}</p>
+                </div>
+                <div className="text-2xl">📦</div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Top Categories */}
       {insights.summary.topCategories.length > 0 && (
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-          <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
-            📊 Spending by Category
-          </h4>
+        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">📊 Top Spending Categories</h3>
           <div className="space-y-3">
             {insights.summary.topCategories.map((category, index) => (
-              <div key={category.name} className="flex items-center justify-between">
+              <div key={category.name} className="flex items-center justify-between rounded-xl bg-white/5 p-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 bg-gradient-to-r from-purple to-cyan rounded text-white text-xs flex items-center justify-center font-bold">
-                    {index + 1}
+                  <span className="text-lg">{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '📍'}</span>
+                  <div>
+                    <span className="text-white font-medium">{category.name}</span>
+                    {category.types && (
+                      <div className="flex gap-1 mt-1">
+                        {category.types.map(type => (
+                          <span key={type} className={`text-xs px-2 py-1 rounded-full ${getCategoryColor(type)}`}>
+                            {type}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <span className="text-white">{category.name}</span>
-                  <span className="text-white/60 text-sm">({category.count} service{category.count !== 1 ? 's' : ''})</span>
                 </div>
-                <div className="text-white font-medium">${category.total.toFixed(2)}/mo</div>
+                <div className="text-right">
+                  <div className="text-white font-medium">${category.total.toFixed(0)}</div>
+                  <div className="text-xs text-white/60">{category.count} items</div>
+                </div>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Insights List */}
+      {insights.insights.length > 0 ? (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">💡 Optimization Opportunities</h3>
+          {insights.insights.map((insight, index) => (
+            <div
+              key={index}
+              className={`rounded-2xl border backdrop-blur-sm p-6 ${getPriorityColor(insight.priority)}`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{getCategoryIcon(insight.category)}</span>
+                  <div>
+                    <h4 className="text-lg font-semibold text-white">{insight.title}</h4>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        insight.priority === 'high' ? 'bg-red-500/20 text-red-300' :
+                        insight.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                        'bg-green-500/20 text-green-300'
+                      }`}>
+                        {insight.priority.toUpperCase()} PRIORITY
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded-full ${getCategoryColor(insight.category)}`}>
+                        {insight.category.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {insight.potentialSavings > 0 && (
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-green-400">
+                      ${insight.potentialSavings.toFixed(0)}
+                    </div>
+                    <div className="text-xs text-white/60">potential savings</div>
+                  </div>
+                )}
+              </div>
+              
+              <p className="text-white/80 mb-3">{insight.description}</p>
+              
+              <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                <p className="text-sm text-white/90">
+                  <span className="font-medium">💡 Recommended Action:</span> {insight.action}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-8 text-center">
+          <div className="text-4xl mb-4">✨</div>
+          <h3 className="text-lg font-semibold text-white mb-2">Great Financial Health!</h3>
+          <p className="text-white/70">
+            No optimization opportunities found. Your spending patterns look well-balanced.
+          </p>
         </div>
       )}
     </div>
