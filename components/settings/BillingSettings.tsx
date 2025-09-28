@@ -36,6 +36,30 @@ export default function BillingSettings({ billing, isPro, orders }: BillingSetti
 
   const usagePercentage = (billing.usageCount / billing.usageLimit) * 100;
 
+  // Format renewal date
+  const formatRenewalDate = (dateString?: string) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Calculate days until renewal
+  const getDaysUntilRenewal = (dateString?: string) => {
+    if (!dateString) return null;
+    const renewalDate = new Date(dateString);
+    const today = new Date();
+    const diffTime = renewalDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const renewalDate = formatRenewalDate(billing.renewalDate);
+  const daysUntil = getDaysUntilRenewal(billing.renewalDate);
+
   return (
     <div className="space-y-8">
       <div className="mb-6">
@@ -65,15 +89,39 @@ export default function BillingSettings({ billing, isPro, orders }: BillingSetti
               </span>
             </div>
           </div>
-          {!isPro ? (
-            <Button onClick={handleUpgrade} className="bg-gradient-to-r from-purple to-cyan">
-              Upgrade to Pro
-            </Button>
-          ) : (
-            <Button onClick={handleManageBilling} variant="secondary">
-              Manage Billing
-            </Button>
-          )}
+          <div className="flex flex-col items-end gap-2">
+            {!isPro ? (
+              <Button onClick={handleUpgrade} className="bg-gradient-to-r from-purple to-cyan">
+                Upgrade to Pro
+              </Button>
+            ) : (
+              <>
+                <Button onClick={handleManageBilling} variant="secondary">
+                  Manage Billing
+                </Button>
+                {/* Renewal Reminder */}
+                {renewalDate && isPro && (
+                  <div className="text-right">
+                    <div className="text-xs text-white/60">Next renewal:</div>
+                    <div className={`text-sm font-medium ${
+                      daysUntil !== null && daysUntil <= 7 
+                        ? "text-yellow-400" 
+                        : daysUntil !== null && daysUntil <= 3 
+                          ? "text-red-400" 
+                          : "text-white/80"
+                    }`}>
+                      {renewalDate}
+                      {daysUntil !== null && daysUntil >= 0 && (
+                        <span className="ml-1 text-xs text-white/60">
+                          ({daysUntil === 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `${daysUntil} days`})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
@@ -189,7 +237,7 @@ export default function BillingSettings({ billing, isPro, orders }: BillingSetti
               <h4 className="text-lg font-semibold text-white">🚀 Pro Plan</h4>
               {isPro && <span className="text-xs bg-cyan/20 text-cyan-300 px-2 py-1 rounded">Current</span>}
             </div>
-            <div className="text-2xl font-bold text-white mb-4">$4.99<span className="text-sm font-normal text-white/60">/month</span></div>
+            <div className="text-2xl font-bold text-white mb-4">$5<span className="text-sm font-normal text-white/60">/month</span></div>
             <ul className="space-y-2 text-sm mb-6">
               <li className="flex items-center gap-2 text-white/80">
                 <span className="text-green-400">✓</span> Unlimited subscriptions

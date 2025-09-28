@@ -34,12 +34,16 @@ model User {
   currentPeriodEnd         DateTime?
   cancelAtPeriodEnd        Boolean?       @default(false)
   
+  // 2FA Fields
+  twoFactorEnabled         Boolean        @default(false)
+  
   // Relations
   accounts                 Account[]
   expenses                 Expense[]
   orders                   Order[]
   sessions                 Session[]
   subscriptions            Subscription[]
+  verificationCodes        VerificationCode[]
 
   // Notification-related relations
   pushSubscription         PushSubscription?
@@ -51,6 +55,7 @@ model User {
   @@index([email])
   @@index([stripeCustomerId])
   @@index([isPro])
+  @@index([twoFactorEnabled])
 }
 
 model Account {
@@ -88,6 +93,24 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([used])
+  @@index([userId, used])
+  @@map("verification_codes")
 }
 
 model SubscriptionEvent {
