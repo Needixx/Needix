@@ -2,52 +2,73 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useToast } from "@/components/ui/Toast";
 import type { BillingPeriod } from "@/lib/types";
-
-const CATEGORIES = [
-  'Entertainment',
-  'Productivity',
-  'News & Media',
-  'Business',
-  'Health & Fitness',
-  'Education',
-  'Gaming',
-  'Other'
-] as const;
 
 export type SubscriptionFormData = {
   name: string;
   price: number;
-  currency: "USD";
+  currency: string;
   period: BillingPeriod;
   nextBillingDate?: string;
   category?: string;
-  link?: string;
   notes?: string;
-  isEssential?: boolean;
+  link?: string;
+  isEssential: boolean;
 };
 
-interface AddProps {
+interface AddSubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (data: SubscriptionFormData) => void;
 }
 
-export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: AddProps) {
+interface ServiceSuggestion {
+  name: string;
+  price: number;
+  currency: string;
+  period: BillingPeriod;
+  category: string;
+  website: string;
+}
+
+const CATEGORIES = [
+  'Entertainment', 'Software', 'AI Tools', 'Development', 'Storage', 
+  'Shopping', 'Productivity', 'Communication', 'Design', 'Other'
+] as const;
+
+// Check if AI auto-fill is enabled
+const getAISettings = () => {
+  try {
+    const stored = localStorage.getItem("needix_ai");
+    return stored ? JSON.parse(stored) : { autoFillForms: false };
+  } catch {
+    return { autoFillForms: false };
+  }
+};
+
+function AddSubscriptionDialog({ open, onOpenChange, onAdd }: AddSubscriptionDialogProps) {
+  const toast = useToast();
+  
+  // Form state
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [_currency, _setCurrency] = useState("USD");
-  const [category, setCategory] = useState('Other');
+  const [currency, setCurrency] = useState("USD");
+  const [category, setCategory] = useState<string>('Other');
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [notes, setNotes] = useState("");
   const [link, setLink] = useState("");
   const [isEssential, setIsEssential] = useState(false);
 
+  // AI auto-fill state
+  const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
+  const [suggestion, setSuggestion] = useState<ServiceSuggestion | null>(null);
+  const [showSuggestion, setShowSuggestion] = useState(false);
+
   // Calendar state
   const now = useMemo(() => new Date(), []);
   const minYear = now.getFullYear();
   const minMonth = now.getMonth();
-
   const [calYear, setCalYear] = useState<number>(minYear);
   const [calMonth, setCalMonth] = useState<number>(minMonth);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -62,20 +83,64 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
   );
 
   const canGoPrevMonth = calYear > minYear || (calYear === minYear && calMonth > minMonth);
+  const canGoNextMonth = calYear < minYear + 2;
 
-  const goPrevMonth = () => {
-    if (!canGoPrevMonth) return;
-    const d = new Date(calYear, calMonth, 1);
-    d.setMonth(d.getMonth() - 1);
-    setCalYear(d.getFullYear());
-    setCalMonth(d.getMonth());
+  // AI Auto-fill functionality
+  const fetchServiceSuggestion = async (serviceName: string) => {
+    const aiSettings = getAISettings();
+    if (!aiSettings.autoFillForms || !serviceName.trim()) {
+      setSuggestion(null);
+      setShowSuggestion(false);
+      return;
+    }
+
+    if (serviceName.length < 3) return; // Wait for at least 3 characters
+
+    setIsLoadingSuggestion(true);
+    try {
+      const response = await fetch('/api/ai/service-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceName })
+      });
+
+      const data = await response.json();
+      
+      if (data.suggestion) {
+        setSuggestion(data.suggestion);
+        setShowSuggestion(true);
+      } else {
+        setSuggestion(null);
+        setShowSuggestion(false);
+      }
+    } catch (error) {
+      console.error('Failed to fetch service suggestion:', error);
+    } finally {
+      setIsLoadingSuggestion(false);
+    }
   };
 
-  const goNextMonth = () => {
-    const d = new Date(calYear, calMonth, 1);
-    d.setMonth(d.getMonth() + 1);
-    setCalYear(d.getFullYear());
-    setCalMonth(d.getMonth());
+  // Debounced service name lookup
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchServiceSuggestion(name);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [name]);
+
+  // Apply AI suggestion
+  const applySuggestion = () => {
+    if (!suggestion) return;
+    
+    setPrice(suggestion.price.toString());
+    setCurrency(suggestion.currency);
+    setPeriod(suggestion.period);
+    setCategory(suggestion.category);
+    setLink(suggestion.website);
+    setShowSuggestion(false);
+    
+    toast("Auto-fill applied! ✨", "success");
   };
 
   const totalDays = new Date(calYear, calMonth + 1, 0).getDate();
@@ -97,7 +162,7 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
     onAdd({
       name,
       price: parseFloat(price),
-      currency: "USD",
+      currency,
       period,
       nextBillingDate,
       category: category,
@@ -107,8 +172,13 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
     });
 
     // Reset form
+    resetForm();
+  };
+
+  const resetForm = () => {
     setName("");
     setPrice("");
+    setCurrency("USD");
     setCategory('Other');
     setPeriod('monthly');
     setNotes("");
@@ -117,21 +187,13 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
     setSelectedDay(null);
     setCalYear(minYear);
     setCalMonth(minMonth);
+    setSuggestion(null);
+    setShowSuggestion(false);
   };
 
   const onClose = () => {
     onOpenChange(false);
-    // Reset form when closing
-    setName("");
-    setPrice("");
-    setCategory('Other');
-    setPeriod('monthly');
-    setNotes("");
-    setLink("");
-    setIsEssential(false);
-    setSelectedDay(null);
-    setCalYear(minYear);
-    setCalMonth(minMonth);
+    resetForm();
   };
 
   if (!open) return null;
@@ -142,11 +204,16 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
         <h2 className="mb-6 text-2xl font-bold text-white">
           Add New Subscription
         </h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
+          {/* Name with AI Auto-fill */}
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-white/80">📺 Service Name</div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-white/80">📺 Service Name</span>
+              {isLoadingSuggestion && (
+                <span className="text-xs text-purple-400">🤖 Looking up...</span>
+              )}
+            </div>
             <input
               type="text"
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 placeholder:text-white/50"
@@ -155,6 +222,27 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
               placeholder="e.g., Netflix, Spotify, Adobe Creative Cloud"
               required
             />
+            
+            {/* AI Suggestion Card */}
+            {showSuggestion && suggestion && (
+              <div className="mt-2 p-3 bg-gradient-to-r from-purple/10 to-cyan/10 border border-purple/20 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-white">🤖 Auto-fill suggestion</div>
+                    <div className="text-xs text-white/60">
+                      ${suggestion.price}/{suggestion.period} • {suggestion.category}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applySuggestion}
+                    className="px-3 py-1 bg-gradient-to-r from-purple to-cyan text-white text-xs rounded-lg hover:shadow-lg transition-all"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
           </label>
 
           {/* Price */}
@@ -183,10 +271,10 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
               value={period}
               onChange={(e) => setPeriod(e.target.value as BillingPeriod)}
             >
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
               <option value="weekly">Weekly</option>
-              <option value="custom">Custom</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
             </select>
           </label>
 
@@ -204,118 +292,118 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
             </select>
           </label>
 
-          {/* Calendar Section */}
+          {/* Next Billing Date Calendar */}
           <div className="space-y-3">
-            <div className="text-sm font-medium text-white/80">
-              📅 Next Billing Date (optional)
-            </div>
+            <div className="text-sm font-medium text-white/80">📅 Next Billing Date (Optional)</div>
             
-            {/* Month navigation */}
+            {/* Month Navigation */}
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={goPrevMonth}
                 disabled={!canGoPrevMonth}
-                className={`rounded-lg px-3 py-2 text-sm ${
-                  canGoPrevMonth ?
-                  "text-white hover:bg-white/10" : "text-white/30 cursor-not-allowed"
-                }`}
+                onClick={() => {
+                  if (calMonth === 0) {
+                    setCalMonth(11);
+                    setCalYear(calYear - 1);
+                  } else {
+                    setCalMonth(calMonth - 1);
+                  }
+                }}
+                className="p-2 text-white/70 hover:text-white disabled:opacity-30"
               >
                 ←
               </button>
-              <div className="text-center font-medium">{monthLabel}</div>
+              <span className="text-white font-medium">{monthLabel}</span>
               <button
                 type="button"
-                onClick={goNextMonth}
-                className="rounded-lg px-3 py-2 text-sm text-white hover:bg-white/10"
+                disabled={!canGoNextMonth}
+                onClick={() => {
+                  if (calMonth === 11) {
+                    setCalMonth(0);
+                    setCalYear(calYear + 1);
+                  } else {
+                    setCalMonth(calMonth + 1);
+                  }
+                }}
+                className="p-2 text-white/70 hover:text-white disabled:opacity-30"
               >
                 →
               </button>
             </div>
 
-            {/* Calendar grid */}
+            {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-1 text-center text-sm">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                <div key={d} className="py-2 text-white/60 font-medium">
-                  {d}
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                <div key={`day-header-${index}`} className="p-2 text-white/50 font-medium">
+                  {day}
                 </div>
               ))}
-
+              
+              {/* Empty cells for padding */}
               {Array.from({ length: start }, (_, i) => (
                 <div key={`empty-${i}`} />
               ))}
-
+              
+              {/* Calendar days */}
               {Array.from({ length: totalDays }, (_, i) => {
                 const day = i + 1;
-                const selected = day === selectedDay;
                 const disabled = isDisabled(day);
-
+                const selected = selectedDay === day;
+                
                 return (
                   <button
                     key={day}
                     type="button"
-                    onClick={() => setSelectedDay(disabled ? null : day)}
-                    className={[
-                      "aspect-square rounded-lg text-sm transition-colors",
-                      disabled
-                        ? "cursor-not-allowed text-white/30"
-                        : "text-white hover:bg-white/10",
-                      selected ? "bg-purple-500/20 ring-1 ring-purple-400/50" : "",
-                    ].join(" ")}
                     disabled={disabled}
+                    onClick={() => setSelectedDay(selected ? null : day)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      disabled
+                        ? 'text-white/20 cursor-not-allowed'
+                        : selected
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
+                        : 'text-white/70 hover:bg-white/10 hover:text-white'
+                    }`}
                   >
                     {day}
                   </button>
                 );
               })}
             </div>
-
-            <div className="text-xs text-white/70 text-center">
-              {selectedDay
-                ? `📅 Next billing: ${new Date(
-                    calYear,
-                    calMonth,
-                    selectedDay
-                  ).toLocaleDateString()}`
-                : "Pick the next billing date (cannot select past days)."}
-            </div>
           </div>
 
-          {/* Essential Toggle */}
-          <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-neutral-800/50">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isEssential}
-                onChange={(e) => setIsEssential(e.target.checked)}
-                className="w-4 h-4 rounded border-white/20 bg-neutral-700 text-purple-500 focus:ring-purple-500/50"
-              />
-              <span className="text-white/80">🔴 Essential subscription (cannot live without)</span>
-            </label>
-          </div>
-
-          {/* Cancellation Link */}
+          {/* Website Link */}
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-white/80">🔗 Cancellation Link (optional)</div>
+            <div className="mb-2 text-sm font-medium text-white/80">🔗 Website (Optional)</div>
             <input
               type="url"
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 placeholder:text-white/50"
               value={link}
               onChange={(e) => setLink(e.target.value)}
-              placeholder="https://netflix.com/cancelplan"
+              placeholder="https://netflix.com"
             />
           </label>
 
           {/* Notes */}
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-white/80">📝 Notes (optional)</div>
+            <div className="mb-2 text-sm font-medium text-white/80">📝 Notes (Optional)</div>
             <textarea
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 placeholder:text-white/50 resize-none"
-              rows={3}
+              rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Premium plan, family subscription, etc."
+              placeholder="Any additional notes..."
             />
+          </label>
+
+          {/* Essential Toggle */}
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isEssential}
+              onChange={(e) => setIsEssential(e.target.checked)}
+              className="w-4 h-4 text-purple-600 bg-neutral-800 border-white/20 rounded focus:ring-purple-500 focus:ring-2"
+            />
+            <span className="text-sm text-white/80">⭐ Mark as Essential</span>
           </label>
 
           {/* Buttons */}
@@ -340,21 +428,20 @@ export default function AddSubscriptionDialog({ open, onOpenChange, onAdd }: Add
   );
 }
 
-// EditSubscriptionDialog component (updated with new design)
-type InitialData = Partial<SubscriptionFormData> & { id?: string };
-
-interface EditProps {
+// EditSubscriptionDialog component
+export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initial?: InitialData;
+  initial?: Partial<SubscriptionFormData> & { id?: string };
   onUpdate: (data: SubscriptionFormData & { id?: string }) => void;
-}
-
-export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }: EditProps) {
+}) {
+  const toast = useToast();
+  
+  // Form state
   const [name, setName] = useState(initial?.name || "");
   const [price, setPrice] = useState(initial?.price?.toString() || "");
-  const [_currency, _setCurrency] = useState("USD");
-  const [category, setCategory] = useState(initial?.category || 'Other');
+  const [currency, setCurrency] = useState(initial?.currency || "USD");
+  const [category, setCategory] = useState<string>(initial?.category || 'Other');
   const [period, setPeriod] = useState<BillingPeriod>(initial?.period || 'monthly');
   const [notes, setNotes] = useState(initial?.notes || "");
   const [link, setLink] = useState(initial?.link || "");
@@ -364,22 +451,33 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
   const now = useMemo(() => new Date(), []);
   const minYear = now.getFullYear();
   const minMonth = now.getMonth();
-
   const [calYear, setCalYear] = useState<number>(minYear);
   const [calMonth, setCalMonth] = useState<number>(minMonth);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  // Initialize calendar with existing date
+  // Initialize form with initial data
   useEffect(() => {
-    if (initial?.nextBillingDate) {
-      const d = new Date(`${initial.nextBillingDate}T00:00:00`);
-      if (d >= now) {
-        setCalYear(d.getFullYear());
-        setCalMonth(d.getMonth());
-        setSelectedDay(d.getDate());
+    if (initial) {
+      setName(initial.name || "");
+      setPrice(initial.price?.toString() || "");
+      setCurrency(initial.currency || "USD");
+      setCategory(initial.category || 'Other');
+      setPeriod(initial.period || 'monthly');
+      setNotes(initial.notes || "");
+      setLink(initial.link || "");
+      setIsEssential(initial.isEssential || false);
+
+      // Initialize calendar with existing date
+      if (initial.nextBillingDate) {
+        const d = new Date(`${initial.nextBillingDate}T00:00:00`);
+        if (d >= now) {
+          setCalYear(d.getFullYear());
+          setCalMonth(d.getMonth());
+          setSelectedDay(d.getDate());
+        }
       }
     }
-  }, [initial?.nextBillingDate, now]);
+  }, [initial, now]);
 
   const monthLabel = useMemo(
     () =>
@@ -391,21 +489,7 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
   );
 
   const canGoPrevMonth = calYear > minYear || (calYear === minYear && calMonth > minMonth);
-
-  const goPrevMonth = () => {
-    if (!canGoPrevMonth) return;
-    const d = new Date(calYear, calMonth, 1);
-    d.setMonth(d.getMonth() - 1);
-    setCalYear(d.getFullYear());
-    setCalMonth(d.getMonth());
-  };
-
-  const goNextMonth = () => {
-    const d = new Date(calYear, calMonth, 1);
-    d.setMonth(d.getMonth() + 1);
-    setCalYear(d.getFullYear());
-    setCalMonth(d.getMonth());
-  };
+  const canGoNextMonth = calYear < minYear + 2;
 
   const totalDays = new Date(calYear, calMonth + 1, 0).getDate();
   const start = new Date(calYear, calMonth, 1).getDay();
@@ -427,7 +511,7 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
       id: initial?.id,
       name,
       price: parseFloat(price),
-      currency: "USD",
+      currency,
       period,
       nextBillingDate,
       category: category,
@@ -445,7 +529,7 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
         <h2 className="mb-6 text-2xl font-bold text-white">
           Edit Subscription
         </h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name */}
           <label className="block">
@@ -486,10 +570,10 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
               value={period}
               onChange={(e) => setPeriod(e.target.value as BillingPeriod)}
             >
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
               <option value="weekly">Weekly</option>
-              <option value="custom">Custom</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
             </select>
           </label>
 
@@ -507,118 +591,118 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
             </select>
           </label>
 
-          {/* Calendar Section */}
+          {/* Next Billing Date Calendar */}
           <div className="space-y-3">
-            <div className="text-sm font-medium text-white/80">
-              📅 Next Billing Date (optional)
-            </div>
+            <div className="text-sm font-medium text-white/80">📅 Next Billing Date (Optional)</div>
             
-            {/* Month navigation */}
+            {/* Month Navigation */}
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={goPrevMonth}
                 disabled={!canGoPrevMonth}
-                className={`rounded-lg px-3 py-2 text-sm ${
-                  canGoPrevMonth ?
-                  "text-white hover:bg-white/10" : "text-white/30 cursor-not-allowed"
-                }`}
+                onClick={() => {
+                  if (calMonth === 0) {
+                    setCalMonth(11);
+                    setCalYear(calYear - 1);
+                  } else {
+                    setCalMonth(calMonth - 1);
+                  }
+                }}
+                className="p-2 text-white/70 hover:text-white disabled:opacity-30"
               >
                 ←
               </button>
-              <div className="text-center font-medium">{monthLabel}</div>
+              <span className="text-white font-medium">{monthLabel}</span>
               <button
                 type="button"
-                onClick={goNextMonth}
-                className="rounded-lg px-3 py-2 text-sm text-white hover:bg-white/10"
+                disabled={!canGoNextMonth}
+                onClick={() => {
+                  if (calMonth === 11) {
+                    setCalMonth(0);
+                    setCalYear(calYear + 1);
+                  } else {
+                    setCalMonth(calMonth + 1);
+                  }
+                }}
+                className="p-2 text-white/70 hover:text-white disabled:opacity-30"
               >
                 →
               </button>
             </div>
 
-            {/* Calendar grid */}
+            {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-1 text-center text-sm">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                <div key={d} className="py-2 text-white/60 font-medium">
-                  {d}
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                <div key={`edit-day-header-${index}`} className="p-2 text-white/50 font-medium">
+                  {day}
                 </div>
               ))}
-
+              
+              {/* Empty cells for padding */}
               {Array.from({ length: start }, (_, i) => (
                 <div key={`empty-${i}`} />
               ))}
-
+              
+              {/* Calendar days */}
               {Array.from({ length: totalDays }, (_, i) => {
                 const day = i + 1;
-                const selected = day === selectedDay;
                 const disabled = isDisabled(day);
-
+                const selected = selectedDay === day;
+                
                 return (
                   <button
                     key={day}
                     type="button"
-                    onClick={() => setSelectedDay(disabled ? null : day)}
-                    className={[
-                      "aspect-square rounded-lg text-sm transition-colors",
-                      disabled
-                        ? "cursor-not-allowed text-white/30"
-                        : "text-white hover:bg-white/10",
-                      selected ? "bg-purple-500/20 ring-1 ring-purple-400/50" : "",
-                    ].join(" ")}
                     disabled={disabled}
+                    onClick={() => setSelectedDay(selected ? null : day)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      disabled
+                        ? 'text-white/20 cursor-not-allowed'
+                        : selected
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
+                        : 'text-white/70 hover:bg-white/10 hover:text-white'
+                    }`}
                   >
                     {day}
                   </button>
                 );
               })}
             </div>
-
-            <div className="text-xs text-white/70 text-center">
-              {selectedDay
-                ? `📅 Next billing: ${new Date(
-                    calYear,
-                    calMonth,
-                    selectedDay
-                  ).toLocaleDateString()}`
-                : "Pick the next billing date (cannot select past days)."}
-            </div>
           </div>
 
-          {/* Essential Toggle */}
-          <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-neutral-800/50">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isEssential}
-                onChange={(e) => setIsEssential(e.target.checked)}
-                className="w-4 h-4 rounded border-white/20 bg-neutral-700 text-purple-500 focus:ring-purple-500/50"
-              />
-              <span className="text-white/80">🔴 Essential subscription (cannot live without)</span>
-            </label>
-          </div>
-
-          {/* Cancellation Link */}
+          {/* Website Link */}
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-white/80">🔗 Cancellation Link (optional)</div>
+            <div className="mb-2 text-sm font-medium text-white/80">🔗 Website (Optional)</div>
             <input
               type="url"
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 placeholder:text-white/50"
               value={link}
               onChange={(e) => setLink(e.target.value)}
-              placeholder="https://netflix.com/cancelplan"
+              placeholder="https://netflix.com"
             />
           </label>
 
           {/* Notes */}
           <label className="block">
-            <div className="mb-2 text-sm font-medium text-white/80">📝 Notes (optional)</div>
+            <div className="mb-2 text-sm font-medium text-white/80">📝 Notes (Optional)</div>
             <textarea
               className="w-full rounded-xl border border-white/10 bg-neutral-800 px-3 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 placeholder:text-white/50 resize-none"
-              rows={3}
+              rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Premium plan, family subscription, etc."
+              placeholder="Any additional notes..."
             />
+          </label>
+
+          {/* Essential Toggle */}
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isEssential}
+              onChange={(e) => setIsEssential(e.target.checked)}
+              className="w-4 h-4 text-purple-600 bg-neutral-800 border-white/20 rounded focus:ring-purple-500 focus:ring-2"
+            />
+            <span className="text-sm text-white/80">⭐ Mark as Essential</span>
           </label>
 
           {/* Buttons */}
@@ -642,3 +726,6 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
     </div>
   );
 }
+
+// Export both components
+export default AddSubscriptionDialog;

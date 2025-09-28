@@ -40,6 +40,7 @@ export default function MobileNavigation() {
     { path: "/dashboard/orders", label: "Orders", icon: "📦" },
     { path: "/dashboard/expenses", label: "Expenses", icon: "💰" },
     { path: "/calendar", label: "Calendar", icon: "📅" },
+    { path: "/dashboard/ai-insights", label: "AI Insights", icon: "🤖" },
   ];
 
   const handleNavigation = (path: string) => {
@@ -48,12 +49,12 @@ export default function MobileNavigation() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-white/10 z-50">
-      <div className="flex items-center justify-around px-2 py-3 max-w-md mx-auto">
+      <div className="flex items-center justify-around px-1 py-3 max-w-lg mx-auto">
         {navItems.map(({ path, label, icon }) => (
           <button
             key={path}
             onClick={() => handleNavigation(path)}
-            className={`flex flex-col items-center py-2 px-3 rounded-lg transition-colors min-w-0 ${
+            className={`flex flex-col items-center py-2 px-2 rounded-lg transition-colors min-w-0 ${
               pathname === path
                 ? "text-cyan-400 bg-cyan-400/10"
                 : "text-white/60 hover:text-white hover:bg-white/5"
