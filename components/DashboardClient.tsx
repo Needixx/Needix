@@ -15,6 +15,7 @@ import { useState } from "react";
 import { fmtCurrency } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import type { Subscription } from "@/lib/types";
+import EnhancedAIInsights from "@/components/EnhancedAIInsights";
 
 export default function DashboardClient() {
   const {

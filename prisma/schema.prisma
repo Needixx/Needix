@@ -53,6 +53,14 @@ model User {
   reminderSnapshots        ReminderSnapshot[]
   scheduledNotifications   ScheduledNotification[]
 
+  // AI-related relations
+  aiRecommendationLogs     AIRecommendationLog[]
+  savingsGoals             SavingsGoal[]
+  reminders                Reminder[]
+  aiSettings               AIUserSettings?
+  marketDataCache          MarketDataCache[]
+  usageTracking            UsageTracking[]
+
   @@index([email])
   @@index([stripeCustomerId])
   @@index([isPro])
@@ -343,6 +351,179 @@ model ScheduledNotification {
   @@map("scheduled_notifications")
 }
 
+// AI ENHANCED MODELS
+
+model AIRecommendationLog {
+  id                 String   @id @default(cuid())
+  userId             String
+  recommendationType String   // "bundle_optimization", "negotiation", "rotation", etc.
+  insightId          String   // Reference to the specific insight that was applied
+  title              String   // Human-readable title of the recommendation
+  description        String?  // Detailed description of what was applied
+  potentialSavings   Decimal? @db.Decimal(10, 2) // Expected savings amount
+  actualSavings      Decimal? @db.Decimal(10, 2) // Actual savings (if measurable)
+  status             AIRecommendationStatus @default(applied)
+  appliedAt          DateTime @default(now())
+  completedAt        DateTime? // When the recommendation was fully executed
+  metadata           Json?    // Additional data about the recommendation
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([recommendationType])
+  @@index([status])
+  @@index([appliedAt])
+  @@index([userId, status])
+  @@map("ai_recommendation_logs")
+}
+
+model SavingsGoal {
+  id              String   @id @default(cuid())
+  userId          String
+  title           String   @default("AI Savings Goal")
+  description     String?  // Optional description of the goal
+  targetAmount    Decimal  @db.Decimal(10, 2) // Target savings amount
+  timeframeMonths Int      // Number of months to achieve the goal
+  monthlyTarget   Decimal  @db.Decimal(10, 2) // Monthly savings target
+  currentProgress Decimal  @db.Decimal(10, 2) @default(0) // Current savings achieved
+  category        String?  // "subscriptions", "general", etc.
+  status          SavingsGoalStatus @default(active)
+  startDate       DateTime @default(now())
+  targetDate      DateTime // Calculated end date
+  achievedAt      DateTime? // When the goal was completed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([targetDate])
+  @@index([userId, status])
+  @@map("savings_goals")
+}
+
+model Reminder {
+  id           String        @id @default(cuid())
+  userId       String
+  title        String
+  description  String?
+  dueDate      DateTime
+  type         ReminderType
+  relatedId    String?       // ID of related subscription, order, etc.
+  priority     ReminderPriority @default(medium)
+  completed    Boolean       @default(false)
+  completedAt  DateTime?
+  snoozeUntil  DateTime?     // For snoozing reminders
+  recurring    Boolean       @default(false)
+  recurringPattern String?   // "monthly", "weekly", etc.
+  metadata     Json?         // Additional reminder data
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([dueDate])
+  @@index([type])
+  @@index([completed])
+  @@index([priority])
+  @@index([userId, completed])
+  @@index([dueDate, completed])
+  @@map("reminders")
+}
+
+model AIUserSettings {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  
+  // Core AI permissions
+  allowDataAccess         Boolean  @default(false)
+  enableAutomatedActions  Boolean  @default(false)
+  
+  // Subscription intelligence features
+  enableBundleAnalysis    Boolean  @default(true)
+  enableRotationPlanning  Boolean  @default(true)
+  enableTrialTracking     Boolean  @default(true)
+  enableCostPerUse        Boolean  @default(true)
+  
+  // Commerce optimization features
+  enableNegotiationAssist Boolean  @default(true)
+  enablePaymentOptimization Boolean @default(true)
+  enableLateFeePrevention Boolean  @default(true)
+  enableMarketComparison  Boolean  @default(true)
+  
+  // Behavioral analysis features
+  enableSpendingAlerts    Boolean  @default(true)
+  enableGoalBasedPlanning Boolean  @default(true)
+  enableSeasonalOptimization Boolean @default(true)
+  
+  // AI configuration
+  confidenceThreshold     Int      @default(70) // Percentage (50-95)
+  analysisFrequency       AIAnalysisFrequency @default(weekly)
+  savingsGoalAmount       Decimal? @db.Decimal(10, 2) // Monthly savings target
+  autoApplyLowRisk        Boolean  @default(false) // Auto-apply low-risk recommendations
+  
+  // Privacy and data retention
+  retainAnalysisHistory   Boolean  @default(true)
+  dataRetentionDays       Int      @default(90)
+  shareAnonymousInsights  Boolean  @default(false)
+  
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("ai_user_settings")
+}
+
+model MarketDataCache {
+  id              String   @id @default(cuid())
+  userId          String?  // Null for global market data
+  serviceCategory String   // "streaming", "internet", "phone", etc.
+  serviceName     String?  // Specific service name
+  averagePrice    Decimal  @db.Decimal(10, 2)
+  currency        String   @default("USD")
+  region          String   @default("US")
+  dataSource      String   // "api", "scraping", "user_reported"
+  sampleSize      Int?     // Number of data points used
+  lastUpdated     DateTime @default(now())
+  expiresAt       DateTime // When this cache entry expires
+  metadata        Json?    // Additional market data
+  
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([serviceCategory])
+  @@index([serviceName])
+  @@index([expiresAt])
+  @@index([region])
+  @@index([userId])
+  @@unique([serviceCategory, serviceName, region]) // Prevent duplicates
+  @@map("market_data_cache")
+}
+
+model UsageTracking {
+  id             String   @id @default(cuid())
+  userId         String
+  subscriptionId String?  // Reference to subscription if applicable
+  serviceName    String
+  usageDate      DateTime @default(now())
+  usageType      String   // "login", "view", "download", "stream", etc.
+  usageCount     Int      @default(1)
+  metadata       Json?    // Additional usage metadata
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([serviceName])
+  @@index([usageDate])
+  @@index([userId, serviceName])
+  @@map("usage_tracking")
+}
+
 // ENUMS
 
 /// Stripe subscription lifecycle states we care about.
@@ -381,4 +562,57 @@ enum OrderStatus {
   active
   completed
   cancelled
+}
+
+/// AI recommendation status tracking
+enum AIRecommendationStatus {
+  applied      // Recommendation was applied
+  pending      // Waiting for user action
+  completed    // Recommendation was fully executed
+  failed       // Recommendation failed to apply
+  dismissed    // User dismissed the recommendation
+  expired      // Recommendation expired
+}
+
+/// Savings goal status
+enum SavingsGoalStatus {
+  active       // Goal is currently being pursued
+  completed    // Goal was achieved
+  paused       // Goal is temporarily paused
+  cancelled    // Goal was cancelled
+  expired      // Goal deadline passed without completion
+}
+
+/// Types of reminders the AI can create
+enum ReminderType {
+  subscription_renewal    // Upcoming subscription renewal
+  payment_optimization   // Switch payment method
+  late_fee_prevention   // Check balance before renewal
+  category_alert        // Spending category limit
+  savings_milestone     // Monthly savings goal check
+  streaming_rotation    // Rotate streaming services
+  negotiation_call      // Call to negotiate price
+  trial_opportunity     // Available trial or discount
+  bundle_switch         // Switch to bundle offer
+  warranty_review       // Review warranty coverage
+  seasonal_pause        // Pause seasonal service
+  price_change_alert    // Service price increased
+  unused_service        // Service not being used
+  duplicate_service     // Duplicate service detected
+  goal_check           // Check progress on savings goal
+}
+
+/// Priority levels for reminders
+enum ReminderPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+/// How frequently AI should analyze user data
+enum AIAnalysisFrequency {
+  daily
+  weekly
+  monthly
 }
