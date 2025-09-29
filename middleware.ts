@@ -1,4 +1,4 @@
-// middleware.ts - Fix the import issue
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -15,6 +15,8 @@ export function middleware(request: NextRequest) {
     '/how-it-works',
     '/privacy',
     '/terms',
+    '/auth/popup-success', // Add popup success page
+    '/api/auth', // Allow all auth API routes
   ];
 
   // Check if it's a public route
@@ -31,6 +33,12 @@ export function middleware(request: NextRequest) {
   
   // Redirect to signin if not authenticated and trying to access protected route
   if (!sessionToken && !isPublicRoute) {
+    // Allow /connect routes if they're trying to connect integrations
+    if (pathname.startsWith('/connect')) {
+      // Let them through, the page will handle auth check
+      return NextResponse.next();
+    }
+    
     const signinUrl = new URL('/signin', request.url);
     signinUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(signinUrl);
@@ -53,5 +61,7 @@ export const config = {
     '/calendar/:path*',
     '/analytics/:path*',
     '/signin',
+    '/auth/:path*', // Include auth routes
+    // Don't include /connect - let the page handle its own auth
   ],
 };

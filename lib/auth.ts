@@ -8,6 +8,85 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { debug } from '@/lib/debug';
 
+// Check if Google OAuth is configured
+const isGoogleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
+// Define Credentials provider
+const credentialsProvider = Credentials({
+  name: 'credentials',
+  credentials: {
+    email: { label: 'Email', type: 'email' },
+    password: { label: 'Password', type: 'password' },
+    name: { label: 'Name', type: 'text', optional: true },
+  },
+  async authorize(credentials): Promise<User | null> {
+    if (!credentials?.email) {
+      throw new Error('Email is required');
+    }
+
+    // Special handling for dev login
+    if (process.env.NODE_ENV === 'development' && 
+        process.env.ENABLE_DEV_AUTH && 
+        credentials.name === 'Dev User') {
+      return {
+        id: 'dev-user',
+        email: credentials.email as string,
+        name: 'Dev User',
+      };
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: credentials.email as string },
+    });
+
+    if (!user) {
+      throw new Error('No account found with this email');
+    }
+
+    // Check if user signed up with Google but is trying to use password
+    if (!user.password) {
+      throw new Error('This email is associated with a Google account. Please sign in with Google or use "Create account" to add a password.');
+    }
+
+    if (!credentials.password) {
+      throw new Error('Password is required');
+    }
+
+    const isValid = await bcrypt.compare(credentials.password as string, user.password);
+    
+    if (!isValid) {
+      throw new Error('Invalid password');
+    }
+
+    return {
+      id: user.id,
+      email: user.email!,
+      name: user.name,
+    };
+  },
+});
+
+// Define Google provider conditionally
+const googleProvider = isGoogleConfigured ? Google({
+  clientId: process.env.GOOGLE_CLIENT_ID!,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  allowDangerousEmailAccountLinking: true,
+  authorization: {
+    params: {
+      scope: "openid email profile https://www.googleapis.com/auth/gmail.readonly"
+    }
+  }
+}) : null;
+
+// Build providers array
+const providers = isGoogleConfigured 
+  ? [credentialsProvider, googleProvider!]
+  : [credentialsProvider];
+
+if (!isGoogleConfigured) {
+  console.warn('Google OAuth not configured. GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required for Google sign-in.');
+}
+
 export const {
   auth,
   signIn,
@@ -17,97 +96,60 @@ export const {
   trustHost: true,
   session: { strategy: 'jwt' },
   adapter: PrismaAdapter(prisma),
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      allowDangerousEmailAccountLinking: true,
-      authorization: {
-        params: {
-          scope: "openid email profile https://www.googleapis.com/auth/gmail.readonly"
-        }
-      }
-    }),
-    Credentials({
-      name: 'credentials',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
-        name: { label: 'Name', type: 'text', optional: true },
-      },
-      async authorize(credentials): Promise<User | null> {
-        if (!credentials?.email) {
-          throw new Error('Email is required');
-        }
-
-        // Special handling for dev login
-        if (process.env.NODE_ENV === 'development' && 
-            process.env.ENABLE_DEV_AUTH && 
-            credentials.name === 'Dev User') {
-          return {
-            id: 'dev-user',
-            email: credentials.email as string,
-            name: 'Dev User',
-            image: null,
-          };
-        }
-
-        if (!credentials?.password) {
-          throw new Error('Password is required');
-        }
-
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
-        });
-
-        if (!user || !user.password) {
-          throw new Error('Invalid email or password');
-        }
-
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password as string,
-          user.password
-        );
-
-        if (!isPasswordValid) {
-          throw new Error('Invalid email or password');
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-        };
-      },
-    }),
-  ],
+  providers,
   pages: {
     signIn: '/signin',
-    error: '/signin',
+    error: '/signin', // Error page
   },
   callbacks: {
-    async signIn({ user, account }) {
-      // Skip database operations for dev login
-      if (user.id === 'dev-user') {
-        return true;
-      }
+    async signIn({ user, account, profile }) {
+      debug.log('Sign in attempt:', { 
+        provider: account?.provider,
+        userEmail: user.email,
+        profileEmail: profile?.email
+      });
 
-      // For OAuth providers, ensure user exists in database
-      if (account?.provider && account.provider !== 'credentials') {
+      if (account?.provider === 'google') {
         try {
-          await prisma.user.upsert({
-            where: { email: user.email || '' },
-            update: {
-              name: user.name,
-              image: user.image,
-            },
-            create: {
-              email: user.email || '',
-              name: user.name,
-              image: user.image,
-            },
+          const existingUser = await prisma.user.findUnique({
+            where: { email: user.email! },
+            include: {
+              accounts: {
+                where: { provider: 'google' }
+              }
+            }
           });
+
+          if (!existingUser) {
+            // Create new user for Google sign-in
+            await prisma.user.create({
+              data: {
+                email: user.email!,
+                name: user.name || profile?.name || 'Google User',
+                image: user.image,
+              },
+            });
+            debug.log('Created new user for Google sign-in:', user.email);
+          } else {
+            // Update existing user info
+            await prisma.user.update({
+              where: { email: user.email! },
+              data: {
+                name: user.name || existingUser.name,
+                image: user.image || existingUser.image,
+              },
+            });
+            
+            // Check if Google account is already linked
+            const googleAccountExists = existingUser.accounts.some(acc => acc.provider === 'google');
+            
+            if (!googleAccountExists) {
+              // Link the Google account to existing user
+              debug.log('Linking Google account to existing user:', user.email);
+            } else {
+              debug.log('Google account already linked for user:', user.email);
+            }
+          }
         } catch (error) {
           console.error('Error creating/updating user:', error);
           return false;
@@ -123,7 +165,6 @@ export const {
         try {
           const { Capacitor } = await import('@capacitor/core');
           if (Capacitor.isNativePlatform()) {
-            // For mobile app, always redirect to dashboard
             return '/dashboard';
           }
         } catch {
@@ -131,8 +172,61 @@ export const {
         }
       }
 
-      // If this is a callback URL, let it proceed normally
+      // Parse the URL to check for special cases
+      try {
+        const urlObj = new URL(url, baseUrl);
+        
+        // Check if this is a Google OAuth callback with our custom state
+        if (urlObj.pathname.includes('/api/auth/callback/google')) {
+          const state = urlObj.searchParams.get('state');
+          
+          if (state) {
+            try {
+              // Try to decode our custom state
+              const decodedState = JSON.parse(Buffer.from(state, 'base64').toString());
+              if (decodedState.action === 'link' && decodedState.returnTo) {
+                debug.log('Google link callback detected, redirecting to:', decodedState.returnTo);
+                return decodedState.returnTo;
+              }
+            } catch (e) {
+              // Not our custom state, continue with normal flow
+              debug.log('State parsing failed or not custom state');
+            }
+          }
+          
+          // Check for explicit callbackUrl parameter
+          const callbackUrl = urlObj.searchParams.get('callbackUrl');
+          if (callbackUrl) {
+            const decodedCallback = decodeURIComponent(callbackUrl);
+            debug.log('Google callback with explicit callbackUrl:', decodedCallback);
+            return decodedCallback;
+          }
+          
+          // Default for Google callback
+          debug.log('Google callback with no special state, going to integrations');
+          return '/dashboard?tab=settings&section=integrations&google_connected=true';
+        }
+        
+        // Handle specific callback URLs with parameters (for integrations)
+        if (urlObj.searchParams.has('google_connected') || 
+            (urlObj.pathname.includes('/dashboard') && urlObj.searchParams.has('tab'))) {
+          return url.startsWith(baseUrl) ? url : baseUrl + url;
+        }
+      } catch (e) {
+        debug.log('URL parsing error in redirect:', e);
+      }
+
+      // If this is any callback URL, try to extract the intended destination
       if (url.includes('/api/auth/callback')) {
+        try {
+          const urlObj = new URL(url);
+          const callbackUrl = urlObj.searchParams.get('callbackUrl');
+          if (callbackUrl) {
+            return decodeURIComponent(callbackUrl);
+          }
+        } catch (e) {
+          // Continue with default logic
+        }
         return url;
       }
 
@@ -216,3 +310,6 @@ export const {
   },
   debug: process.env.NODE_ENV === 'development',
 });
+
+// Export a helper to check if Google OAuth is available
+export const isGoogleOAuthEnabled = () => isGoogleConfigured;
