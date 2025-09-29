@@ -22,6 +22,11 @@ export const {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          scope: "openid email profile https://www.googleapis.com/auth/gmail.readonly"
+        }
+      }
     }),
     Credentials({
       name: 'credentials',
@@ -164,10 +169,38 @@ export const {
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.sub = user.id;
       }
+      
+      // Store the access token and refresh token for Gmail API access
+      if (account && account.provider === 'google') {
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.expiresAt = account.expires_at;
+        
+        // Also store in database for persistence
+        if (user?.email) {
+          try {
+            await prisma.account.updateMany({
+              where: {
+                provider: 'google',
+                user: { email: user.email }
+              },
+              data: {
+                access_token: account.access_token,
+                refresh_token: account.refresh_token,
+                expires_at: account.expires_at,
+                scope: account.scope
+              }
+            });
+          } catch (error) {
+            console.error('Error updating account tokens:', error);
+          }
+        }
+      }
+      
       return token;
     },
   },
@@ -176,7 +209,8 @@ export const {
       debug.log('User signed in:', { 
         userId: user.id, 
         provider: account?.provider,
-        email: user.email 
+        email: user.email,
+        hasGmailAccess: account?.scope?.includes('gmail.readonly') || false
       });
     },
   },

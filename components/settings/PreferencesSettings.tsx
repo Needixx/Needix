@@ -62,7 +62,7 @@ export default function PreferencesSettings({ appSettings, setAppSettings }: Pre
             <label className="block text-sm font-medium text-white/80 mb-2">Timezone</label>
             <select
               value={appSettings.timezone}
-              onChange={(e) => updateAppSettings({ timezone: e.target.value })}
+              onChange={onSelect("timezone")}
               className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
             >
               <option value="America/New_York">🇺🇸 Eastern Time</option>

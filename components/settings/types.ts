@@ -3,7 +3,7 @@
 export type NotificationSettings = {
   renewalReminders: boolean;
   priceAlerts: boolean;
-  priceChanges: boolean; // Add this missing property
+  priceChanges: boolean;
   weeklyDigest: boolean;
   emailNotifications: boolean;
   webPush: boolean;
@@ -57,7 +57,7 @@ export type IntegrationSettings = {
 export const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   renewalReminders: true,
   priceAlerts: true,
-  priceChanges: true, // Add this missing property
+  priceChanges: true,
   weeklyDigest: false,
   emailNotifications: true,
   webPush: false,

@@ -91,178 +91,90 @@ export default function BillingSettings({ billing, isPro, orders }: BillingSetti
           </div>
           <div className="flex flex-col items-end gap-2">
             {!isPro ? (
-              <Button onClick={handleUpgrade} className="bg-gradient-to-r from-purple to-cyan">
-                Upgrade to Pro
+              <Button onClick={handleUpgrade} variant="primary" size="sm">
+                🚀 Upgrade to Pro
               </Button>
             ) : (
-              <>
-                <Button onClick={handleManageBilling} variant="secondary">
-                  Manage Billing
-                </Button>
-                {/* Renewal Reminder */}
-                {renewalDate && isPro && (
-                  <div className="text-right">
-                    <div className="text-xs text-white/60">Next renewal:</div>
-                    <div className={`text-sm font-medium ${
-                      daysUntil !== null && daysUntil <= 7 
-                        ? "text-yellow-400" 
-                        : daysUntil !== null && daysUntil <= 3 
-                          ? "text-red-400" 
-                          : "text-white/80"
-                    }`}>
-                      {renewalDate}
-                      {daysUntil !== null && daysUntil >= 0 && (
-                        <span className="ml-1 text-xs text-white/60">
-                          ({daysUntil === 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `${daysUntil} days`})
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </>
+              <Button onClick={handleManageBilling} variant="secondary" size="sm">
+                Manage Billing
+              </Button>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-          <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-            <div className="text-2xl font-bold text-white">{billing.usageCount}</div>
-            <div className="text-sm text-white/60">Active Subscriptions</div>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-            <div className="text-2xl font-bold text-white">{orders.length}</div>
-            <div className="text-sm text-white/60">Total Orders</div>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-            <div className="text-2xl font-bold text-white">
-              {isPro ? "Unlimited" : billing.usageLimit}
-            </div>
-            <div className="text-sm text-white/60">Subscription Limit</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Usage Progress */}
-      {!isPro && (
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">📊 Usage</h3>
+        {/* Usage Progress */}
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-white/80">Monthly Usage</span>
             <span className="text-sm text-white/60">
-              {billing.usageCount} / {billing.usageLimit} subscriptions
+              {billing.usageCount} / {billing.usageLimit === 999 ? "Unlimited" : billing.usageLimit}
             </span>
           </div>
-
-          <div className="mb-4">
-            <div className="bg-white/20 rounded-full h-3 overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-300 ${
-                  usagePercentage >= 100 
-                    ? "bg-red-500" 
-                    : usagePercentage >= 80 
-                      ? "bg-yellow-500" 
-                      : "bg-gradient-to-r from-purple to-cyan"
-                }`}
-                style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-              />
-            </div>
+          <div className="w-full bg-white/10 rounded-full h-2">
+            <div 
+              className={`h-2 rounded-full transition-all duration-300 ${
+                usagePercentage >= 90 
+                  ? "bg-gradient-to-r from-red-500 to-red-400" 
+                  : usagePercentage >= 70 
+                    ? "bg-gradient-to-r from-yellow-500 to-yellow-400" 
+                    : "bg-gradient-to-r from-green-500 to-green-400"
+              }`}
+              style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+            />
           </div>
-
-          {usagePercentage >= 100 ? (
-            <div className="bg-red-500/20 border border-red-500/40 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-red-400">⚠️</span>
-                <span className="font-medium text-red-400">Limit Reached</span>
-              </div>
-              <p className="text-sm text-red-300 mb-3">
-                You've reached your subscription limit. Upgrade to Pro for unlimited subscriptions.
-              </p>
-              <Button onClick={handleUpgrade} variant="secondary" size="sm">
-                Upgrade Now
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-white/60">
-              You're using {Math.round(usagePercentage)}% of your subscription limit. 
-              {billing.usageLimit - billing.usageCount} slots remaining.
+          {usagePercentage >= 90 && !isPro && (
+            <p className="text-xs text-red-400 mt-2">
+              ⚠️ You're approaching your usage limit. Consider upgrading to Pro for unlimited access.
             </p>
           )}
         </div>
-      )}
 
-      {/* Plan Comparison */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-        <h3 className="text-lg font-semibold text-white mb-6">📋 Plan Comparison</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Free Plan */}
-          <div className={`border rounded-xl p-6 ${
-            !isPro ? "border-purple/40 bg-purple/10" : "border-white/20 bg-white/5"
-          }`}>
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-lg font-semibold text-white">🆓 Free Plan</h4>
-              {!isPro && <span className="text-xs bg-purple/20 text-purple-300 px-2 py-1 rounded">Current</span>}
-            </div>
-            <div className="text-2xl font-bold text-white mb-4">$0<span className="text-sm font-normal text-white/60">/month</span></div>
-            <ul className="space-y-2 text-sm">
-              <li className="flex items-center gap-2 text-white/80">
-                <span className="text-green-400">✓</span> Up to 2 subscriptions
-              </li>
-              <li className="flex items-center gap-2 text-white/80">
-                <span className="text-green-400">✓</span> Basic notifications
-              </li>
-              <li className="flex items-center gap-2 text-white/80">
-                <span className="text-green-400">✓</span> Expense tracking
-              </li>
-              <li className="flex items-center gap-2 text-white/40">
-                <span className="text-red-400">✗</span> Unlimited subscriptions
-              </li>
-              <li className="flex items-center gap-2 text-white/40">
-                <span className="text-red-400">✗</span> Advanced analytics
-              </li>
-            </ul>
-          </div>
-
-          {/* Pro Plan */}
-          <div className={`border rounded-xl p-6 relative ${
-            isPro ? "border-cyan/40 bg-cyan/10" : "border-white/20 bg-white/5"
-          }`}>
-            {!isPro && (
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <span className="bg-gradient-to-r from-purple to-cyan text-white text-xs font-medium px-3 py-1 rounded-full">
-                  Recommended
-                </span>
+        {/* Renewal Info */}
+        {isPro && billing.renewalDate && (
+          <div className="mt-6 p-4 bg-white/5 border border-white/10 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium text-white">Next Billing Date</h4>
+                <p className="text-sm text-white/60">
+                  {renewalDate}
+                  {daysUntil !== null && (
+                    <span className="ml-2">
+                      ({daysUntil > 0 ? `in ${daysUntil} days` : daysUntil === 0 ? "Today" : `${Math.abs(daysUntil)} days ago`})
+                    </span>
+                  )}
+                </p>
               </div>
-            )}
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-lg font-semibold text-white">🚀 Pro Plan</h4>
-              {isPro && <span className="text-xs bg-cyan/20 text-cyan-300 px-2 py-1 rounded">Current</span>}
+              <div className="text-2xl">📅</div>
             </div>
-            <div className="text-2xl font-bold text-white mb-4">$5<span className="text-sm font-normal text-white/60">/month</span></div>
-            <ul className="space-y-2 text-sm mb-6">
-              <li className="flex items-center gap-2 text-white/80">
-                <span className="text-green-400">✓</span> Unlimited subscriptions
-              </li>
-              <li className="flex items-center gap-2 text-white/80">
-                <span className="text-green-400">✓</span> Advanced notifications
-              </li>
-              <li className="flex items-center gap-2 text-white/80">
-                <span className="text-green-400">✓</span> Detailed analytics
-              </li>
-              <li className="flex items-center gap-2 text-white/80">
-                <span className="text-green-400">✓</span> Export data
-              </li>
-              <li className="flex items-center gap-2 text-white/80">
-                <span className="text-green-400">✓</span> Priority support
-              </li>
-            </ul>
-            {!isPro && (
-              <Button 
-                onClick={handleUpgrade} 
-                className="w-full bg-gradient-to-r from-purple to-cyan"
-              >
-                Upgrade to Pro
-              </Button>
-            )}
+          </div>
+        )}
+      </div>
+
+      {/* Usage Statistics */}
+      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+        <h3 className="text-lg font-semibold text-white mb-4">📊 Account Activity</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-4 bg-white/5 border border-white/10 rounded-lg text-center">
+            <div className="text-2xl mb-2">📋</div>
+            <div className="text-xl font-bold text-white">{billing.usageCount}</div>
+            <div className="text-xs text-white/60">Subscriptions</div>
+          </div>
+          <div className="p-4 bg-white/5 border border-white/10 rounded-lg text-center">
+            <div className="text-2xl mb-2">🛍️</div>
+            <div className="text-xl font-bold text-white">{orders.length}</div>
+            <div className="text-xs text-white/60">Orders</div>
+          </div>
+          <div className="p-4 bg-white/5 border border-white/10 rounded-lg text-center">
+            <div className="text-2xl mb-2">💰</div>
+            <div className="text-xl font-bold text-white">
+              ${orders.reduce((sum, order) => sum + order.total, 0).toFixed(2)}
+            </div>
+            <div className="text-xs text-white/60">Total Orders</div>
+          </div>
+          <div className="p-4 bg-white/5 border border-white/10 rounded-lg text-center">
+            <div className="text-2xl mb-2">⚡</div>
+            <div className="text-xl font-bold text-white">{isPro ? "Pro" : "Free"}</div>
+            <div className="text-xs text-white/60">Plan Type</div>
           </div>
         </div>
       </div>
