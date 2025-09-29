@@ -1,10 +1,10 @@
 // app/auth/popup-success/page.tsx
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function PopupSuccessPage() {
+function PopupSuccessContent() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -55,5 +55,24 @@ export default function PopupSuccessPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PopupSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/30 to-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block p-4 rounded-2xl bg-gradient-to-br from-purple-600/20 to-cyan-600/20 border border-purple-500/30 mb-4">
+            <span className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+              Needix
+            </span>
+          </div>
+          <p className="text-white/70">Loading...</p>
+        </div>
+      </div>
+    }>
+      <PopupSuccessContent />
+    </Suspense>
   );
 }

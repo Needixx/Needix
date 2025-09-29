@@ -10,7 +10,7 @@ interface DetectedItem {
   type: "subscription" | "order" | "expense";
   name: string;
   category: string;
-  amount: number;
+  amount: number | null; // Allow null for orders without prices
   currency: string;
   interval?: string;
   date?: string;
@@ -20,144 +20,413 @@ interface DetectedItem {
   emailSubject: string;
   emailId: string;
   selected: boolean;
+  description?: string; // Add description field
 }
 
 interface EmailPattern {
   pattern: RegExp;
   type: "subscription" | "order" | "expense";
   category: string;
+  weight: number;
 }
 
-// Enhanced patterns for detecting ANY financial activity - much more aggressive
-const FINANCIAL_PATTERNS: EmailPattern[] = [
-  // Subscription patterns - Enhanced with more variations
-  { pattern: /subscription.*renew|subscription.*has.*been.*renewed|recurring.*payment|monthly.*billing|annual.*billing/i, type: "subscription", category: "Subscription" },
-  { pattern: /auto.*pay|automatic.*payment|autopay|auto.*renew|auto.*renewal/i, type: "subscription", category: "Subscription" },
-  { pattern: /your.*subscription.*to|subscription.*was.*successfully.*renewed|thanks.*for.*subscribing/i, type: "subscription", category: "Subscription" },
-  { pattern: /membership.*renew|membership.*billing|membership.*fee/i, type: "subscription", category: "Membership" },
-  
-  // Order patterns - Much more comprehensive
-  { pattern: /order.*confirmation|purchase.*receipt|order.*receipt|purchase.*confirmation/i, type: "order", category: "Shopping" },
-  { pattern: /your.*order|order.*#|tracking.*number|shipped|delivered|order.*placed/i, type: "order", category: "Shopping" },
-  { pattern: /bought|purchased|buying|ordering from|order from/i, type: "order", category: "Shopping" },
-  { pattern: /thank.*you.*for.*your.*order|your.*purchase.*is.*complete/i, type: "order", category: "Shopping" },
-  
-  // Expense patterns - Cast wide net
-  { pattern: /receipt|payment.*confirmation|transaction.*receipt|payment.*processed/i, type: "expense", category: "Expense" },
-  { pattern: /bill.*payment|utility.*bill|statement|invoice.*paid/i, type: "expense", category: "Bills" },
-  { pattern: /charged.*to.*your.*card|payment.*successful|transaction.*successful/i, type: "expense", category: "Expense" },
-  { pattern: /thank.*you.*for.*your.*payment|payment.*received/i, type: "expense", category: "Expense" },
-  
-  // General financial activity - Very broad
-  { pattern: /paid|charged|billed|invoiced|fee|cost|price|total|amount/i, type: "expense", category: "Financial" },
-  { pattern: /renewal|renewed|renewing|expire|expiry|expires/i, type: "subscription", category: "Renewal" },
+// More precise patterns with weight scoring
+const STRONG_SUBSCRIPTION_PATTERNS: EmailPattern[] = [
+  { pattern: /subscription (has been )?renewed|recurring payment (processed|received)/i, type: "subscription", category: "Subscription", weight: 90 },
+  { pattern: /your (monthly|annual|yearly) (subscription|membership)/i, type: "subscription", category: "Subscription", weight: 85 },
+  { pattern: /auto-renewal (successful|processed)|automatically renewed/i, type: "subscription", category: "Subscription", weight: 85 },
+  { pattern: /subscription confirmation|welcome to your subscription/i, type: "subscription", category: "Subscription", weight: 80 },
 ];
 
-const AMOUNT_PATTERNS = [
-  /\$(\d+(?:,\d{3})*(?:\.\d{2})?)/g,
-  /(\d+(?:,\d{3})*(?:\.\d{2})?)\s*USD/gi,
-  /total.*?(\d+(?:,\d{3})*(?:\.\d{2})?)/gi,
-  /amount.*?(\d+(?:,\d{3})*(?:\.\d{2})?)/gi,
-  /charged.*?(\d+(?:,\d{3})*(?:\.\d{2})?)/gi,
-  /paid.*?(\d+(?:,\d{3})*(?:\.\d{2})?)/gi,
+const STRONG_ORDER_PATTERNS: EmailPattern[] = [
+  { pattern: /order confirmation|your order (has been|is) confirmed/i, type: "order", category: "Shopping", weight: 90 },
+  { pattern: /order #[\w\d-]+|order number:?\s*[\w\d-]+/i, type: "order", category: "Shopping", weight: 85 },
+  { pattern: /your (purchase|order) receipt|receipt for your (purchase|order)/i, type: "order", category: "Shopping", weight: 85 },
+  { pattern: /thank you for your (order|purchase)/i, type: "order", category: "Shopping", weight: 80 },
+  { pattern: /tracking (number|information)|has (shipped|been shipped)/i, type: "order", category: "Shopping", weight: 75 },
+  { pattern: /order placed|you (ordered|bought)/i, type: "order", category: "Shopping", weight: 70 },
 ];
 
-// Specific service detection - Enhanced Microsoft patterns
-const SERVICE_PATTERNS: Array<{ pattern: RegExp; name: string; category: string }> = [
-  // Microsoft variations
-  { pattern: /microsoft.*365|office.*365|microsoft.*basic|microsoft.*subscription/i, name: "Microsoft 365", category: "Software" },
-  { pattern: /microsoft.*office|office.*subscription|office.*renewal/i, name: "Microsoft Office", category: "Software" },
-  { pattern: /microsoft.*teams|teams.*subscription/i, name: "Microsoft Teams", category: "Communication" },
-  { pattern: /microsoft.*onedrive|onedrive.*subscription/i, name: "Microsoft OneDrive", category: "Storage" },
-  
-  // Other services
-  { pattern: /netflix/i, name: "Netflix", category: "Entertainment" },
-  { pattern: /spotify/i, name: "Spotify", category: "Entertainment" },
-  { pattern: /amazon.*prime/i, name: "Amazon Prime", category: "Shopping" },
-  { pattern: /apple.*music/i, name: "Apple Music", category: "Entertainment" },
-  { pattern: /adobe/i, name: "Adobe", category: "Software" },
-  { pattern: /google.*workspace/i, name: "Google Workspace", category: "Software" },
-  { pattern: /dropbox/i, name: "Dropbox", category: "Storage" },
-  { pattern: /slack/i, name: "Slack", category: "Productivity" },
-  { pattern: /zoom/i, name: "Zoom", category: "Communication" },
-  { pattern: /github/i, name: "GitHub", category: "Development" },
-  { pattern: /figma/i, name: "Figma", category: "Design" },
-  { pattern: /notion/i, name: "Notion", category: "Productivity" },
-  { pattern: /canva/i, name: "Canva", category: "Design" },
-  { pattern: /linkedin.*premium/i, name: "LinkedIn Premium", category: "Professional" },
+const STRONG_EXPENSE_PATTERNS: EmailPattern[] = [
+  { pattern: /payment (confirmation|receipt)|payment successful/i, type: "expense", category: "Expense", weight: 80 },
+  { pattern: /you paid \$[\d,]+\.?\d*/i, type: "expense", category: "Expense", weight: 85 },
+  { pattern: /invoice #[\w\d-]+|invoice (paid|received)/i, type: "expense", category: "Bills", weight: 80 },
+  { pattern: /(utility|electric|water|gas|internet|phone) bill/i, type: "expense", category: "Utilities", weight: 85 },
+];
+
+// Specific well-known services (high confidence)
+const SERVICE_PATTERNS: Array<{ 
+  pattern: RegExp; 
+  name: string; 
+  category: string; 
+  weight: number;
+  description?: string;
+}> = [
+  { pattern: /microsoft (365|office|basic)/i, name: "Microsoft 365", category: "Software", weight: 95, description: "Microsoft 365 subscription for Office apps and cloud services" },
+  { pattern: /netflix/i, name: "Netflix", category: "Entertainment", weight: 95, description: "Netflix streaming service subscription" },
+  { pattern: /spotify/i, name: "Spotify", category: "Entertainment", weight: 95, description: "Spotify music streaming subscription" },
+  { pattern: /amazon prime/i, name: "Amazon Prime", category: "Shopping", weight: 95, description: "Amazon Prime membership" },
+  { pattern: /apple music/i, name: "Apple Music", category: "Entertainment", weight: 95, description: "Apple Music streaming subscription" },
+  { pattern: /youtube (premium|music)/i, name: "YouTube Premium", category: "Entertainment", weight: 95, description: "YouTube Premium subscription" },
+  { pattern: /adobe (creative cloud|acrobat)/i, name: "Adobe", category: "Software", weight: 95, description: "Adobe Creative Cloud or Acrobat subscription" },
+  { pattern: /google (workspace|one|drive)/i, name: "Google Workspace", category: "Software", weight: 95, description: "Google Workspace or Google One subscription" },
+  { pattern: /dropbox/i, name: "Dropbox", category: "Storage", weight: 95, description: "Dropbox cloud storage subscription" },
+  { pattern: /slack/i, name: "Slack", category: "Productivity", weight: 95, description: "Slack team communication subscription" },
+  { pattern: /zoom/i, name: "Zoom", category: "Communication", weight: 95, description: "Zoom video conferencing subscription" },
+  { pattern: /github/i, name: "GitHub", category: "Development", weight: 95, description: "GitHub code repository subscription" },
+  { pattern: /figma/i, name: "Figma", category: "Design", weight: 95, description: "Figma design tool subscription" },
+  { pattern: /notion/i, name: "Notion", category: "Productivity", weight: 95, description: "Notion workspace subscription" },
+  { pattern: /canva/i, name: "Canva", category: "Design", weight: 95, description: "Canva design platform subscription" },
+  { pattern: /disney\+|disney plus/i, name: "Disney+", category: "Entertainment", weight: 95, description: "Disney+ streaming subscription" },
+  { pattern: /hulu/i, name: "Hulu", category: "Entertainment", weight: 95, description: "Hulu streaming subscription" },
+  { pattern: /hbo max/i, name: "HBO Max", category: "Entertainment", weight: 95, description: "HBO Max streaming subscription" },
+  { pattern: /audible/i, name: "Audible", category: "Entertainment", weight: 95, description: "Audible audiobook subscription" },
+  { pattern: /icloud/i, name: "iCloud", category: "Storage", weight: 95, description: "iCloud storage subscription" },
+];
+
+// More precise amount extraction - look for amounts near financial keywords
+const CONTEXTUAL_AMOUNT_PATTERNS = [
+  // Amount with clear context
+  /(?:total|amount|price|charged|paid|cost)[:\s]+\$?([\d,]+\.?\d{0,2})/gi,
+  /\$?([\d,]+\.?\d{2})\s*(?:total|charged|paid|billed)/gi,
+  // Standard currency formats
+  /\$([\d,]+\.\d{2})/g,
+  /USD\s*([\d,]+\.?\d{0,2})/gi,
 ];
 
 function extractAmounts(text: string): number[] {
   const amounts: number[] = [];
+  const seen = new Set<number>();
   
-  for (const pattern of AMOUNT_PATTERNS) {
+  // Try contextual patterns first (higher priority)
+  for (const pattern of CONTEXTUAL_AMOUNT_PATTERNS) {
     const matches = text.matchAll(pattern);
     for (const match of matches) {
-      const amountStr = match[1];
-      const amount = parseFloat(amountStr.replace(/,/g, ''));
-      if (amount > 0 && amount < 10000) { // Reasonable range
+      const amountStr = match[1].replace(/,/g, '');
+      const amount = parseFloat(amountStr);
+      
+      // Only accept realistic amounts
+      if (amount >= 0.99 && amount <= 9999 && !seen.has(amount)) {
         amounts.push(amount);
+        seen.add(amount);
       }
     }
   }
   
-  return [...new Set(amounts)]; // Remove duplicates
+  return amounts;
 }
 
-function detectServiceName(subject: string, body: string): { name: string; category: string } {
-  const fullText = `${subject} ${body}`.toLowerCase();
+function extractOrderNumber(text: string): string | null {
+  // Try to extract order number
+  const orderPatterns = [
+    /order\s*#\s*([\w\d-]+)/i,
+    /order\s*number:?\s*([\w\d-]+)/i,
+    /confirmation\s*#\s*([\w\d-]+)/i,
+  ];
   
-  for (const service of SERVICE_PATTERNS) {
-    if (service.pattern.test(fullText)) {
-      return { name: service.name, category: service.category };
+  for (const pattern of orderPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return match[1];
     }
   }
   
-  // Fallback: extract from sender or subject
-  const fromMatch = subject.match(/from\s+([A-Za-z\s]+)/i);
-  if (fromMatch) {
-    return { name: fromMatch[1].trim(), category: "Other" };
+  return null;
+}
+
+function extractItemDetails(subject: string, body: string): string | null {
+  // Try to extract what was ordered from common patterns
+  const itemPatterns = [
+    /ordered:?\s*(.+?)(?:\n|$)/i,
+    /purchased:?\s*(.+?)(?:\n|$)/i,
+    /item\(?s?\)?:?\s*(.+?)(?:\n|$)/i,
+    /product\(?s?\)?:?\s*(.+?)(?:\n|$)/i,
+  ];
+  
+  for (const pattern of itemPatterns) {
+    const match = body.match(pattern);
+    if (match && match[1].trim().length > 3 && match[1].trim().length < 100) {
+      return match[1].trim();
+    }
   }
   
-  // Extract first word from subject as service name
-  const firstWord = subject.split(' ')[0];
-  return { name: firstWord || "Unknown Service", category: "Other" };
+  return null;
 }
 
-function categorizeByContent(subject: string, body: string): string {
-  const text = `${subject} ${body}`.toLowerCase();
+function detectServiceName(subject: string, body: string): { 
+  name: string; 
+  weight: number; 
+  description: string | null;
+} {
+  const text = `${subject} ${body}`;
   
-  if (/streaming|entertainment|music|video/i.test(text)) return "Entertainment";
-  if (/software|app|tool|platform/i.test(text)) return "Software";
-  if (/cloud|storage|backup/i.test(text)) return "Storage";
-  if (/food|restaurant|delivery|uber.*eats|doordash/i.test(text)) return "Food & Dining";
-  if (/gas|fuel|transport|uber|lyft/i.test(text)) return "Transportation";
-  if (/grocery|supermarket|walmart|target/i.test(text)) return "Groceries";
-  if (/utility|electric|water|internet|phone/i.test(text)) return "Utilities";
-  if (/insurance|health|medical/i.test(text)) return "Insurance";
-  if (/gym|fitness|health/i.test(text)) return "Health & Fitness";
-  if (/education|course|training/i.test(text)) return "Education";
+  // Check for known services first
+  for (const service of SERVICE_PATTERNS) {
+    if (service.pattern.test(text)) {
+      return { 
+        name: service.name, 
+        weight: service.weight,
+        description: service.description || null
+      };
+    }
+  }
   
-  return "Other";
+  // Extract vendor from email sender
+  const fromMatch = body.match(/from:?\s*([A-Z][a-zA-Z0-9\s&.]{2,40}?)(?:\s*<|@|\n|$)/i);
+  if (fromMatch) {
+    const vendor = fromMatch[1].trim();
+    return { 
+      name: vendor, 
+      weight: 70,
+      description: null
+    };
+  }
+  
+  // Try to extract service name from common patterns
+  const serviceMatch = text.match(/(?:subscription to|order from|payment to|purchase from)\s+([A-Z][a-zA-Z0-9\s&.]{2,40})/i);
+  if (serviceMatch) {
+    return { 
+      name: serviceMatch[1].trim(), 
+      weight: 65,
+      description: null
+    };
+  }
+  
+  // Try extracting from subject line (often has company name)
+  const subjectMatch = subject.match(/^([A-Z][a-zA-Z0-9\s&.]{2,40}?)(?:\s*[-–:|])/);
+  if (subjectMatch) {
+    return { 
+      name: subjectMatch[1].trim(), 
+      weight: 60,
+      description: null
+    };
+  }
+  
+  return { name: "Unknown Service", weight: 30, description: null };
 }
 
-function calculateConfidence(subject: string, body: string, amounts: number[]): number {
-  let confidence = 40; // Base confidence
-  
+function categorizeByContent(subject: string, body: string): string | null {
   const text = `${subject} ${body}`.toLowerCase();
   
-  // Boost for financial keywords
-  if (/payment|charged|billed|invoice|receipt/i.test(text)) confidence += 25;
-  if (/total|amount|price|cost/i.test(text)) confidence += 15;
-  if (amounts.length > 0) confidence += 20;
+  // Specific category matching
+  if (/streaming|netflix|spotify|hulu|disney|youtube|hbo/i.test(text)) return "Entertainment";
+  if (/software|adobe|microsoft|office|app|saas|subscription/i.test(text)) return "Software";
+  if (/cloud|storage|dropbox|drive|backup|icloud/i.test(text)) return "Storage";
+  if (/restaurant|food|delivery|uber eats|doordash|grubhub|dining/i.test(text)) return "Food & Dining";
+  if (/gas|fuel|transport|uber|lyft|parking|travel/i.test(text)) return "Transportation";
+  if (/grocery|supermarket|walmart|target|whole foods/i.test(text)) return "Groceries";
+  if (/utility|electric|water|internet|phone|cable|wifi/i.test(text)) return "Utilities";
+  if (/insurance|health|medical|dental|vision/i.test(text)) return "Insurance";
+  if (/gym|fitness|workout|yoga|health club/i.test(text)) return "Health & Fitness";
+  if (/education|course|training|udemy|coursera|class/i.test(text)) return "Education";
+  if (/clothing|apparel|fashion|shoes|accessories/i.test(text)) return "Clothing";
+  if (/electronics|tech|computer|phone|gadget/i.test(text)) return "Electronics";
+  if (/book|amazon|kindle|audible/i.test(text)) return "Books & Media";
   
-  // Boost for recognizable services
-  if (SERVICE_PATTERNS.some(s => s.pattern.test(text))) confidence += 20;
+  return null;
+}
+
+function buildDescription(
+  type: "subscription" | "order" | "expense",
+  serviceName: string,
+  serviceDescription: string | null,
+  subject: string,
+  body: string,
+  amount: number | null,
+  orderNumber: string | null,
+  itemDetails: string | null
+): string {
+  let description = "";
+  
+  if (type === "order") {
+    description = `Order from ${serviceName}`;
+    
+    if (orderNumber) {
+      description += ` (Order #${orderNumber})`;
+    }
+    
+    if (itemDetails) {
+      description += `. Items: ${itemDetails}`;
+    }
+    
+    if (amount) {
+      description += `. Total: $${amount.toFixed(2)}`;
+    } else {
+      description += ". Price to be confirmed.";
+    }
+  } else if (type === "subscription") {
+    if (serviceDescription) {
+      description = serviceDescription;
+    } else {
+      description = `${serviceName} subscription`;
+    }
+    
+    if (amount) {
+      description += ` - $${amount.toFixed(2)}`;
+    }
+  } else {
+    // expense
+    description = `Payment to ${serviceName}`;
+    
+    if (amount) {
+      description += ` for $${amount.toFixed(2)}`;
+    }
+  }
+  
+  return description;
+}
+
+function calculateConfidence(
+  subject: string, 
+  body: string, 
+  amounts: number[],
+  matchedPattern: EmailPattern | null,
+  serviceWeight: number,
+  type: "subscription" | "order" | "expense"
+): number {
+  let confidence = 0;
+  
+  // Base confidence from pattern match
+  if (matchedPattern) {
+    confidence = matchedPattern.weight;
+  } else {
+    confidence = 20; // Very low base if no pattern
+  }
+  
+  // Boost for recognized service
+  if (serviceWeight >= 90) {
+    confidence = Math.max(confidence, 85);
+  } else if (serviceWeight >= 70) {
+    confidence += 10;
+  }
+  
+  // Amount validation - orders can have no amount
+  if (type === "order") {
+    // Orders are valid even without amounts
+    if (amounts.length === 1) {
+      confidence += 10; // Bonus for clear amount
+    }
+  } else {
+    // Subscriptions and expenses need amounts
+    if (amounts.length === 0) {
+      confidence -= 30; // Heavy penalty for no amount
+    } else if (amounts.length === 1) {
+      confidence += 10; // Bonus for single clear amount
+    } else if (amounts.length > 5) {
+      confidence -= 10; // Penalty for too many amounts
+    }
+  }
+  
+  // Check for spam indicators
+  const text = `${subject} ${body}`.toLowerCase();
+  if (/unsubscribe|opt.out|promotional|advertisement|marketing/i.test(text)) {
+    confidence -= 20;
+  }
   
   // Boost for clear transaction language
-  if (/thank.*you.*purchase|confirmation|successful.*payment/i.test(text)) confidence += 15;
+  if (/thank you for your (purchase|payment|order)|receipt|confirmation/i.test(text)) {
+    confidence += 10;
+  }
   
-  return Math.min(95, confidence);
+  return Math.max(0, Math.min(100, confidence));
+}
+
+function analyzeEmail(email: any): DetectedItem | null {
+  const { subject, body, from, date } = email;
+  const fullText = `${subject} ${body}`;
+  
+  // First: Check for strong patterns
+  let bestMatch: { pattern: EmailPattern; weight: number } | null = null;
+  
+  const allPatterns = [
+    ...STRONG_SUBSCRIPTION_PATTERNS,
+    ...STRONG_ORDER_PATTERNS,
+    ...STRONG_EXPENSE_PATTERNS
+  ];
+  
+  for (const pattern of allPatterns) {
+    if (pattern.pattern.test(fullText)) {
+      if (!bestMatch || pattern.weight > bestMatch.weight) {
+        bestMatch = { pattern, weight: pattern.weight };
+      }
+    }
+  }
+  
+  // If no strong pattern match, skip this email
+  if (!bestMatch) {
+    return null;
+  }
+  
+  // Extract amounts
+  const amounts = extractAmounts(fullText);
+  
+  // For orders, we allow no amount - just need confirmation
+  // For subscriptions/expenses, we need an amount
+  if (bestMatch.pattern.type !== "order" && amounts.length === 0) {
+    return null;
+  }
+  
+  // Detect service name and description
+  const service = detectServiceName(subject, body);
+  
+  // Extract order details if applicable
+  const orderNumber = extractOrderNumber(fullText);
+  const itemDetails = extractItemDetails(subject, body);
+  
+  // Calculate confidence
+  const confidence = calculateConfidence(
+    subject, 
+    body, 
+    amounts, 
+    bestMatch.pattern,
+    service.weight,
+    bestMatch.pattern.type
+  );
+  
+  // Only return items with confidence >= 60
+  if (confidence < 60) {
+    return null;
+  }
+  
+  // Use the most prominent amount (usually the largest for receipts)
+  const amount = amounts.length > 0 ? Math.max(...amounts) : null;
+  
+  // Final sanity check on amount if present
+  if (amount !== null && (amount < 0.50 || amount > 10000)) {
+    return null;
+  }
+  
+  const category = categorizeByContent(subject, body) || bestMatch.pattern.category;
+  
+  // Build detailed description
+  const description = buildDescription(
+    bestMatch.pattern.type,
+    service.name,
+    service.description,
+    subject,
+    body,
+    amount,
+    orderNumber,
+    itemDetails
+  );
+  
+  // Parse date
+  const emailDate = date ? new Date(parseInt(date)) : new Date();
+  
+  return {
+    id: `email_${email.id}_${Date.now()}`,
+    emailId: email.id,
+    type: bestMatch.pattern.type,
+    name: service.name,
+    category,
+    amount: amount,
+    currency: "USD",
+    confidence,
+    emailSubject: subject.substring(0, 100),
+    selected: confidence >= 75, // Auto-select only high confidence items
+    description,
+    date: emailDate.toISOString().split('T')[0],
+  };
 }
 
 async function getGmailEmails(accessToken: string): Promise<any[]> {
@@ -169,28 +438,31 @@ async function getGmailEmails(accessToken: string): Promise<any[]> {
     oauth2Client.setCredentials({ access_token: accessToken });
     gmail.context._options.auth = oauth2Client;
     
-    // More aggressive search query to catch any financial activity
+    // Search last 30 days only
     const query = [
-      'newer_than:3m', // Reduced to 3 months for faster processing
-      '(payment OR receipt OR bill OR subscription OR order OR charged OR invoice OR autopay OR renewed OR subscribing OR purchased OR bought OR "has been renewed" OR "subscription to" OR "thanks for" OR "thank you for" OR billing OR "auto-renewal" OR "payment confirmation" OR "order confirmation" OR "purchase confirmation")',
-      // Cast a wider net - don't limit by sender initially
-      '-label:spam -label:trash -label:promotions', // Exclude obvious non-financial emails
-      'has:nouserlabels OR in:inbox OR in:important' // Include unlabeled emails that might be financial
+      'newer_than:30d', // Last 30 days only
+      '(("order confirmation" OR "payment confirmation" OR "receipt" OR "subscription renewed" OR "order number" OR "invoice paid" OR "thank you for your order" OR "thank you for your purchase" OR "payment successful" OR "you paid" OR "order placed"))',
+      '-label:spam -label:trash', // Exclude spam and trash
+      'has:nouserlabels OR in:inbox' // Focus on inbox
     ].join(' ');
+    
+    console.log('Gmail query:', query);
     
     const listResponse = await gmail.users.messages.list({
       userId: 'me',
       q: query,
-      maxResults: 100 // Increased from 50 to catch more emails
+      maxResults: 50 // Reasonable limit
     });
     
     if (!listResponse.data.messages) {
       return [];
     }
     
-    // Get full email details - process more emails
+    console.log(`Found ${listResponse.data.messages.length} potential emails`);
+    
+    // Get full email details
     const emails = [];
-    for (const message of listResponse.data.messages.slice(0, 50)) { // Process max 50 emails
+    for (const message of listResponse.data.messages.slice(0, 50)) {
       try {
         const emailResponse = await gmail.users.messages.get({
           userId: 'me',
@@ -213,10 +485,6 @@ async function getGmailEmails(accessToken: string): Promise<any[]> {
             if (part.mimeType === 'text/plain' && part.body?.data) {
               body += Buffer.from(part.body.data, 'base64').toString();
             }
-            // Also check HTML parts for more content
-            if (part.mimeType === 'text/html' && part.body?.data && !body) {
-              body += Buffer.from(part.body.data, 'base64').toString();
-            }
           }
         }
         
@@ -224,7 +492,7 @@ async function getGmailEmails(accessToken: string): Promise<any[]> {
           id: email.id,
           subject,
           from,
-          body: body.substring(0, 2000), // Increased body length for better analysis
+          body: body.substring(0, 3000), // First 3000 chars
           date: email.internalDate
         });
         
@@ -240,83 +508,6 @@ async function getGmailEmails(accessToken: string): Promise<any[]> {
     console.error('Gmail API error:', error);
     throw new Error('Failed to access Gmail');
   }
-}
-
-function analyzeEmail(email: any): DetectedItem | null {
-  const { subject, body, from } = email;
-  
-  // Much more aggressive financial detection - check if ANY financial keywords exist
-  const fullText = `${subject} ${body}`.toLowerCase();
-  
-  // First check: Does this email contain ANY financial keywords?
-  const hasFinancialKeywords = [
-    "payment", "charged", "billed", "paid", "invoice", "receipt", "transaction",
-    "subscription", "order", "purchase", "bought", "billing", "renewal", "renewed",
-    "fee", "cost", "price", "total", "amount", "$", "usd", "dollars"
-  ].some((keyword: string) => fullText.includes(keyword));
-  
-  if (!hasFinancialKeywords) {
-    return null; // Skip emails with no financial language
-  }
-  
-  // Second check: Look for specific patterns
-  let matchedPattern: { type: "subscription" | "order" | "expense"; category: string } | null = null;
-  for (const pattern of FINANCIAL_PATTERNS) {
-    if (pattern.pattern.test(fullText)) {
-      matchedPattern = pattern;
-      break;
-    }
-  }
-  
-  // If no specific pattern matches but has financial keywords, still try to extract
-  if (!matchedPattern) {
-    // Default to expense if we have financial keywords but no specific pattern
-    matchedPattern = { type: "expense", category: "Financial" };
-  }
-  
-  const amounts = extractAmounts(`${subject} ${body}`);
-  
-  // Be more lenient with amounts - even look for any number that might be a price
-  if (amounts.length === 0) {
-    // Try to find any numbers that could be amounts
-    const numberMatches = fullText.match(/(\d+(?:\.\d{1,2})?)/g);
-    if (numberMatches) {
-      for (const match of numberMatches) {
-        const num = parseFloat(match);
-        if (num > 0.99 && num < 10000) { // Very broad range
-          amounts.push(num);
-        }
-      }
-    }
-  }
-  
-  // If still no amounts, use a default based on type
-  if (amounts.length === 0) {
-    if (matchedPattern.type === "subscription") amounts.push(9.99);
-    else if (matchedPattern.type === "order") amounts.push(25.00);
-    else amounts.push(15.00);
-  }
-  
-  const service = detectServiceName(subject, body);
-  const category = categorizeByContent(subject, body) || matchedPattern.category;
-  const type = matchedPattern.type;
-  const confidence = calculateConfidence(subject, body, amounts);
-  
-  // Use the largest amount found (likely the main charge)
-  const amount = Math.max(...amounts);
-  
-  return {
-    id: `email_${email.id}_${Date.now()}`,
-    emailId: email.id,
-    type,
-    name: service.name,
-    category,
-    amount,
-    currency: "USD",
-    confidence: Math.max(confidence, 60), // Minimum 60% confidence
-    emailSubject: subject,
-    selected: confidence >= 60, // Auto-select reasonable confidence items
-  };
 }
 
 export async function POST() {
@@ -345,13 +536,7 @@ export async function POST() {
       return NextResponse.json({ error: "Google account not connected" }, { status: 400 });
     }
 
-    console.log(`Starting REAL Gmail scan for user: ${user.email}`);
-    console.log('Google account found:', {
-      hasAccessToken: !!googleAccount.access_token,
-      hasRefreshToken: !!googleAccount.refresh_token,
-      expiresAt: googleAccount.expires_at,
-      scope: googleAccount.scope
-    });
+    console.log(`Starting Gmail scan for user: ${user.email} (last 30 days)`);
 
     // Check if we have the necessary permissions
     if (!googleAccount.scope?.includes('gmail.readonly')) {
@@ -369,20 +554,14 @@ export async function POST() {
     }
 
     try {
-      // Check if token is expired and refresh if needed
       let accessToken = googleAccount.access_token;
       
-      if (googleAccount.expires_at && googleAccount.expires_at * 1000 < Date.now()) {
-        console.log('Access token expired, attempting refresh...');
+      // Check if token is expired and refresh if needed
+      const isExpired = googleAccount.expires_at && googleAccount.expires_at * 1000 < Date.now();
+      
+      if (isExpired && googleAccount.refresh_token) {
+        console.log('Access token expired, refreshing...');
         
-        if (!googleAccount.refresh_token) {
-          return NextResponse.json({ 
-            error: "Access token expired and no refresh token available. Please reconnect your Google account.",
-            needsReauth: true 
-          }, { status: 400 });
-        }
-
-        // Refresh the token
         try {
           const oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
@@ -392,11 +571,11 @@ export async function POST() {
           oauth2Client.setCredentials({
             refresh_token: googleAccount.refresh_token
           });
-
+          
           const { credentials } = await oauth2Client.refreshAccessToken();
           accessToken = credentials.access_token!;
           
-          // Update the database with new token
+          // Update the stored tokens
           await prisma.account.update({
             where: { id: googleAccount.id },
             data: {
@@ -415,9 +594,9 @@ export async function POST() {
         }
       }
       
-      // Get real emails from Gmail
+      // Get emails from Gmail
       const emails = await getGmailEmails(accessToken);
-      console.log(`Found ${emails.length} potential financial emails`);
+      console.log(`Retrieved ${emails.length} emails from Gmail`);
       
       // Analyze each email for financial data
       const detectedItems: DetectedItem[] = [];
@@ -428,6 +607,8 @@ export async function POST() {
         }
       }
       
+      console.log(`Detected ${detectedItems.length} high-confidence financial items`);
+      
       const response = {
         success: true,
         items: detectedItems,
@@ -436,39 +617,32 @@ export async function POST() {
           subscriptions: detectedItems.filter(item => item.type === "subscription").length,
           orders: detectedItems.filter(item => item.type === "order").length,
           expenses: detectedItems.filter(item => item.type === "expense").length,
+          withoutPrices: detectedItems.filter(item => item.amount === null).length,
         },
-        message: `Found ${detectedItems.length} financial items in your Gmail`
+        message: `Found ${detectedItems.length} financial items in your Gmail (last 30 days, ${emails.length} emails scanned)`
       };
 
-      console.log('Real Gmail scan completed:', response.summary);
       return NextResponse.json(response);
       
     } catch (gmailError: unknown) {
       console.error("Gmail API error:", gmailError);
       
-      // Type-safe error checking
       const errorMessage = gmailError instanceof Error ? gmailError.message : String(gmailError);
       
-      // Check if it's an auth error
       if (errorMessage.includes('authentication') || 
           errorMessage.includes('credential') ||
           errorMessage.includes('401')) {
         return NextResponse.json({ 
-          error: "Gmail authentication failed. Please disconnect and reconnect your Google account in settings to grant Gmail access.",
+          error: "Gmail authentication failed. Please reconnect your Google account.",
           needsReauth: true 
         }, { status: 401 });
       }
       
-      // Fallback to demo mode for other errors
-      console.log("Falling back to demo mode due to Gmail API error");
-      
       return NextResponse.json({
-        success: true,
-        items: [], // Return empty array instead of fake data
-        summary: { total: 0, subscriptions: 0, orders: 0, expenses: 0 },
-        message: "Gmail scanning temporarily unavailable. Please ensure Gmail access is properly configured.",
-        demo: true
-      });
+        success: false,
+        error: "Failed to scan Gmail. Please try again.",
+        details: errorMessage
+      }, { status: 500 });
     }
 
   } catch (error) {

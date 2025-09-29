@@ -9,7 +9,7 @@ interface DetectedItem {
   id: string;
   type: "subscription" | "order" | "expense";
   name: string;
-  amount: number;
+  amount: number | null; // Allow null for orders without prices
   currency: string;
   category: string;
   interval?: string;
@@ -19,6 +19,7 @@ interface DetectedItem {
   confidence: number;
   emailSubject: string;
   selected: boolean;
+  description?: string; // Add description field
 }
 
 interface GmailScannerDialogProps {
@@ -180,34 +181,13 @@ export default function GmailScannerDialog({
                   We'll scan your Gmail for subscription receipts, order confirmations, and expense records.
                   You'll be able to review and select which items to import.
                 </p>
-                
-                <div className="bg-white/5 rounded-lg p-4 max-w-md mx-auto mb-8">
-                  <h4 className="font-medium text-white mb-2">What we'll look for:</h4>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="text-center">
-                      <div className="text-lg mb-1">🔄</div>
-                      <div className="text-purple-300">Subscriptions</div>
-                      <div className="text-white/50 text-xs">Netflix, Spotify, etc.</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg mb-1">📦</div>
-                      <div className="text-blue-300">Orders</div>
-                      <div className="text-white/50 text-xs">Amazon, food delivery</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg mb-1">💳</div>
-                      <div className="text-green-300">Expenses</div>
-                      <div className="text-white/50 text-xs">Gas, groceries, utilities</div>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               <Button
                 onClick={handleScan}
                 disabled={isScanning}
                 variant="primary"
-                className="px-8 py-4 text-lg"
+                className="px-8 py-3"
               >
                 {isScanning ? (
                   <>
@@ -296,7 +276,11 @@ export default function GmailScannerDialog({
                         
                         <div className="flex items-center gap-6 text-sm text-white/70 mb-2">
                           <span className="font-semibold text-white">
-                            {item.currency} ${item.amount.toFixed(2)}
+                            {item.amount !== null ? (
+                              `${item.currency} $${item.amount.toFixed(2)}`
+                            ) : (
+                              <span className="text-yellow-400">Price to be confirmed</span>
+                            )}
                           </span>
                           <span className="bg-white/10 px-2 py-1 rounded">
                             {item.category}
@@ -317,6 +301,12 @@ export default function GmailScannerDialog({
                             </span>
                           )}
                         </div>
+                        
+                        {item.description && (
+                          <p className="text-sm text-white/60 mb-2">
+                            {item.description}
+                          </p>
+                        )}
                         
                         <p className="text-xs text-white/50 truncate">
                           📧 {item.emailSubject}
