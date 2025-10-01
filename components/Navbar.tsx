@@ -1,53 +1,22 @@
 // components/Navbar.tsx
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
-import DashboardLink from "@/components/DashboardLink";
-import { useEffect, useState } from "react";
-import Portal from "@/components/ui/Portal";
-import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
-import { isMobileApp } from "@/lib/mobile-auth";
+import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
+import { Button } from "@/components/ui/Button";
+import DashboardLink from "@/components/DashboardLink";
+import Portal from "@/components/ui/Portal";
 
-export default function Navbar() {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = async () => {
-      try {
-        const isMobileDevice = isMobileApp();
-        setIsMobile(isMobileDevice);
-        
-        // Also check for small screens if not mobile app
-        if (!isMobileDevice) {
-          setIsMobile(window.innerWidth < 768);
-        }
-      } catch {
-        // Fallback to screen size check
-        setIsMobile(window.innerWidth < 768);
-      }
-    };
-    void checkMobile();
-
-    // Listen for window resize to update mobile state
-    const handleResize = () => {
-      if (!isMobileApp()) {
-        setIsMobile(window.innerWidth < 768);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
+export default function Navbar({ isMobile = false }: { isMobile?: boolean }) {
   return (
     <nav className={`${isMobile ? 'fixed' : 'sticky'} top-0 left-0 right-0 z-50 w-full border-b border-white/10 bg-black/90 backdrop-blur-md supports-[backdrop-filter]:bg-black/70 ${isMobile ? 'pt-safe-top' : ''}`}>
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link href="/" className="text-lg font-semibold">Needix</Link>
         <div className="flex items-center gap-2">
           <DashboardLink />
-          {/* Hide Calendar button on mobile screens (show only in menu) */}
           <div className="hidden md:block">
             <CalendarLink />
           </div>
@@ -79,6 +48,7 @@ function UserStatusMenu() {
   const { data: session } = useSession();
   const { isPro } = useSubscriptionLimit();
   const [open, setOpen] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
   
   useEffect(() => {
     if (open) {
@@ -88,9 +58,18 @@ function UserStatusMenu() {
     }
   }, [open]);
 
-  function handleSignOut() {
+  function handleSignOutClick() {
     setOpen(false);
+    setShowSignOutModal(true);
+  }
+
+  function handleConfirmSignOut() {
+    setShowSignOutModal(false);
     window.location.href = '/api/auth/signout';
+  }
+
+  function handleCancelSignOut() {
+    setShowSignOutModal(false);
   }
   
   if (!session?.user) {
@@ -136,10 +115,43 @@ function UserStatusMenu() {
                 <LinkItem href="/#pricing" label={isPro ? "💎 Pricing" : "⭐ Upgrade to Pro"} onClick={() => setOpen(false)} />
                 <LinkItem href="mailto:needix2025@gmail.com" label="💬 Help / Feedback" onClick={() => setOpen(false)} />
                 {session?.user && (
-                  <button onClick={handleSignOut} className="rounded-xl border border-white/10 px-3 py-2 text-left text-white/90 hover:bg-white/10 mobile-touch-target">
+                  <button onClick={handleSignOutClick} className="rounded-xl border border-white/10 px-3 py-2 text-left text-white/90 hover:bg-white/10 mobile-touch-target">
                     🚪 Logout
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {showSignOutModal && (
+        <Portal>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+            <div className="bg-slate-900 border border-white/20 rounded-xl p-6 max-w-md w-full">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-yellow-400 text-2xl">👋</span>
+                <h3 className="text-xl font-bold text-white">Sign Out</h3>
+              </div>
+              
+              <p className="text-white/80 mb-6">
+                Are you sure you want to sign out? You'll need to sign in again to access your account.
+              </p>
+              
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleCancelSignOut}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmSignOut}
+                  className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 flex-1"
+                >
+                  Sign Out
+                </Button>
               </div>
             </div>
           </div>

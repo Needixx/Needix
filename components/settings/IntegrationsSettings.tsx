@@ -33,14 +33,12 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
     const checkGoogleConnection = async () => {
       if (session?.user) {
         try {
-          // Check Google connection
           const googleResponse = await fetch("/api/integrations/google/status");
           if (googleResponse.ok) {
             const { connected } = await googleResponse.json();
             updateIntegrations({ googleConnected: connected });
           }
 
-          // Check Plaid connection (for Pro users)
           if (isPro) {
             const plaidResponse = await fetch("/api/integrations/plaid/status");
             if (plaidResponse.ok) {
@@ -161,7 +159,6 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
 
     setLoading("stripe");
     try {
-      // Initialize Plaid Link for bank connections
       const response = await fetch("/api/integrations/plaid/create-link-token", {
         method: "POST",
       });
@@ -169,7 +166,6 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
       if (response.ok) {
         const { link_token } = await response.json();
         
-        // Load Plaid Link dynamically
         const script = document.createElement('script');
         script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
         script.onload = () => {
@@ -177,7 +173,6 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
             token: link_token,
             onSuccess: async (public_token: string, metadata: any) => {
               try {
-                // Exchange public token for access token
                 const exchangeResponse = await fetch("/api/integrations/plaid/exchange-token", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -190,7 +185,6 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
 
                 if (exchangeResponse.ok) {
                   toast("Bank account connected successfully!", "success");
-                  // Refresh integrations status
                   const statusResponse = await fetch("/api/integrations/plaid/status");
                   if (statusResponse.ok) {
                     const { connected } = await statusResponse.json();
@@ -270,9 +264,10 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
           <div className="flex items-start gap-3">
             <div className="text-blue-400 text-xl">💡</div>
             <div>
-              <h4 className="font-medium text-blue-300 mb-1">Two-Step Process</h4>
+              <h4 className="font-medium text-blue-300 mb-1">Integration Levels</h4>
               <p className="text-sm text-blue-200/80">
-                First connect your Google account, then you can scan your Gmail for subscriptions whenever you want.
+                • <strong>Free:</strong> Gmail Scanner - Connect Google and scan your inbox for subscriptions<br />
+                • <strong>Pro Only:</strong> Bank Transactions - Automatic detection from your bank account
               </p>
             </div>
           </div>
@@ -286,7 +281,12 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
               <span className="text-2xl">📧</span>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">Google Workspace</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-white">Google Workspace</h3>
+                <span className="bg-green-500/20 text-green-300 text-xs px-2 py-0.5 rounded-full font-medium border border-green-500/30">
+                  FREE
+                </span>
+              </div>
               <p className="text-sm text-white/60">Connect your account and scan Gmail for subscriptions</p>
             </div>
           </div>
@@ -388,12 +388,23 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
               <span className="text-2xl">🏦</span>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">Bank Accounts</h3>
-              <p className="text-sm text-white/60">Connect your bank to track subscription payments</p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-white">Bank Accounts</h3>
+                {!isPro && (
+                  <span className="bg-purple-500/20 text-purple-300 text-xs px-2 py-0.5 rounded-full font-medium border border-purple-500/30">
+                    PRO ONLY
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-white/60">
+                {isPro 
+                  ? "Connect your bank to track subscription payments" 
+                  : "Upgrade to Pro to connect your bank account"}
+              </p>
             </div>
           </div>
           
-          {integrations.plaidConnected ? (
+          {integrations.plaidConnected && isPro ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -417,15 +428,19 @@ const IntegrationsSettings: React.FC<IntegrationsSettingsProps> = ({ integration
             <div className="space-y-3">
               <Button 
                 onClick={handleStripeConnect} 
-                disabled={loading === "stripe"}
+                disabled={loading === "stripe" || !isPro}
                 variant={isPro ? "primary" : "secondary"} 
-                className="w-full"
+                className={`w-full ${!isPro ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {loading === "stripe" ? "Connecting..." : isPro ? "Connect Bank Account" : "Upgrade Required"}
+                {loading === "stripe" ? "Connecting..." : isPro ? "Connect Bank Account" : "🔒 Upgrade to Pro Required"}
               </Button>
-              {isPro && (
+              {isPro ? (
                 <p className="text-xs text-white/60 text-center">
                   Pro feature: Automatically detect subscription payments from your bank
+                </p>
+              ) : (
+                <p className="text-xs text-orange-400 text-center">
+                  ⭐ Upgrade to Pro to access bank transaction monitoring
                 </p>
               )}
             </div>

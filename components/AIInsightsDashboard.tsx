@@ -3,6 +3,9 @@
 
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/Toast";
+import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 
 interface Insight {
   type: string;
@@ -39,7 +42,6 @@ interface AIInsightsData {
   lastAnalyzed: string;
 }
 
-// Check if AI analysis is enabled
 const getAISettings = () => {
   try {
     const stored = localStorage.getItem("needix_ai");
@@ -50,12 +52,20 @@ const getAISettings = () => {
 };
 
 export default function AIInsightsDashboard() {
+  const { isPro } = useSubscriptionLimit();
   const [insights, setInsights] = useState<AIInsightsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
 
   const fetchInsights = async () => {
+    // PRO CHECK FIRST
+    if (!isPro) {
+      setError("AI Insights is a Pro feature. Upgrade to access!");
+      setLoading(false);
+      return;
+    }
+
     const aiSettings = getAISettings();
     
     if (!aiSettings.allowDataAccess) {
@@ -85,7 +95,7 @@ export default function AIInsightsDashboard() {
 
   useEffect(() => {
     fetchInsights();
-  }, []);
+  }, [isPro]);
 
   if (loading) {
     return (
@@ -101,18 +111,46 @@ export default function AIInsightsDashboard() {
   }
 
   if (error) {
+    const isProError = error.includes("Pro feature");
+    
     return (
-      <div className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/15 to-pink-500/10 backdrop-blur-sm p-8">
+      <div className={`rounded-2xl border backdrop-blur-sm p-8 ${
+        isProError 
+          ? 'border-purple-500/30 bg-gradient-to-br from-purple-500/15 to-cyan-500/10'
+          : 'border-red-500/20 bg-gradient-to-br from-red-500/15 to-pink-500/10'
+      }`}>
         <div className="text-center">
-          <div className="text-4xl mb-4">⚠️</div>
-          <h3 className="text-lg font-semibold text-white mb-2">AI Analysis Unavailable</h3>
+          <div className="text-4xl mb-4">{isProError ? '🔒' : '⚠️'}</div>
+          <h3 className="text-lg font-semibold text-white mb-2">
+            {isProError ? 'Pro Feature' : 'AI Analysis Unavailable'}
+          </h3>
           <p className="text-white/70 mb-4">{error}</p>
-          <button
-            onClick={fetchInsights}
-            className="px-4 py-2 bg-red-500/20 border border-red-500/30 text-white rounded-lg hover:bg-red-500/30 transition-all"
-          >
-            Try Again
-          </button>
+          
+          {isProError ? (
+            <div className="space-y-4">
+              <div className="bg-white/5 rounded-xl p-4 mb-4">
+                <h4 className="font-medium text-white mb-2">AI Insights includes:</h4>
+                <ul className="text-sm text-white/70 space-y-1 text-left max-w-md mx-auto">
+                  <li>• Personalized savings recommendations</li>
+                  <li>• Subscription optimization analysis</li>
+                  <li>• Spending pattern detection</li>
+                  <li>• Budget forecasting & alerts</li>
+                </ul>
+              </div>
+              <Link href="/#pricing">
+                <Button className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700">
+                  ⭐ Upgrade to Pro
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <button
+              onClick={fetchInsights}
+              className="px-4 py-2 bg-red-500/20 border border-red-500/30 text-white rounded-lg hover:bg-red-500/30 transition-all"
+            >
+              Try Again
+            </button>
+          )}
         </div>
       </div>
     );
