@@ -256,7 +256,7 @@ export default function DashboardPage() {
           <StatCard
             title="Total Monthly Spend"
             value={fmtCurrency(totalMonthlySpend)}
-            subtitle="All recurring costs"
+            subtitle="Total Cost"
             gradient="from-purple-700/15 to-purple-900/10"
             icon="🌸"
           />
@@ -270,7 +270,7 @@ export default function DashboardPage() {
           <StatCard
             title="Monthly Expenses"
             value={fmtCurrency(expenseTotals?.monthly ?? 0)}
-            subtitle={`${expenseTotals?.essential ? Math.round(expenseTotals.essential) : 0}% essential`}
+            subtitle={`${expenseTotals?.essential && expenseTotals?.monthly ? Math.round((expenseTotals.essential / expenseTotals.monthly) * 100) : 0}% essential`}
             gradient="from-green-700/15 to-green-900/10"
             icon="📊"
           />
