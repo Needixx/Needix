@@ -1,12 +1,11 @@
 // components/CalendarClient.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useOrders } from "@/lib/useOrders";
 import { useExpenses } from "@/lib/useExpenses";
 import { isMobileApp } from "@/lib/mobile-auth";
-import { useEffect } from "react";
 
 interface CalendarEvent {
   id: string;
@@ -127,13 +126,19 @@ export default function CalendarClient() {
 
   const calendarEvents = useMemo(() => {
     const events: CalendarEvent[] = [];
+    
+    // Get the start and end of the current month being viewed
+    const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
 
     if (filters.subscriptions) {
       subscriptions?.forEach(sub => {
         if (filters.essentialOnly && !sub.isEssential) return;
         
         const renewalDate = sub.nextBillingDate ? new Date(sub.nextBillingDate) : null;
-        if (renewalDate && renewalDate >= new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)) {
+        
+        // Show ALL items within the displayed month (past, present, and future)
+        if (renewalDate && renewalDate >= monthStart && renewalDate <= monthEnd) {
           events.push({
             id: `sub-${sub.id}`,
             title: sub.name,
@@ -150,7 +155,9 @@ export default function CalendarClient() {
       orders?.forEach(order => {
         const orderDate = order.scheduledDate ? new Date(order.scheduledDate) : 
                          order.nextDate ? new Date(order.nextDate) : null;
-        if (orderDate && orderDate >= new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)) {
+        
+        // Show ALL items within the displayed month (past, present, and future)
+        if (orderDate && orderDate >= monthStart && orderDate <= monthEnd) {
           events.push({
             id: `order-${order.id}`,
             title: order.name,
@@ -166,7 +173,9 @@ export default function CalendarClient() {
       expenses?.forEach(expense => {
         const expenseDate = expense.nextPaymentDate ? new Date(expense.nextPaymentDate) :
                            expense.dueDate ? new Date(expense.dueDate) : null;
-        if (expenseDate && expenseDate >= new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)) {
+        
+        // Show ALL items within the displayed month (past, present, and future)
+        if (expenseDate && expenseDate >= monthStart && expenseDate <= monthEnd) {
           events.push({
             id: `expense-${expense.id}`,
             title: expense.name,
@@ -180,6 +189,35 @@ export default function CalendarClient() {
 
     return events;
   }, [subscriptions, orders, expenses, filters, currentDate]);
+
+  // Calculate current/active counts for filter buttons (only today and future)
+  const currentCounts = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const activeSubscriptions = subscriptions?.filter(sub => {
+      const date = sub.nextBillingDate ? new Date(sub.nextBillingDate) : null;
+      return date && date >= today;
+    }).length || 0;
+    
+    const activeOrders = orders?.filter(order => {
+      const date = order.scheduledDate ? new Date(order.scheduledDate) : 
+                   order.nextDate ? new Date(order.nextDate) : null;
+      return date && date >= today;
+    }).length || 0;
+    
+    const activeExpenses = expenses?.filter(expense => {
+      const date = expense.nextPaymentDate ? new Date(expense.nextPaymentDate) :
+                   expense.dueDate ? new Date(expense.dueDate) : null;
+      return date && date >= today;
+    }).length || 0;
+    
+    return {
+      subscriptions: activeSubscriptions,
+      orders: activeOrders,
+      expenses: activeExpenses,
+    };
+  }, [subscriptions, orders, expenses]);
 
   const getCalendarDays = () => {
     const year = currentDate.getFullYear();
@@ -242,87 +280,93 @@ export default function CalendarClient() {
     .reduce((total, event) => total + event.amount, 0);
 
   return (
-    <div className={`${isMobile ? 'p-4' : 'p-6'} space-y-6`}>
+    <div className={`${isMobile ? 'p-4' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10'} space-y-6`}>
       {/* Header */}
-      <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700 p-4 md:p-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-white mb-2">Financial Calendar</h1>
-              <p className="text-gray-300 text-sm md:text-base">
-                <span className="text-green-400 font-semibold">${monthTotal.toFixed(0)}</span> total this month
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigateMonth(-1)}
-                className="p-2 rounded-lg bg-slate-700/50 border border-slate-600 text-white hover:bg-slate-600/50 transition-all mobile-touch-target"
-              >
-                ←
-              </button>
-              <h2 className="text-lg md:text-xl font-semibold text-white min-w-[160px] text-center">
-                {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </h2>
-              <button
-                onClick={() => navigateMonth(1)}
-                className="p-2 rounded-lg bg-slate-700/50 border border-slate-600 text-white hover:bg-slate-600/50 transition-all mobile-touch-target"
-              >
-                →
-              </button>
-            </div>
-          </div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold text-white`}>Financial Calendar</h1>
+          <p className="text-gray-400 text-sm mt-1">
+            Track upcoming subscriptions, orders, and expenses
+          </p>
+        </div>
+        
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2">
+          <div className="text-sm text-gray-400">Month Total</div>
+          <div className="text-2xl font-bold text-white">${monthTotal.toFixed(2)}</div>
+        </div>
+      </div>
+
+      {/* Month Navigation */}
+      <div className="flex items-center justify-between bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700 p-4">
+        <button
+          onClick={() => navigateMonth(-1)}
+          className="p-2 hover:bg-slate-700 rounded-lg transition-colors mobile-touch-target"
+        >
+          <span className="text-white text-xl">←</span>
+        </button>
+        
+        <h2 className="text-xl font-semibold text-white">
+          {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </h2>
+        
+        <button
+          onClick={() => navigateMonth(1)}
+          className="p-2 hover:bg-slate-700 rounded-lg transition-colors mobile-touch-target"
+        >
+          <span className="text-white text-xl">→</span>
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700 p-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, subscriptions: !prev.subscriptions }))}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm mobile-touch-target ${
+              filters.subscriptions
+                ? 'bg-blue-500/20 border-blue-500 text-blue-300'
+                : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
+            }`}
+          >
+            <div className="w-3 h-3 rounded bg-blue-500"></div>
+            <span className="font-medium">Subscriptions ({currentCounts.subscriptions})</span>
+          </button>
           
-          {/* Mobile-friendly Filters */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilters(prev => ({ ...prev, subscriptions: !prev.subscriptions }))}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm mobile-touch-target ${
-                filters.subscriptions
-                  ? 'bg-blue-500/20 border-blue-500 text-blue-300'
-                  : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
-              }`}
-            >
-              <div className="w-3 h-3 rounded bg-blue-500"></div>
-              <span className="font-medium">Subs ({subscriptions?.length || 0})</span>
-            </button>
-            
-            <button
-              onClick={() => setFilters(prev => ({ ...prev, orders: !prev.orders }))}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm mobile-touch-target ${
-                filters.orders
-                  ? 'bg-green-500/20 border-green-500 text-green-300'
-                  : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
-              }`}
-            >
-              <div className="w-3 h-3 rounded bg-green-500"></div>
-              <span className="font-medium">Orders ({orders?.length || 0})</span>
-            </button>
-            
-            <button
-              onClick={() => setFilters(prev => ({ ...prev, expenses: !prev.expenses }))}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm mobile-touch-target ${
-                filters.expenses
-                  ? 'bg-purple-500/20 border-purple-500 text-purple-300'
-                  : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
-              }`}
-            >
-              <div className="w-3 h-3 rounded bg-purple-500"></div>
-              <span className="font-medium">Expenses ({expenses?.length || 0})</span>
-            </button>
-            
-            <button
-              onClick={() => setFilters(prev => ({ ...prev, essentialOnly: !prev.essentialOnly }))}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm mobile-touch-target ${
-                filters.essentialOnly
-                  ? 'bg-red-500/20 border-red-500 text-red-300'
-                  : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
-              }`}
-            >
-              <div className="w-3 h-3 rounded bg-red-500"></div>
-              <span className="font-medium">Essential</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, orders: !prev.orders }))}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm mobile-touch-target ${
+              filters.orders
+                ? 'bg-green-500/20 border-green-500 text-green-300'
+                : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
+            }`}
+          >
+            <div className="w-3 h-3 rounded bg-green-500"></div>
+            <span className="font-medium">Orders ({currentCounts.orders})</span>
+          </button>
+          
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, expenses: !prev.expenses }))}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm mobile-touch-target ${
+              filters.expenses
+                ? 'bg-purple-500/20 border-purple-500 text-purple-300'
+                : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
+            }`}
+          >
+            <div className="w-3 h-3 rounded bg-purple-500"></div>
+            <span className="font-medium">Expenses ({currentCounts.expenses})</span>
+          </button>
+          
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, essentialOnly: !prev.essentialOnly }))}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm mobile-touch-target ${
+              filters.essentialOnly
+                ? 'bg-red-500/20 border-red-500 text-red-300'
+                : 'bg-slate-700/50 border-slate-600 text-gray-400 hover:border-slate-500'
+            }`}
+          >
+            <div className="w-3 h-3 rounded bg-red-500"></div>
+            <span className="font-medium">Essential</span>
+          </button>
         </div>
       </div>
 
@@ -353,43 +397,45 @@ export default function CalendarClient() {
                   day.isCurrentMonth
                     ? 'bg-slate-700/50 border-slate-600'
                     : 'bg-slate-800/30 border-slate-700'
-                } ${isToday ? 'ring-2 ring-orange-400' : ''} ${
+                } ${isToday ? 'ring-2 ring-blue-500' : ''} ${
                   hasEvents ? 'cursor-pointer hover:bg-slate-600/50' : ''
                 }`}
               >
-                <div className={`text-xs md:text-sm font-medium mb-1 md:mb-2 ${
+                <div className={`text-xs md:text-sm font-medium mb-1 ${
                   day.isCurrentMonth ? 'text-white' : 'text-gray-500'
-                }`}>
+                } ${isToday ? 'text-blue-400' : ''}`}>
                   {day.date.getDate()}
                 </div>
                 
-                {dayTotal > 0 && (
-                  <div className="text-xs text-green-400 font-semibold mb-1 md:mb-2">
-                    ${isMobile ? dayTotal.toFixed(0) : dayTotal.toFixed(0)}
+                {hasEvents && (
+                  <div className="space-y-1">
+                    {dayEvents.slice(0, isMobile ? 2 : 3).map((event, i) => (
+                      <div
+                        key={i}
+                        className={`text-xs p-1 rounded ${
+                          event.type === 'subscription'
+                            ? 'bg-blue-500/20 text-blue-300'
+                            : event.type === 'order'
+                            ? 'bg-green-500/20 text-green-300'
+                            : 'bg-purple-500/20 text-purple-300'
+                        }`}
+                      >
+                        <div className="truncate">{event.title}</div>
+                        {!isMobile && <div className="font-semibold">${event.amount.toFixed(2)}</div>}
+                      </div>
+                    ))}
+                    {dayEvents.length > (isMobile ? 2 : 3) && (
+                      <div className="text-xs text-gray-400 text-center">
+                        +{dayEvents.length - (isMobile ? 2 : 3)} more
+                      </div>
+                    )}
+                    {dayTotal > 0 && !isMobile && (
+                      <div className="text-xs font-bold text-white mt-1 pt-1 border-t border-gray-600">
+                        ${dayTotal.toFixed(2)}
+                      </div>
+                    )}
                   </div>
                 )}
-                
-                <div className="space-y-1">
-                  {dayEvents.slice(0, isMobile ? 1 : 2).map((event, eventIndex) => (
-                    <div
-                      key={`${event.id}-${eventIndex}`}
-                      className={`text-xs p-1 rounded truncate ${
-                        event.type === 'subscription'
-                          ? 'bg-blue-500/20 text-blue-300'
-                          : event.type === 'order'
-                          ? 'bg-green-500/20 text-green-300'
-                          : 'bg-purple-500/20 text-purple-300'
-                      }`}
-                    >
-                      {isMobile ? event.title.substring(0, 6) + (event.title.length > 6 ? '...' : '') : event.title}
-                    </div>
-                  ))}
-                  {dayEvents.length > (isMobile ? 1 : 2) && (
-                    <div className="text-xs text-gray-400 font-medium">
-                      +{dayEvents.length - (isMobile ? 1 : 2)} more
-                    </div>
-                  )}
-                </div>
               </div>
             );
           })}
