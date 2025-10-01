@@ -5,10 +5,13 @@ import { useMemo, useEffect, useState, type ReactNode } from "react";
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useOrders } from "@/lib/useOrders";
 import { useExpenses } from "@/lib/useExpenses";
+import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import { fmtCurrency } from "@/lib/format";
 import AIAssist from "@/components/AIAssist";
 import Link from "next/link";
 import AuroraBackground from "@/components/AuroraBackground";
+import { useToast } from "@/components/ui/Toast";
+import GmailScannerDialog from "@/components/settings/GmailScannerDialog";
 
 // Date helpers
 function startOfMonth(d = new Date()) {
@@ -88,6 +91,7 @@ function Panel({ title, children }: { title: string; children?: ReactNode }) {
 }
 
 export default function DashboardPage() {
+  const { isPro } = useSubscriptionLimit();
   const {
     items: subs,
     totals: subTotals,
@@ -106,6 +110,11 @@ export default function DashboardPage() {
     refresh: refreshExpenses,
   } = useExpenses();
   const [_refreshKey, setRefreshKey] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [integrations, setIntegrations] = useState({ googleConnected: false, plaidConnected: false });
+  const [loadingIntegration, setLoadingIntegration] = useState<string | null>(null);
+  const [showGmailScanner, setShowGmailScanner] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     const handleDataRefresh = () => {
@@ -120,6 +129,137 @@ export default function DashboardPage() {
     return () =>
       window.removeEventListener("needix-data-refresh", handleDataRefresh);
   }, [refreshSubs, refreshOrders, refreshExpenses]);
+
+  useEffect(() => {
+    if (isPro) {
+      checkIntegrations();
+    }
+  }, [isPro]);
+
+  const checkIntegrations = async () => {
+    try {
+      const googleResponse = await fetch("/api/integrations/google/status");
+      if (googleResponse.ok) {
+        const { connected } = await googleResponse.json();
+        setIntegrations(prev => ({ ...prev, googleConnected: connected }));
+      }
+
+      const plaidResponse = await fetch("/api/integrations/plaid/status");
+      if (plaidResponse.ok) {
+        const { connected } = await plaidResponse.json();
+        setIntegrations(prev => ({ ...prev, plaidConnected: connected }));
+      }
+    } catch (error) {
+      console.error("Error checking integrations:", error);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    setLoadingIntegration("google");
+    try {
+      const popup = window.open(
+        "/api/integrations/google/link",
+        "google-oauth",
+        "width=500,height=600,scrollbars=yes,resizable=yes"
+      );
+      if (popup) {
+        const checkClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkClosed);
+            setLoadingIntegration(null);
+            checkIntegrations();
+          }
+        }, 1000);
+      } else {
+        window.location.href = "/api/integrations/google/link";
+      }
+    } catch (error) {
+      console.error("Error connecting Google:", error);
+      toast("Failed to connect Google account", "error");
+      setLoadingIntegration(null);
+    }
+  };
+
+  const handleScanGmail = () => {
+    console.log("=== SCAN GMAIL CLICKED ===");
+    console.log("Current showGmailScanner state:", showGmailScanner);
+    console.log("Setting showGmailScanner to true");
+    setShowGmailScanner(true);
+    console.log("After setState, showGmailScanner:", showGmailScanner);
+  };
+
+  const handleGmailScanComplete = (importedCount: number) => {
+    console.log("Gmail scan complete, imported:", importedCount);
+    toast(`Successfully imported ${importedCount} items from Gmail!`, "success");
+    setShowGmailScanner(false);
+  };
+
+  const handleConnectPlaid = async () => {
+    setLoadingIntegration("plaid");
+    try {
+      const response = await fetch("/api/integrations/plaid/create-link-token", {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        const { link_token } = await response.json();
+        
+        const script = document.createElement('script');
+        script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+        script.onload = () => {
+          const handler = (window as any).Plaid.create({
+            token: link_token,
+            onSuccess: async (public_token: string, metadata: any) => {
+              try {
+                const exchangeResponse = await fetch("/api/integrations/plaid/exchange-token", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ 
+                    public_token,
+                    institution: metadata.institution,
+                    accounts: metadata.accounts 
+                  }),
+                });
+
+                if (exchangeResponse.ok) {
+                  toast("Bank account connected successfully!", "success");
+                  checkIntegrations();
+                } else {
+                  throw new Error("Failed to connect bank account");
+                }
+              } catch (error) {
+                console.error("Error exchanging token:", error);
+                toast("Failed to complete bank connection", "error");
+              }
+              setLoadingIntegration(null);
+            },
+            onExit: (err: any, metadata: any) => {
+              if (err != null) {
+                console.error("Plaid Link error:", err);
+                toast("Bank connection cancelled or failed", "error");
+              }
+              setLoadingIntegration(null);
+            },
+          });
+          
+          handler.open();
+        };
+        document.head.appendChild(script);
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to initialize bank connection");
+      }
+    } catch (error) {
+      console.error("Error connecting bank:", error);
+      toast("Failed to connect bank account", "error");
+      setLoadingIntegration(null);
+    }
+  };
+
+  const handleAISuccess = () => {
+    setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 1500);
+  };
 
   const { ordersThisMonthTotal, totalMonthlySpend } = useMemo(() => {
     const now = new Date();
@@ -140,73 +280,26 @@ export default function DashboardPage() {
       return d && inRange(d, monthStart, monthEnd) ? sum + o.amount : sum;
     }, 0);
 
-    const totalSpend = (subTotals?.monthly || 0) + (expenseTotals?.monthly || 0);
-    return { ordersThisMonthTotal: ordersTotal, totalMonthlySpend: totalSpend };
+    return {
+      ordersThisMonthTotal: ordersTotal,
+      totalMonthlySpend: (subTotals?.monthly ?? 0) + (expenseTotals?.monthly ?? 0),
+    };
   }, [orders, subTotals, expenseTotals]);
 
-  // Calculate weekly spending
-  const weeklySpending = useMemo(() => {
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-
-    // Weekly subscriptions (use price, not amount)
-    const weeklySubTotal = subs.reduce((sum, s) => {
-      if (!s.nextBillingDate) return sum;
-      const nextBilling = new Date(`${s.nextBillingDate}T00:00:00`);
-      if (nextBilling >= startOfWeek && nextBilling <= endOfWeek) {
-        return sum + (s.price || 0);
-      }
-      return sum;
-    }, 0);
-
-    // Weekly orders
-    const weeklyOrderTotal = orders.reduce((sum, o) => {
-      const orderType = o.type as 'one-time' | 'recurring';
-      const orderDate = orderType === 'recurring' && o.nextDate
-        ? new Date(`${o.nextDate}T00:00:00`)
-        : o.scheduledDate
-        ? new Date(`${o.scheduledDate}T00:00:00`)
-        : null;
-      
-      if (orderDate && orderDate >= startOfWeek && orderDate <= endOfWeek) {
-        return sum + (o.amount || 0);
-      }
-      return sum;
-    }, 0);
-
-    // Weekly expenses (monthly / 4 weeks)
-    const weeklyExpenseTotal = (expenseTotals?.monthly || 0) / 4;
-
-    return weeklySubTotal + weeklyOrderTotal + weeklyExpenseTotal;
-  }, [subs, orders, expenseTotals]);
-
-  const isLoading = subsLoading || ordersLoading || expensesLoading;
-
-  const handleAISuccess = () => {
-    const tasks: Array<Promise<unknown>> = [];
-    if (typeof refreshSubs === "function") tasks.push(refreshSubs());
-    if (typeof refreshOrders === "function") tasks.push(refreshOrders());
-    if (typeof refreshExpenses === "function") tasks.push(refreshExpenses());
-    void Promise.allSettled(tasks);
-    setRefreshKey((prev) => prev + 1);
-  };
-
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
       <AuroraBackground />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
-        <header className="rounded-3xl border border-white/0 bg-white/[0.03] backdrop-blur-sm p-6 md:p-8 shadow-lg">
-          <h1 className="text-3xl md:text-4xl font-bold text-white">Financial Dashboard</h1>
-          <p className="mt-2 text-white/70">
-            Your complete financial overview — track subscriptions, orders, and expenses all in one place.
-          </p>
+      <div className="relative z-10 mx-auto max-w-7xl space-y-6 px-4 py-10 sm:px-6">
+        <header className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight text-white">Dashboard</h1>
+              <p className="mt-2 text-base text-white/60">
+                Welcome back! Here's your financial overview.
+              </p>
+            </div>
+          </div>
 
           {/* Action cards */}
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -244,8 +337,8 @@ export default function DashboardPage() {
 
             <div className="rounded-xl border border-white/0 bg-gradient-to-br from-orange-500/12 to-amber-500/10 backdrop-blur-xl p-3 shadow">
               <AIAssist
-                buttonLabel=" Add with AI"
-                className="w-full justify-center border border-white/0 bg-white/[0.02] hover:bg-white/[0.05]"
+                buttonLabel="Add with AI"
+                className="w-full h-full flex items-center justify-center gap-2 border-0 bg-transparent hover:bg-white/[0.05] text-white rounded-xl py-3"
                 onSuccess={handleAISuccess}
               />
             </div>
@@ -271,160 +364,21 @@ export default function DashboardPage() {
             title="Monthly Expenses"
             value={fmtCurrency(expenseTotals?.monthly ?? 0)}
             subtitle={`${expenseTotals?.essential && expenseTotals?.monthly ? Math.round((expenseTotals.essential / expenseTotals.monthly) * 100) : 0}% essential`}
-            gradient="from-green-700/15 to-green-900/10"
-            icon="📊"
+            gradient="from-emerald-700/15 to-emerald-900/10"
+            icon="💸"
           />
           <StatCard
-            title="Orders This Month"
+            title="Upcoming Orders"
             value={fmtCurrency(ordersThisMonthTotal)}
-            subtitle={`${orders.filter((o) => o.status === "active").length} tracked`}
-            gradient="from-cyan-700/15 to-cyan-900/10"
+            subtitle="This month"
+            gradient="from-sky-700/15 to-sky-900/10"
             icon="📦"
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Upcoming This Week */}
-          <Panel title="Upcoming This Week">
-            {(() => {
-              const now = new Date();
-              const startOfWeek = new Date(now);
-              startOfWeek.setDate(now.getDate() - now.getDay());
-              startOfWeek.setHours(0, 0, 0, 0);
-              
-              const endOfWeek = new Date(startOfWeek);
-              endOfWeek.setDate(startOfWeek.getDate() + 6);
-              endOfWeek.setHours(23, 59, 59, 999);
-
-              // Get subscriptions due this week
-              const weeklySubscriptions = subs.filter(s => {
-                if (!s.nextBillingDate) return false;
-                const nextBilling = new Date(`${s.nextBillingDate}T00:00:00`);
-                return nextBilling >= startOfWeek && nextBilling <= endOfWeek;
-              });
-
-              // Get orders scheduled this week
-              const weeklyOrders = orders.filter(o => {
-                const orderType = o.type as 'one-time' | 'recurring';
-                const orderDate = orderType === 'recurring' && o.nextDate
-                  ? new Date(`${o.nextDate}T00:00:00`)
-                  : o.scheduledDate
-                  ? new Date(`${o.scheduledDate}T00:00:00`)
-                  : null;
-                
-                return orderDate && orderDate >= startOfWeek && orderDate <= endOfWeek;
-              });
-
-              // Get expenses due this week
-              const weeklyExpenses = expenses.filter(e => {
-                if (!e.isRecurring) return false;
-                const expenseDate = e.nextPaymentDate || e.dueDate;
-                if (!expenseDate) return false;
-                const date = new Date(expenseDate);
-                return date >= startOfWeek && date <= endOfWeek;
-              });
-
-              const hasItems = weeklySubscriptions.length > 0 || weeklyOrders.length > 0 || weeklyExpenses.length > 0;
-
-              if (!hasItems) {
-                return (
-                  <div className="text-center py-8 text-white/60">
-                    <p className="text-lg">🎉 No items due this week</p>
-                    <p className="text-sm mt-2">Enjoy your week!</p>
-                  </div>
-                );
-              }
-
-              return (
-                <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                  {/* Subscriptions */}
-                  {weeklySubscriptions.map((sub) => (
-                    <div key={`sub-${sub.id}`} className="flex items-center justify-between rounded-xl bg-purple-500/10 border border-purple-500/20 p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-purple-400"></div>
-                        <div>
-                          <p className="text-white/90 font-medium">{sub.name}</p>
-                          <p className="text-xs text-white/50">
-                            {sub.nextBillingDate ? new Date(`${sub.nextBillingDate}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date'}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="font-semibold text-purple-300">{fmtCurrency(sub.price || 0)}</span>
-                    </div>
-                  ))}
-
-                  {/* Orders */}
-                  {weeklyOrders.map((order) => (
-                    <div key={`order-${order.id}`} className="flex items-center justify-between rounded-xl bg-blue-500/10 border border-blue-500/20 p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                        <div>
-                          <p className="text-white/90 font-medium">{order.name}</p>
-                          <p className="text-xs text-white/50">
-                            {(() => {
-                              const orderType = order.type as 'one-time' | 'recurring';
-                              const orderDate = orderType === 'recurring' && order.nextDate
-                                ? new Date(`${order.nextDate}T00:00:00`)
-                                : order.scheduledDate
-                                ? new Date(`${order.scheduledDate}T00:00:00`)
-                                : null;
-                              return orderDate ? orderDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date';
-                            })()}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="font-semibold text-blue-300">{fmtCurrency(order.amount || 0)}</span>
-                    </div>
-                  ))}
-
-                  {/* Expenses */}
-                  {weeklyExpenses.map((expense) => (
-                    <div key={`expense-${expense.id}`} className="flex items-center justify-between rounded-xl bg-green-500/10 border border-green-500/20 p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                        <div>
-                          <p className="text-white/90 font-medium">{expense.name}</p>
-                          <p className="text-xs text-white/50">
-                            {new Date(expense.nextPaymentDate || expense.dueDate || '').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="font-semibold text-green-300">{fmtCurrency(expense.amount || 0)}</span>
-                    </div>
-                  ))}
-
-                  {/* Total */}
-                  {hasItems && (
-                    <div className="pt-3 mt-3 border-t border-white/10">
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/60 text-sm">Total This Week</span>
-                        <span className="text-white font-bold text-lg">
-                          {fmtCurrency(
-                            weeklySubscriptions.reduce((sum, s) => sum + (s.price || 0), 0) +
-                            weeklyOrders.reduce((sum, o) => sum + (o.amount || 0), 0) +
-                            weeklyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </Panel>
-
-          {/* Financial Insights */}
-          <Panel title="Financial Insights">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Panel title="Overview">
             <div className="space-y-3">
-              {/* Weekly Spending */}
-              <div className="rounded-lg bg-white/[0.04] border border-white/0 px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-white/50">Weekly Spending</p>
-                <p className="mt-1 text-lg font-semibold text-white">
-                  {fmtCurrency(weeklySpending)}
-                </p>
-                <p className="text-xs text-white/40 mt-1">Expected for this week</p>
-              </div>
-
               {/* Monthly Spending */}
               <div className="rounded-lg bg-white/[0.04] border border-white/0 px-4 py-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">Monthly Spending</p>
@@ -475,7 +429,89 @@ export default function DashboardPage() {
             </div>
           </Panel>
         </div>
+
+        {/* Integration Connections - Pro Only */}
+        {isPro && (
+          <Panel title="🔗 Integrations">
+            <div className="space-y-4">
+              {/* Google/Gmail Connection */}
+              <div className="flex items-center justify-between p-4 rounded-lg bg-white/[0.04] border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                    <span className="text-xl">📧</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">Google Workspace</h4>
+                    <p className="text-xs text-white/60">
+                      {integrations.googleConnected 
+                        ? "Connected - Scan Gmail for subscriptions" 
+                        : "Connect to scan your Gmail"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {integrations.googleConnected ? (
+                    <button
+                      onClick={handleScanGmail}
+                      disabled={loadingIntegration === "google"}
+                      className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-medium transition-all disabled:opacity-50"
+                    >
+                      {loadingIntegration === "google" ? "Processing..." : "Scan Gmail"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleConnectGoogle}
+                      disabled={loadingIntegration === "google"}
+                      className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-medium transition-all disabled:opacity-50"
+                    >
+                      {loadingIntegration === "google" ? "Connecting..." : "Connect Google"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Plaid Bank Connection */}
+              <div className="flex items-center justify-between p-4 rounded-lg bg-white/[0.04] border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+                    <span className="text-xl">🏦</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">Bank Account</h4>
+                    <p className="text-xs text-white/60">
+                      {integrations.plaidConnected 
+                        ? "Connected - Auto-detect transactions" 
+                        : "Connect your bank via Plaid"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {integrations.plaidConnected ? (
+                    <span className="px-3 py-2 bg-green-500/20 text-green-300 rounded-lg text-sm font-medium border border-green-500/30">
+                      ✓ Connected
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleConnectPlaid}
+                      disabled={loadingIntegration === "plaid"}
+                      className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white text-sm font-medium transition-all disabled:opacity-50"
+                    >
+                      {loadingIntegration === "plaid" ? "Connecting..." : "Connect Bank"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Panel>
+        )}
       </div>
+
+      {/* >>> Added dialog mount <<< */}
+      <GmailScannerDialog
+        isOpen={showGmailScanner}
+        onClose={() => setShowGmailScanner(false)}
+        onComplete={handleGmailScanComplete}
+      />
 
       {isLoading && (
         <div className="fixed top-4 right-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg px-4 py-2">
@@ -486,5 +522,6 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+    
   );
 }

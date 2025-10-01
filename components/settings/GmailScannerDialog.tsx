@@ -1,7 +1,8 @@
 // components/settings/GmailScannerDialog.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 
@@ -9,7 +10,7 @@ interface DetectedItem {
   id: string;
   type: "subscription" | "order" | "expense";
   name: string;
-  amount: number | null; // Allow null for orders without prices
+  amount: number | null;
   currency: string;
   category: string;
   interval?: string;
@@ -19,7 +20,7 @@ interface DetectedItem {
   confidence: number;
   emailSubject: string;
   selected: boolean;
-  description?: string; // Add description field
+  description?: string;
 }
 
 interface GmailScannerDialogProps {
@@ -38,13 +39,18 @@ export default function GmailScannerDialog({
 }: GmailScannerDialogProps) {
   const rawToast = useToast();
   const toast: ToastFn = (m, v) => rawToast(m, v);
+  const [mounted, setMounted] = useState(false);
 
   const [isScanning, setIsScanning] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [detectedItems, setDetectedItems] = useState<DetectedItem[]>([]);
   const [scanComplete, setScanComplete] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const handleScan = async () => {
     setIsScanning(true);
@@ -151,9 +157,9 @@ export default function GmailScannerDialog({
     return acc;
   }, {} as Record<string, number>);
 
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900/95 backdrop-blur-sm border border-white/20 rounded-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+  const dialogContent = (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-white/20 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
         <div className="p-6 border-b border-white/10">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-2xl font-bold text-white">🔍 Gmail Financial Scanner</h2>
@@ -187,7 +193,6 @@ export default function GmailScannerDialog({
                 onClick={handleScan}
                 disabled={isScanning}
                 variant="primary"
-                className="px-8 py-3"
               >
                 {isScanning ? (
                   <>
@@ -201,7 +206,6 @@ export default function GmailScannerDialog({
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Summary */}
               <div className="bg-white/5 rounded-xl p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">📊 Scan Results</h3>
                 <div className="grid grid-cols-3 gap-6 mb-6">
@@ -241,7 +245,6 @@ export default function GmailScannerDialog({
                 </div>
               </div>
 
-              {/* Items List */}
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {detectedItems.map((item) => (
                   <div
@@ -279,7 +282,7 @@ export default function GmailScannerDialog({
                             {item.amount !== null ? (
                               `${item.currency} $${item.amount.toFixed(2)}`
                             ) : (
-                              <span className="text-yellow-400">Price to be confirmed</span>
+                              <span className="text-yellow-400">Price TBD</span>
                             )}
                           </span>
                           <span className="bg-white/10 px-2 py-1 rounded">
@@ -290,23 +293,7 @@ export default function GmailScannerDialog({
                               Every {item.interval}
                             </span>
                           )}
-                          {item.vendor && (
-                            <span className="text-blue-300">
-                              from {item.vendor}
-                            </span>
-                          )}
-                          {item.date && (
-                            <span className="text-green-300">
-                              {new Date(item.date).toLocaleDateString()}
-                            </span>
-                          )}
                         </div>
-                        
-                        {item.description && (
-                          <p className="text-sm text-white/60 mb-2">
-                            {item.description}
-                          </p>
-                        )}
                         
                         <p className="text-xs text-white/50 truncate">
                           📧 {item.emailSubject}
@@ -323,7 +310,6 @@ export default function GmailScannerDialog({
                   <h3 className="text-xl font-semibold text-white mb-3">No Items Found</h3>
                   <p className="text-white/60 max-w-md mx-auto">
                     We didn't find any subscription receipts, orders, or expenses in your recent Gmail.
-                    Try connecting more email accounts or check if you have subscription emails in other folders.
                   </p>
                 </div>
               )}
@@ -364,4 +350,6 @@ export default function GmailScannerDialog({
       </div>
     </div>
   );
+
+  return createPortal(dialogContent, document.body);
 }
