@@ -85,49 +85,51 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Futuristic Purple/Pink Background - Toned Down */}
+      {/* Background */}
       <div className="fixed inset-0 bg-black -z-10" />
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900 -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-purple-500/8 via-transparent to-transparent -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-pink-500/8 via-transparent to-transparent -z-10" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-violet-500/4 to-transparent -z-10" />
-
-      <main className="relative mx-auto max-w-6xl px-4 py-10">
+      
+      <div className="relative z-10 mx-auto max-w-6xl px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold text-white">Your Subscriptions</h1>
-          <p className="text-white/70">Track and manage all your recurring payments</p>
-          {!isPro && (
-            <p className="text-purple-300 text-sm mt-1">
-              Using {items.length} of {subscriptionLimit} free subscriptions
+          <div className="bg-gradient-to-r from-purple-500/15 via-pink-500/10 to-fuchsia-500/15 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-fuchsia-300 bg-clip-text text-transparent mb-2">
+              📺 Your Subscriptions
+            </h1>
+            <p className="text-white/70">
+              Track and manage all your recurring payments in one place
             </p>
-          )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm border border-purple-500/30">
+                {items.length} Active
+              </span>
+              <span className="px-3 py-1 bg-pink-500/20 text-pink-300 rounded-full text-sm border border-pink-500/30">
+                {fmtCurrency(totals.monthly)}/month
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Upgrade Banner for Free Users */}
         {!isPro && (
-          <div className="mb-6 rounded-2xl border border-purple-400/20 bg-gradient-to-r from-purple-400/8 to-pink-400/8 backdrop-blur-sm p-6">
+          <div className="mb-6 rounded-xl border border-purple-400/20 bg-gradient-to-r from-purple-400/8 to-pink-400/8 backdrop-blur-sm p-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent mb-2">
-                  📺 Free Plan - Subscription Tracking
+                <h3 className="text-lg font-semibold text-purple-300 mb-2">
+                  Free Plan
                 </h3>
-                <p className="text-white/80 mb-2">Track up to 2 subscriptions with basic features.</p>
-                <div className="text-sm text-white/60 mb-3">
+                <p className="text-white/70 mb-2">Track up to 2 subscriptions with basic features.</p>
+                <div className="text-sm text-white/60">
                   Currently using{" "}
                   <span className="font-semibold text-purple-300">
                     {items.length} of {subscriptionLimit}
                   </span>{" "}
                   free subscription slots
                 </div>
-                <div className="text-sm text-purple-300">
-                  ⭐ Upgrade for unlimited subscriptions, price alerts &amp; more!
-                </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <UpgradeButton className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-semibold transform hover:scale-105 transition-all" />
-                <div className="text-xs text-center text-white/50">30-day money back guarantee</div>
-              </div>
+              <UpgradeButton className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+                Upgrade to Pro
+              </UpgradeButton>
             </div>
           </div>
         )}
@@ -167,7 +169,7 @@ export default function SubscriptionsPage() {
           {canAddSubscription ? (
             <button
               onClick={() => setShowAddDialog(true)}
-              className="rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-semibold text-white shadow-lg hover:from-purple-400 hover:to-pink-400 transition-all transform hover:scale-105"
+              className="rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-semibold text-white shadow-lg hover:from-purple-600 hover:to-pink-600 transition-all"
             >
               + Add Subscription
             </button>
@@ -175,8 +177,7 @@ export default function SubscriptionsPage() {
             <div className="flex items-center gap-2">
               <Button
                 disabled
-                className="opacity-50 cursor-not-allowed bg-gray-600"
-                title="Free plan limit reached - upgrade to Pro for unlimited subscriptions"
+                className="opacity-50 cursor-not-allowed"
               >
                 Add Subscription (Limit Reached)
               </Button>
@@ -195,7 +196,7 @@ export default function SubscriptionsPage() {
         </div>
 
         {/* Subscriptions Table */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden">
+        <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden">
           <SubscriptionTable items={items} onDelete={handleDelete} onEdit={handleEdit} />
         </div>
 
@@ -230,7 +231,7 @@ export default function SubscriptionsPage() {
             onUpdate={handleUpdate}
           />
         )}
-      </main>
+      </div>
     </div>
   );
 }

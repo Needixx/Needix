@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx
 "use client";
 
 import { useMemo, useEffect, useState, type ReactNode } from "react";
@@ -163,11 +164,11 @@ export default function DashboardPage() {
             Your complete financial overview — track subscriptions, orders, and expenses all in one place.
           </p>
 
-          {/* Action cards: Subscriptions, Orders, Expenses, Add with AI (swapped order) */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Action cards: Subscriptions, Orders, Expenses, Transactions, Add with AI */}
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <FeatureLink
               title="Subscriptions"
-              subtitle="Track a new recurring service"
+              subtitle="Track recurring services"
               icon="🧾"
               href="/dashboard/subscriptions"
               gradient="from-purple-500/15 to-fuchsia-500/10"
@@ -175,23 +176,30 @@ export default function DashboardPage() {
 
             <FeatureLink
               title="Orders"
-              subtitle="Monitor a scheduled purchase"
+              subtitle="Monitor scheduled purchases"
               icon="📦"
               href="/dashboard/orders"
-              gradient="from-sky-500/15 to-blue-600/10"
+              gradient="from-sky-500/15 to-indigo-600/10"
             />
 
-            {/* Expenses moved before Add with AI */}
             <FeatureLink
               title="Expenses"
-              subtitle="Record a monthly expense"
+              subtitle="Record monthly expenses"
               icon="💸"
               href="/dashboard/expenses"
               gradient="from-emerald-500/15 to-green-600/10"
             />
 
+            <FeatureLink
+              title="Transactions"
+              subtitle="View bank transactions"
+              icon="💳"
+              href="/dashboard/transactions"
+              gradient="from-cyan-500/15 to-blue-600/10"
+            />
+
             {/* Add with AI now last, with a single robot emoji */}
-            <div className="rounded-xl border border-white/0 bg-gradient-to-br from-cyan-500/12 to-purple-500/10 backdrop-blur-xl p-3 shadow">
+            <div className="rounded-xl border border-white/0 bg-gradient-to-br from-orange-500/12 to-amber-500/10 backdrop-blur-xl p-3 shadow">
               <AIAssist
                 buttonLabel=" Add with AI"
                 className="w-full justify-center border border-white/0 bg-white/[0.02] hover:bg-white/[0.05]"
@@ -249,6 +257,12 @@ export default function DashboardPage() {
                 className="block rounded-lg border border-white/0 bg-gradient-to-r from-purple-600/10 to-fuchsia-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
               >
                 Add Subscription <span className="ml-2 text-white/60">— Track a new recurring service</span>
+              </Link>
+              <Link
+                href="/dashboard/transactions"
+                className="block rounded-lg border border-white/0 bg-gradient-to-r from-cyan-600/10 to-blue-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
+              >
+                View Transactions <span className="ml-2 text-white/60">— Check your bank activity</span>
               </Link>
               <Link
                 href="/dashboard/expenses"

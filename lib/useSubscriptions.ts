@@ -6,6 +6,10 @@ import type { Subscription, BillingPeriod } from '@/lib/types';
 
 const KEY = 'needix-subscriptions';
 
+// Export the types that other components need
+export type UpdatePayload = Partial<Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>>;
+export type { Subscription } from '@/lib/types';
+
 /** Backend subscription shape (what our API returns) */
 type ApiSubscription = {
   id: string;
@@ -168,7 +172,7 @@ export function useSubscriptions() {
     persist(items.filter((s) => s.id !== id));
   };
 
-  const update = async (id: string, patch: Partial<Subscription>) => {
+  const update = async (id: string, patch: UpdatePayload) => {
     try {
       const response = await fetch(`/api/subscriptions/${id}`, {
         method: 'PATCH',

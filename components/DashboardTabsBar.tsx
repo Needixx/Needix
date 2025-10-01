@@ -8,9 +8,11 @@ export default function DashboardTabsBar() {
   const pathname = usePathname();
   
   // Determine active tab based on pathname
-  const active: 'dashboard' | 'subscriptions' | 'orders' | 'expenses' | 'none' = 
+  const active: 'dashboard' | 'subscriptions' | 'orders' | 'expenses' | 'transactions' | 'none' = 
     pathname === '/dashboard' 
       ? 'dashboard'
+      : pathname?.startsWith('/dashboard/transactions')
+      ? 'transactions'
       : pathname?.startsWith('/dashboard/expenses')
       ? 'expenses'
       : pathname?.startsWith('/dashboard/orders')
@@ -25,6 +27,7 @@ export default function DashboardTabsBar() {
       <Tab href="/dashboard/subscriptions" label="Subscriptions" active={active === 'subscriptions'} />
       <Tab href="/dashboard/orders" label="Orders" active={active === 'orders'} />
       <Tab href="/dashboard/expenses" label="Expenses" active={active === 'expenses'} />
+      <Tab href="/dashboard/transactions" label="Bank Transactions" active={active === 'transactions'} />
     </div>
   );
 }
