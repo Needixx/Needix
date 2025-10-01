@@ -16,6 +16,11 @@ const EnvSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().optional(),
+  // Plaid integration (optional)
+  PLAID_CLIENT_ID: z.string().optional(),
+  PLAID_SECRET: z.string().optional(),
+  PLAID_ENV: z.enum(["sandbox", "development", "production"]).optional(),
+  PLAID_WEBHOOK_URL: z.string().url().optional(),
 });
 
 export const env = EnvSchema.parse({
@@ -31,18 +36,15 @@ export const env = EnvSchema.parse({
   VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
   VAPID_SUBJECT: process.env.VAPID_SUBJECT,
+  PLAID_CLIENT_ID: process.env.PLAID_CLIENT_ID,
+  PLAID_SECRET: process.env.PLAID_SECRET,
+  PLAID_ENV: process.env.PLAID_ENV as "sandbox" | "development" | "production" | undefined,
+  PLAID_WEBHOOK_URL: process.env.PLAID_WEBHOOK_URL,
 });
 
-/**
- * Mask a value for safe logging (shows first/last 4 chars only).
- */
 export const mask = (value?: string): string =>
   value ? value.slice(0, 4) + "…" + value.slice(-4) : "(unset)";
 
-/**
- * Diagnostic helper to check env setup without leaking secrets.
- * Example: debug.log(envReport())
- */
 export const envReport = () => ({
   AUTH_SECRET: !!process.env.AUTH_SECRET,
   DATABASE_URL: !!process.env.DATABASE_URL,
@@ -54,6 +56,10 @@ export const envReport = () => ({
   GOOGLE_CLIENT_ID: mask(process.env.GOOGLE_CLIENT_ID),
   GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
   VAPID_PUBLIC_KEY: mask(process.env.VAPID_PUBLIC_KEY),
-  VAPID_PRIVATE_KEY: mask(process.env.VAPID_PRIVATE_KEY),
+  VAPID_PRIVATE_KEY: !!process.env.VAPID_PRIVATE_KEY,
   VAPID_SUBJECT: process.env.VAPID_SUBJECT,
+  PLAID_CLIENT_ID: mask(process.env.PLAID_CLIENT_ID),
+  PLAID_SECRET: !!process.env.PLAID_SECRET,
+  PLAID_ENV: process.env.PLAID_ENV,
+  PLAID_WEBHOOK_URL: process.env.PLAID_WEBHOOK_URL,
 });

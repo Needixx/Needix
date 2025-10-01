@@ -1,3 +1,4 @@
+// components/settings/index.ts
 export { default as SettingsLayout } from "@/components/settings/SettingsLayout";
 export { default as SettingsSidebar } from "@/components/settings/SettingsSidebar";
 export { default as NotificationsSettings } from "@/components/settings/NotificationsSettings";

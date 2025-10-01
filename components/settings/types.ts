@@ -49,6 +49,7 @@ export type SettingsAISettings = {
 
 export type IntegrationSettings = {
   googleConnected: boolean;
+  plaidConnected: boolean;
   stripeCustomerId?: string;
   webPushSupported: boolean;
 };
@@ -103,6 +104,7 @@ export const DEFAULT_AI: SettingsAISettings = {
 export const DEFAULT_INTEGRATIONS: IntegrationSettings = {
   googleConnected: false,
   webPushSupported: false,
+  plaidConnected: false,
 };
 
 // Type guards
@@ -156,3 +158,4 @@ export function isIntegrationSettings(v: unknown): v is IntegrationSettings {
     typeof settings.webPushSupported === "boolean"
   );
 }
+

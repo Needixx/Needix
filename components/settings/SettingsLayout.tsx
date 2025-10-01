@@ -17,7 +17,6 @@ import AISettings from "./AISettings";
 import IntegrationsSettings from "./IntegrationsSettings";
 import DataSettings from "./DataSettings";
 import AccountSettings from "./AccountSettings";
-
 import {
   type NotificationSettings,
   type AppSettings,
