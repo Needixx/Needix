@@ -333,8 +333,8 @@ function AddSubscriptionDialog({ open, onOpenChange, onAdd }: AddSubscriptionDia
 
             {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-1 text-center text-sm">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-                <div key={`day-header-${index}`} className="p-2 text-white/50 font-medium">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                <div key={`day-header-${index}`} className="p-2 text-white/50 font-medium text-xs">
                   {day}
                 </div>
               ))}

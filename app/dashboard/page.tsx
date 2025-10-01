@@ -21,7 +21,7 @@ function inRange(date: Date, start: Date, end: Date) {
   return date >= start && date <= end;
 }
 
-// UI bits (unchanged except for types)
+// UI bits
 function StatCard({
   title,
   value,
@@ -100,11 +100,12 @@ export default function DashboardPage() {
     refresh: refreshOrders,
   } = useOrders();
   const {
+    items: expenses,
     totals: expenseTotals,
     loading: expensesLoading,
     refresh: refreshExpenses,
   } = useExpenses();
-  const [_refreshKey, setRefreshKey] = useState(0); // underscore silences lint
+  const [_refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const handleDataRefresh = () => {
@@ -127,8 +128,9 @@ export default function DashboardPage() {
 
     const ordersTotal = orders.reduce((sum, o) => {
       if (!o.amount || o.status !== "active") return sum;
+      const orderType = o.type as 'one-time' | 'recurring';
       const d =
-        o.type === "subscription"
+        orderType === "recurring"
           ? o.nextDate
             ? new Date(`${o.nextDate}T00:00:00`)
             : null
@@ -140,7 +142,49 @@ export default function DashboardPage() {
 
     const totalSpend = (subTotals?.monthly || 0) + (expenseTotals?.monthly || 0);
     return { ordersThisMonthTotal: ordersTotal, totalMonthlySpend: totalSpend };
-  }, [orders, subTotals, expenseTotals]); // removed `subs` from deps
+  }, [orders, subTotals, expenseTotals]);
+
+  // Calculate weekly spending
+  const weeklySpending = useMemo(() => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    // Weekly subscriptions (use price, not amount)
+    const weeklySubTotal = subs.reduce((sum, s) => {
+      if (!s.nextBillingDate) return sum;
+      const nextBilling = new Date(`${s.nextBillingDate}T00:00:00`);
+      if (nextBilling >= startOfWeek && nextBilling <= endOfWeek) {
+        return sum + (s.price || 0);
+      }
+      return sum;
+    }, 0);
+
+    // Weekly orders
+    const weeklyOrderTotal = orders.reduce((sum, o) => {
+      const orderType = o.type as 'one-time' | 'recurring';
+      const orderDate = orderType === 'recurring' && o.nextDate
+        ? new Date(`${o.nextDate}T00:00:00`)
+        : o.scheduledDate
+        ? new Date(`${o.scheduledDate}T00:00:00`)
+        : null;
+      
+      if (orderDate && orderDate >= startOfWeek && orderDate <= endOfWeek) {
+        return sum + (o.amount || 0);
+      }
+      return sum;
+    }, 0);
+
+    // Weekly expenses (monthly / 4 weeks)
+    const weeklyExpenseTotal = (expenseTotals?.monthly || 0) / 4;
+
+    return weeklySubTotal + weeklyOrderTotal + weeklyExpenseTotal;
+  }, [subs, orders, expenseTotals]);
 
   const isLoading = subsLoading || ordersLoading || expensesLoading;
 
@@ -164,7 +208,7 @@ export default function DashboardPage() {
             Your complete financial overview — track subscriptions, orders, and expenses all in one place.
           </p>
 
-          {/* Action cards: Subscriptions, Orders, Expenses, Transactions, Add with AI */}
+          {/* Action cards */}
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <FeatureLink
               title="Subscriptions"
@@ -198,7 +242,6 @@ export default function DashboardPage() {
               gradient="from-cyan-500/15 to-blue-600/10"
             />
 
-            {/* Add with AI now last, with a single robot emoji */}
             <div className="rounded-xl border border-white/0 bg-gradient-to-br from-orange-500/12 to-amber-500/10 backdrop-blur-xl p-3 shadow">
               <AIAssist
                 buttonLabel=" Add with AI"
@@ -241,15 +284,168 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Panel title="Upcoming This Week">{/* ... */}</Panel>
+          {/* Upcoming This Week */}
+          <Panel title="Upcoming This Week">
+            {(() => {
+              const now = new Date();
+              const startOfWeek = new Date(now);
+              startOfWeek.setDate(now.getDate() - now.getDay());
+              startOfWeek.setHours(0, 0, 0, 0);
+              
+              const endOfWeek = new Date(startOfWeek);
+              endOfWeek.setDate(startOfWeek.getDate() + 6);
+              endOfWeek.setHours(23, 59, 59, 999);
+
+              // Get subscriptions due this week
+              const weeklySubscriptions = subs.filter(s => {
+                if (!s.nextBillingDate) return false;
+                const nextBilling = new Date(`${s.nextBillingDate}T00:00:00`);
+                return nextBilling >= startOfWeek && nextBilling <= endOfWeek;
+              });
+
+              // Get orders scheduled this week
+              const weeklyOrders = orders.filter(o => {
+                const orderType = o.type as 'one-time' | 'recurring';
+                const orderDate = orderType === 'recurring' && o.nextDate
+                  ? new Date(`${o.nextDate}T00:00:00`)
+                  : o.scheduledDate
+                  ? new Date(`${o.scheduledDate}T00:00:00`)
+                  : null;
+                
+                return orderDate && orderDate >= startOfWeek && orderDate <= endOfWeek;
+              });
+
+              // Get expenses due this week
+              const weeklyExpenses = expenses.filter(e => {
+                if (!e.isRecurring) return false;
+                const expenseDate = e.nextPaymentDate || e.dueDate;
+                if (!expenseDate) return false;
+                const date = new Date(expenseDate);
+                return date >= startOfWeek && date <= endOfWeek;
+              });
+
+              const hasItems = weeklySubscriptions.length > 0 || weeklyOrders.length > 0 || weeklyExpenses.length > 0;
+
+              if (!hasItems) {
+                return (
+                  <div className="text-center py-8 text-white/60">
+                    <p className="text-lg">🎉 No items due this week</p>
+                    <p className="text-sm mt-2">Enjoy your week!</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                  {/* Subscriptions */}
+                  {weeklySubscriptions.map((sub) => (
+                    <div key={`sub-${sub.id}`} className="flex items-center justify-between rounded-xl bg-purple-500/10 border border-purple-500/20 p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-purple-400"></div>
+                        <div>
+                          <p className="text-white/90 font-medium">{sub.name}</p>
+                          <p className="text-xs text-white/50">
+                            {sub.nextBillingDate ? new Date(`${sub.nextBillingDate}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date'}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-semibold text-purple-300">{fmtCurrency(sub.price || 0)}</span>
+                    </div>
+                  ))}
+
+                  {/* Orders */}
+                  {weeklyOrders.map((order) => (
+                    <div key={`order-${order.id}`} className="flex items-center justify-between rounded-xl bg-blue-500/10 border border-blue-500/20 p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                        <div>
+                          <p className="text-white/90 font-medium">{order.name}</p>
+                          <p className="text-xs text-white/50">
+                            {(() => {
+                              const orderType = order.type as 'one-time' | 'recurring';
+                              const orderDate = orderType === 'recurring' && order.nextDate
+                                ? new Date(`${order.nextDate}T00:00:00`)
+                                : order.scheduledDate
+                                ? new Date(`${order.scheduledDate}T00:00:00`)
+                                : null;
+                              return orderDate ? orderDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date';
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-semibold text-blue-300">{fmtCurrency(order.amount || 0)}</span>
+                    </div>
+                  ))}
+
+                  {/* Expenses */}
+                  {weeklyExpenses.map((expense) => (
+                    <div key={`expense-${expense.id}`} className="flex items-center justify-between rounded-xl bg-green-500/10 border border-green-500/20 p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                        <div>
+                          <p className="text-white/90 font-medium">{expense.name}</p>
+                          <p className="text-xs text-white/50">
+                            {new Date(expense.nextPaymentDate || expense.dueDate || '').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-semibold text-green-300">{fmtCurrency(expense.amount || 0)}</span>
+                    </div>
+                  ))}
+
+                  {/* Total */}
+                  {hasItems && (
+                    <div className="pt-3 mt-3 border-t border-white/10">
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/60 text-sm">Total This Week</span>
+                        <span className="text-white font-bold text-lg">
+                          {fmtCurrency(
+                            weeklySubscriptions.reduce((sum, s) => sum + (s.price || 0), 0) +
+                            weeklyOrders.reduce((sum, o) => sum + (o.amount || 0), 0) +
+                            weeklyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </Panel>
+
+          {/* Financial Insights */}
           <Panel title="Financial Insights">
-            <div className="rounded-lg bg-white/[0.04] border border-white/0 px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-white/50">Annual Spending</p>
-              <p className="mt-1 text-lg font-semibold text-white">
-                {fmtCurrency((totalMonthlySpend || 0) * 12)}
-              </p>
+            <div className="space-y-3">
+              {/* Weekly Spending */}
+              <div className="rounded-lg bg-white/[0.04] border border-white/0 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Weekly Spending</p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {fmtCurrency(weeklySpending)}
+                </p>
+                <p className="text-xs text-white/40 mt-1">Expected for this week</p>
+              </div>
+
+              {/* Monthly Spending */}
+              <div className="rounded-lg bg-white/[0.04] border border-white/0 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Monthly Spending</p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {fmtCurrency(totalMonthlySpend || 0)}
+                </p>
+                <p className="text-xs text-white/40 mt-1">All recurring costs</p>
+              </div>
+
+              {/* Annual Spending */}
+              <div className="rounded-lg bg-white/[0.04] border border-white/0 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Annual Spending</p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {fmtCurrency((totalMonthlySpend || 0) * 12)}
+                </p>
+                <p className="text-xs text-white/40 mt-1">Projected yearly total</p>
+              </div>
             </div>
           </Panel>
+
+          {/* Quick Actions */}
           <Panel title="Quick Actions">
             <div className="space-y-3">
               <Link
@@ -257,12 +453,6 @@ export default function DashboardPage() {
                 className="block rounded-lg border border-white/0 bg-gradient-to-r from-purple-600/10 to-fuchsia-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
               >
                 Add Subscription <span className="ml-2 text-white/60">— Track a new recurring service</span>
-              </Link>
-              <Link
-                href="/dashboard/transactions"
-                className="block rounded-lg border border-white/0 bg-gradient-to-r from-cyan-600/10 to-blue-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
-              >
-                View Transactions <span className="ml-2 text-white/60">— Check your bank activity</span>
               </Link>
               <Link
                 href="/dashboard/expenses"
@@ -276,11 +466,15 @@ export default function DashboardPage() {
               >
                 Track Order <span className="ml-2 text-white/60">— Monitor a scheduled purchase</span>
               </Link>
+              <Link
+                href="/dashboard/transactions"
+                className="block rounded-lg border border-white/0 bg-gradient-to-r from-cyan-600/10 to-blue-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
+              >
+                View Transactions <span className="ml-2 text-white/60">— Check your bank activity</span>
+              </Link>
             </div>
           </Panel>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">{/* ... */}</div>
       </div>
 
       {isLoading && (
