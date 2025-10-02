@@ -9,7 +9,6 @@ import AddSubscriptionDialog, {
   type SubscriptionFormData,
 } from "@/components/AddSubscriptionDialog";
 import SubscriptionTable from "@/components/SubscriptionTable";
-import ImportCsv from "@/components/ImportCsv";
 import UpgradeButton from "@/components/UpgradeButton";
 import { Button } from "@/components/ui/Button";
 import { fmtCurrency } from "@/lib/format";
@@ -39,7 +38,7 @@ function StatCard({
 }
 
 export default function SubscriptionsPage() {
-  const { items, remove, update, add, importMany, totals } = useSubscriptions();
+  const { items, remove, update, add, totals } = useSubscriptions();
   const { isPro } = useSubscriptionLimit();
   const toast = useToast();
 
@@ -183,15 +182,6 @@ export default function SubscriptionsPage() {
               </Button>
               <UpgradeButton variant="secondary">Upgrade to Pro</UpgradeButton>
             </div>
-          )}
-
-          {isPro && (
-            <ImportCsv
-              onImport={(subs) => {
-                void importMany(subs);
-                toast(`Imported ${subs.length} subscriptions`, "success");
-              }}
-            />
           )}
         </div>
 
