@@ -19,7 +19,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
     const newSettings = { ...aiSettings, ...updates };
     setAISettings(newSettings);
     localStorage.setItem("needix_ai", JSON.stringify(newSettings));
-    toast("AI & Privacy settings updated", "success");
+    // Don't show generic "settings updated" toast - specific toasts are shown in onCheckbox
   };
 
   const onCheckbox =
@@ -28,14 +28,14 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
       const isEnabled = e.target.checked;
       updateAISettings({ [key]: isEnabled } as Partial<SettingsAISettings>);
       
-      // Show specific toast messages for different features
+      // Show specific toast messages with appropriate colors
       switch (key) {
         case 'allowDataAccess':
           toast(
             isEnabled 
               ? "AI can now analyze your subscriptions and provide insights" 
               : "AI analysis disabled for subscription data", 
-            "info"
+            isEnabled ? "success" : "info"
           );
           break;
         case 'autoFillForms':
@@ -43,7 +43,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
             isEnabled 
               ? "AI will now help auto-fill subscription forms" 
               : "Auto-fill assistance disabled", 
-            "info"
+            isEnabled ? "success" : "info"
           );
           break;
         case 'retainHistory':
@@ -51,7 +51,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
             isEnabled 
               ? "Chat history will be kept to improve AI responses" 
               : "Chat history will not be retained", 
-            "info"
+            isEnabled ? "success" : "info"
           );
           break;
       }
@@ -97,7 +97,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
                 onChange={onCheckbox("allowDataAccess")} 
                 className="sr-only peer" 
               />
-              <div className="w-12 h-6 bg-red-500/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
+              <div className="w-12 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-cyan-500 shadow-lg"></div>
             </label>
           </div>
 
@@ -121,7 +121,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
                 onChange={onCheckbox("autoFillForms")} 
                 className="sr-only peer" 
               />
-              <div className="w-12 h-6 bg-red-500/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
+              <div className="w-12 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-cyan-500 shadow-lg"></div>
             </label>
           </div>
         </div>
@@ -164,7 +164,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
                 onChange={onCheckbox("retainHistory")} 
                 className="sr-only peer" 
               />
-              <div className="w-12 h-6 bg-red-500/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
+              <div className="w-12 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-cyan-500 shadow-lg"></div>
             </label>
           </div>
         </div>

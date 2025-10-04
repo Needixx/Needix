@@ -17,6 +17,9 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [name, setName] = useState(user.name || "");
+  const [isSavingName, setIsSavingName] = useState(false);
   const toast: ToastFn = useToast();
 
   const handleSignOut = async () => {
@@ -46,6 +49,48 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
     toast("Data download feature coming soon!", "info");
   };
 
+  const handleSaveName = async () => {
+    if (!name.trim()) {
+      toast("Name cannot be empty", "error");
+      return;
+    }
+
+    setIsSavingName(true);
+    try {
+      const response = await fetch("/api/user/update-profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast("Name updated successfully! Refreshing...", "success");
+        setIsEditingName(false);
+        
+        // Force a hard refresh to get new session data
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        toast(data.error || "Failed to update name", "error");
+      }
+    } catch (error) {
+      console.error("Error updating name:", error);
+      toast("Failed to update name", "error");
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setName(user.name || "");
+    setIsEditingName(false);
+  };
+
   return (
     <div className="space-y-8">
       <div className="mb-6">
@@ -65,15 +110,48 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-white/70 mb-1">Name</label>
-            <div className="p-3 bg-white/5 border border-white/10 rounded-lg text-white">
-              {user.name || "Not set"}
-            </div>
+            <label className="block text-sm font-medium text-white/70 mb-2">Name</label>
+            {isEditingName ? (
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full p-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  placeholder="Enter your name"
+                  disabled={isSavingName}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSaveName}
+                    disabled={isSavingName}
+                    variant="primary"
+                    size="sm"
+                  >
+                    {isSavingName ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    onClick={handleCancelEdit}
+                    disabled={isSavingName}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg">
+                <span className="text-white">{user.name || "Not set"}</span>
+                <button
+                  onClick={() => setIsEditingName(true)}
+                  className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  Edit
+                </button>
+              </div>
+            )}
           </div>
-
-          <p className="text-sm text-white/50 mt-4">
-            More profile customization options coming soon!
-          </p>
         </div>
       </div>
 
@@ -109,59 +187,26 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
               <div className="font-medium text-white">Sign Out</div>
               <div className="text-sm text-white/60">Sign out of your account on this device</div>
             </div>
-            <Button 
+            <Button
               onClick={() => setShowSignOutModal(true)}
-              variant="secondary" 
+              variant="secondary"
               size="sm"
             >
               Sign Out
             </Button>
           </div>
-        </div>
-      </div>
 
-      {/* Account Statistics */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">📊 Account Statistics</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center p-4 bg-white/5 border border-white/10 rounded-lg">
-            <div className="text-2xl font-bold text-white">
-              {Math.floor(Math.random() * 30) + 1}
-            </div>
-            <div className="text-sm text-white/60">Days Active</div>
-          </div>
-          <div className="text-center p-4 bg-white/5 border border-white/10 rounded-lg">
-            <div className="text-2xl font-bold text-white">
-              {Math.floor(Math.random() * 50) + 10}
-            </div>
-            <div className="text-sm text-white/60">Total Logins</div>
-          </div>
-          <div className="text-center p-4 bg-white/5 border border-white/10 rounded-lg">
-            <div className="text-2xl font-bold text-white">
-              {new Date().toLocaleDateString()}
-            </div>
-            <div className="text-sm text-white/60">Last Login</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Danger Zone */}
-      <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-red-400">⚠️</span>
-          <h3 className="text-lg font-semibold text-red-400">Danger Zone</h3>
-        </div>
-        
-        <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-red-500/20 border border-red-500/40 rounded-lg">
+          {/* Delete Account */}
+          <div className="flex items-center justify-between p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
             <div>
-              <div className="font-medium text-red-300">Delete Account</div>
-              <div className="text-sm text-red-200/80">Permanently delete your account and all data</div>
+              <div className="font-medium text-red-400">Delete Account</div>
+              <div className="text-sm text-white/60">Permanently delete your account and all data</div>
             </div>
-            <Button 
+            <Button
               onClick={() => setShowDeleteModal(true)}
-              className="bg-red-500 hover:bg-red-600 text-white"
+              variant="secondary"
               size="sm"
+              className="border-red-500/30 text-red-400 hover:bg-red-500/20"
             >
               Delete Account
             </Button>
@@ -171,17 +216,10 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
 
       {/* Sign Out Confirmation Modal */}
       {showSignOutModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-white/20 rounded-xl p-6 max-w-md w-full">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-yellow-400 text-2xl">👋</span>
-              <h3 className="text-xl font-bold text-white">Sign Out</h3>
-            </div>
-            
-            <p className="text-white/80 mb-6">
-              Are you sure you want to sign out? You'll need to sign in again to access your account.
-            </p>
-            
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-white/10 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-white mb-3">Sign Out</h3>
+            <p className="text-white/70 mb-6">Are you sure you want to sign out?</p>
             <div className="flex gap-3">
               <Button
                 onClick={() => setShowSignOutModal(false)}
@@ -191,9 +229,10 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
                 Cancel
               </Button>
               <Button
-                onClick={() => { void handleSignOut(); }}
+                onClick={handleSignOut}
+                variant="primary"
+                className="flex-1"
                 disabled={isLoading}
-                className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 flex-1"
               >
                 {isLoading ? "Signing out..." : "Sign Out"}
               </Button>
@@ -202,24 +241,14 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
         </div>
       )}
 
-      {/* Delete Account Modal */}
+      {/* Delete Account Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-red-500/40 rounded-xl p-6 max-w-md w-full">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-red-400 text-2xl">⚠️</span>
-              <h3 className="text-xl font-bold text-red-400">Delete Account</h3>
-            </div>
-            
-            <p className="text-white/80 mb-4">
-              This action will permanently delete your account and all associated data. 
-              This cannot be undone.
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-red-500/20 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-red-400 mb-3">⚠️ Delete Account</h3>
+            <p className="text-white/70 mb-6">
+              This action cannot be undone. All your data will be permanently deleted.
             </p>
-            
-            <p className="text-white/70 text-sm mb-6">
-              Are you absolutely sure you want to continue?
-            </p>
-            
             <div className="flex gap-3">
               <Button
                 onClick={() => setShowDeleteModal(false)}
@@ -230,9 +259,10 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
               </Button>
               <Button
                 onClick={handleDeleteAccount}
-                className="bg-red-500 hover:bg-red-600 text-white flex-1"
+                variant="primary"
+                className="flex-1 bg-red-500 hover:bg-red-600"
               >
-                Yes, Delete My Account
+                Delete Account
               </Button>
             </div>
           </div>

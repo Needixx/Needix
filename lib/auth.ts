@@ -258,14 +258,70 @@ export const {
       return baseUrl + '/dashboard';
     },
     async session({ session, token }) {
-      if (session?.user && token?.sub) {
+      // Always fetch fresh user data from database to ensure it's up to date
+      if (token?.email) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: token.email as string },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          });
+
+          if (dbUser && session?.user) {
+            session.user.id = dbUser.id;
+            session.user.name = dbUser.name;
+            session.user.email = dbUser.email!;
+            session.user.image = dbUser.image;
+          }
+        } catch (error) {
+          console.error('Error fetching user in session callback:', error);
+          // Fallback to token data if database fetch fails
+          if (session?.user && token?.sub) {
+            session.user.id = token.sub;
+          }
+          if (session?.user && token?.name) {
+            session.user.name = token.name as string;
+          }
+        }
+      } else if (session?.user && token?.sub) {
+        // Fallback
         session.user.id = token.sub;
       }
+      
       return session;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger }) {
       if (user) {
         token.sub = user.id;
+        token.email = user.email;
+        token.name = user.name;
+      }
+      
+      // Handle update triggers (when session is updated)
+      if (trigger === 'update' && token.email) {
+        // Fetch fresh user data from database
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: token.email as string },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
+          });
+
+          if (dbUser) {
+            token.name = dbUser.name;
+            token.picture = dbUser.image;
+          }
+        } catch (error) {
+          console.error('Error updating token with fresh user data:', error);
+        }
       }
       
       // Store the access token and refresh token for Gmail API access
