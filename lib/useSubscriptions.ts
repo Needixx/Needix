@@ -3,6 +3,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import type { Subscription, BillingPeriod } from '@/lib/types';
+import { Preferences } from '@capacitor/preferences';
+import { Capacitor } from '@capacitor/core';
 
 const KEY = 'needix-subscriptions';
 
@@ -30,12 +32,29 @@ type ApiSubscription = {
 export function useSubscriptions() {
   const [items, setItems] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
+  const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
 
+        // MOBILE PATH: Use Capacitor Preferences
+        if (isNative) {
+          const { value } = await Preferences.get({ key: KEY });
+          if (value) {
+            try {
+              const parsed = JSON.parse(value) as Subscription[];
+              setItems(parsed);
+            } catch (e) {
+              console.error('Error parsing Capacitor subscriptions:', e);
+            }
+          }
+          setLoading(false);
+          return;
+        }
+
+        // WEB PATH: Original code preserved exactly
         // 1) seed from localStorage so UI isn't empty while we fetch
         const localData = localStorage.getItem(KEY);
         if (localData) {
@@ -81,7 +100,7 @@ export function useSubscriptions() {
     };
 
     void loadData();
-  }, []);
+  }, [isNative]);
 
   const totals = useMemo(() => {
     const monthly = items
@@ -95,13 +114,37 @@ export function useSubscriptions() {
     return { monthly };
   }, [items]);
 
-  const persist = (next: Subscription[]) => {
+  const persist = async (next: Subscription[]) => {
     setItems(next);
+    
+    // MOBILE PATH: Use Capacitor Preferences
+    if (isNative) {
+      await Preferences.set({
+        key: KEY,
+        value: JSON.stringify(next),
+      });
+      return;
+    }
+
+    // WEB PATH: Original localStorage
     localStorage.setItem(KEY, JSON.stringify(next));
   };
 
   /** Create a subscription (shows real backend error if it fails) */
   const add = async (subscription: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>) => {
+    // MOBILE PATH: Skip API, use local storage only
+    if (isNative) {
+      const newSub: Subscription = {
+        ...subscription,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await persist([...items, newSub]);
+      return newSub;
+    }
+
+    // WEB PATH: Original API logic preserved exactly
     try {
       const body = {
         name: subscription.name,
@@ -143,7 +186,7 @@ export function useSubscriptions() {
       };
 
       const updated = [...items, newSub];
-      persist(updated);
+      await persist(updated);
       return created;
     } catch (error) {
       console.error('Error adding subscription:', error);
@@ -154,12 +197,19 @@ export function useSubscriptions() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      persist([...items, newSub]);
+      await persist([...items, newSub]);
       return newSub;
     }
   };
 
   const remove = async (id: string) => {
+    // MOBILE PATH: Skip API call
+    if (isNative) {
+      await persist(items.filter((s) => s.id !== id));
+      return;
+    }
+
+    // WEB PATH: Original API logic preserved
     try {
       const response = await fetch(`/api/subscriptions/${id}`, { method: 'DELETE' });
       if (!response.ok) {
@@ -169,10 +219,20 @@ export function useSubscriptions() {
     } catch (error) {
       console.error('Error deleting subscription:', error);
     }
-    persist(items.filter((s) => s.id !== id));
+    await persist(items.filter((s) => s.id !== id));
   };
 
   const update = async (id: string, patch: UpdatePayload) => {
+    // MOBILE PATH: Skip API call
+    if (isNative) {
+      const next = items.map((s) =>
+        s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s
+      );
+      await persist(next);
+      return;
+    }
+
+    // WEB PATH: Original API logic preserved exactly
     try {
       const response = await fetch(`/api/subscriptions/${id}`, {
         method: 'PATCH',
@@ -203,14 +263,21 @@ export function useSubscriptions() {
     const next = items.map((s) =>
       s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s
     );
-    persist(next);
+    await persist(next);
   };
 
-  const importMany = (subs: Subscription[]) => {
-    persist([...subs, ...items]);
+  const importMany = async (subs: Subscription[]) => {
+    await persist([...subs, ...items]);
   };
 
   const refresh = async () => {
+    // MOBILE PATH: No API to refresh from
+    if (isNative) {
+      console.log('Refresh not available on mobile (no backend connection)');
+      return;
+    }
+
+    // WEB PATH: Original refresh logic preserved exactly
     try {
       const response = await fetch('/api/subscriptions');
       if (response.ok) {
@@ -245,7 +312,7 @@ export function useSubscriptions() {
   return { items, totals, add, remove, update, importMany, loading, refresh };
 }
 
-/** Helpers */
+/** Helpers - All preserved exactly from original */
 
 function mapIntervalToPeriod(interval: string): BillingPeriod {
   switch (interval) {

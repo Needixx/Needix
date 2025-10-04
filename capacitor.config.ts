@@ -5,21 +5,29 @@ const config: CapacitorConfig = {
   appId: "com.needix.subtracker",
   appName: "Needix",
   webDir: "out",
-  server: {
-    // For development testing, use localhost directly
-    url: "http://localhost:3000",
-    cleartext: true
-  },
   plugins: {
     LocalNotifications: {
       smallIcon: "ic_stat_icon_config_sample",
-      iconColor: "#488AFF",
+      iconColor: "#667eea",
       sound: "beep.wav",
+    },
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: "#000000",
+      showSpinner: false,
+      androidSpinnerStyle: "large",
+      iosSpinnerStyle: "small",
+      spinnerColor: "#667eea",
     },
   },
   ios: {
     contentInset: "automatic",
     allowsLinkPreview: false,
+  },
+  android: {
+    allowMixedContent: false,
+    captureInput: true,
+    webContentsDebuggingEnabled: false,
   }
 };
 
