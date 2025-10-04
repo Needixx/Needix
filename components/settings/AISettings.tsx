@@ -97,7 +97,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
                 onChange={onCheckbox("allowDataAccess")} 
                 className="sr-only peer" 
               />
-              <div className="w-12 h-6 bg-white/20 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
+              <div className="w-12 h-6 bg-red-500/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
             </label>
           </div>
 
@@ -121,7 +121,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
                 onChange={onCheckbox("autoFillForms")} 
                 className="sr-only peer" 
               />
-              <div className="w-12 h-6 bg-white/20 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
+              <div className="w-12 h-6 bg-red-500/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
             </label>
           </div>
         </div>
@@ -164,7 +164,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
                 onChange={onCheckbox("retainHistory")} 
                 className="sr-only peer" 
               />
-              <div className="w-12 h-6 bg-white/20 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
+              <div className="w-12 h-6 bg-red-500/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple/50 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple peer-checked:to-cyan shadow-lg"></div>
             </label>
           </div>
         </div>
