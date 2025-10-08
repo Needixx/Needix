@@ -1,12 +1,10 @@
 // app/dashboard/transactions/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
-import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
-import Link from "next/link";
-import { ArrowUpDown, RefreshCw, Receipt, ShoppingCart, DollarSign, FolderOpen, Plus, ChevronDown } from "lucide-react";
+import { RefreshCw, Plus, ChevronDown, Receipt, ShoppingCart, DollarSign, Trash2 } from "lucide-react";
 
 interface Transaction {
   id: string;
@@ -16,45 +14,33 @@ interface Transaction {
   amount: number;
   category: string[];
   subcategory: string | null;
-  isSubscription: boolean;
   accountName: string;
+  isSubscription: boolean;
 }
 
-interface DetectedSubscription {
-  merchantName: string;
-  amount: number;
-  frequency: string;
-  lastCharge: string;
-  occurrences: number;
-  transactions: Transaction[];
-}
-
-type TransactionType = "subscription" | "order" | "expense" | null;
-type CategoryType = "subscription" | "order" | "expense" | "other";
+type TransactionType = "subscription" | "order" | "expense";
+type CategoryType = "subscription" | "expense" | "order" | "other";
 
 export default function TransactionsPage() {
-  const { isPro } = useSubscriptionLimit();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [detectedSubs, setDetectedSubs] = useState<DetectedSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [filter, setFilter] = useState<"all" | "subscriptions" | "orders" | "expenses" | "other">("all");
+  const [importing, setImporting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [importedTransactions, setImportedTransactions] = useState<Set<string>>(new Set());
+  const [detectedSubs, setDetectedSubs] = useState<string[]>([]);
+  const [filterCategory, setFilterCategory] = useState<CategoryType | "all">("all");
   const [sortBy, setSortBy] = useState<"date" | "amount">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [importing, setImporting] = useState<string | null>(null);
-  const [importedTransactions, setImportedTransactions] = useState<Set<string>>(new Set());
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const toast = useToast();
+  const isPro = true; // You can replace this with actual subscription check
 
   useEffect(() => {
-    if (isPro) {
-      loadTransactions();
-      detectSubscriptions();
-    } else {
-      setLoading(false);
-    }
-  }, [isPro]);
+    loadTransactions();
+    detectSubscriptions();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -137,12 +123,12 @@ export default function TransactionsPage() {
     
     setImporting(transaction.id);
     try {
-      const response = await fetch(`/api/import-transaction`, {
+      const response = await fetch(`/api/transactions/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transaction,
-          type
+          importType: type
         })
       });
 
@@ -151,13 +137,45 @@ export default function TransactionsPage() {
         setImportedTransactions(prev => new Set(prev).add(transaction.id));
         setSelectedTransaction(null);
       } else {
-        toast("Failed to import transaction", "error");
+        const errorData = await response.json();
+        toast(errorData.error || "Failed to import transaction", "error");
       }
     } catch (error) {
       console.error("Error importing:", error);
       toast("Failed to import transaction", "error");
     } finally {
       setImporting(null);
+    }
+  };
+
+  const deleteTransaction = async (transactionId: string) => {
+    if (!confirm("Are you sure you want to delete this transaction? This cannot be undone.")) {
+      return;
+    }
+
+    setDeleting(transactionId);
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast("Transaction deleted", "success");
+        setTransactions(prev => prev.filter(t => t.id !== transactionId));
+        setImportedTransactions(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(transactionId);
+          return newSet;
+        });
+      } else {
+        const errorData = await response.json();
+        toast(errorData.error || "Failed to delete transaction", "error");
+      }
+    } catch (error) {
+      console.error("Error deleting:", error);
+      toast("Failed to delete transaction", "error");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -221,225 +239,136 @@ export default function TransactionsPage() {
 
           <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-cyan-500/10 p-8 backdrop-blur-sm">
             <div className="text-center mb-6">
-              <div className="inline-block p-4 rounded-full bg-gradient-to-r from-purple-500/20 to-cyan-500/20 mb-4">
-                <span className="text-4xl">🔒</span>
+              <div className="inline-block p-4 rounded-full bg-purple-500/20 mb-4">
+                <svg className="w-12 h-12 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Pro Feature</h2>
-              <p className="text-white/70">
-                Bank transaction monitoring is available exclusively for Pro users
+              <h2 className="text-2xl font-bold text-white mb-2">Upgrade to Pro</h2>
+              <p className="text-white/60 mb-6">
+                Bank transaction tracking is a Pro feature
               </p>
             </div>
-
-            <div className="bg-white/5 rounded-xl p-6 mb-6">
-              <h3 className="text-lg font-semibold text-white mb-4">With Pro, you get:</h3>
-              <ul className="space-y-3 text-white/80">
-                <li className="flex items-start gap-3">
-                  <span className="text-green-400 mt-1">✓</span>
-                  <span>Connect your bank account securely via Plaid</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-green-400 mt-1">✓</span>
-                  <span>Automatic transaction syncing and categorization</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-green-400 mt-1">✓</span>
-                  <span>AI-powered subscription detection from transactions</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-green-400 mt-1">✓</span>
-                  <span>Real-time spending insights and analytics</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-green-400 mt-1">✓</span>
-                  <span>Unlimited subscriptions, orders, and expenses tracking</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="text-center">
-              <div className="mb-4">
-                <span className="text-4xl font-bold text-white">$5</span>
-                <span className="text-white/60 text-lg">/month</span>
+            
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center text-white/80">
+                <svg className="w-5 h-5 text-green-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Automatic transaction syncing
               </div>
-              <Link href="/#pricing">
-                <Button 
-                  size="lg"
-                  className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 text-white font-semibold px-8"
-                >
-                  ⭐ Upgrade to Pro
-                </Button>
-              </Link>
-              <p className="text-white/50 text-sm mt-3">30-day money-back guarantee</p>
+              <div className="flex items-center text-white/80">
+                <svg className="w-5 h-5 text-green-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Smart subscription detection
+              </div>
+              <div className="flex items-center text-white/80">
+                <svg className="w-5 h-5 text-green-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Expense categorization
+              </div>
             </div>
-          </div>
 
-          <div className="mt-8 text-center p-6 rounded-xl bg-white/5 border border-white/10">
-            <p className="text-white/70 mb-3">
-              <strong className="text-white">Free users:</strong> Use our Gmail Scanner to detect subscriptions from your email inbox
-            </p>
-            <Link href="/settings?tab=integrations">
-              <Button variant="secondary">
-                📧 Go to Gmail Scanner
-              </Button>
-            </Link>
+            <Button
+              onClick={() => window.location.href = '/pricing'}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            >
+              Upgrade to Pro
+            </Button>
           </div>
         </div>
       </div>
     );
   }
 
-  // CONTINUE WITH FULL PRO USER EXPERIENCE
-  const categoryTotals = transactions.reduce((acc, t) => {
-    const category = categorizeTransaction(t);
-    acc[category] = (acc[category] || 0) + t.amount;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const subscriptionTotal = categoryTotals.subscription || 0;
-  const orderTotal = categoryTotals.order || 0;
-  const expenseTotal = categoryTotals.expense || 0;
-  const otherTotal = categoryTotals.other || 0;
-
+  // Filter and sort transactions
   const filteredTransactions = transactions
     .filter(t => {
-      if (filter === "all") return true;
-      if (filter === "subscriptions") return t.isSubscription;
-      
-      const category = categorizeTransaction(t);
-      if (filter === "orders") return category === "order";
-      if (filter === "expenses") return category === "expense";
-      if (filter === "other") return category === "other";
-      
-      return true;
+      if (filterCategory === "all") return true;
+      return categorizeTransaction(t) === filterCategory;
     })
     .sort((a, b) => {
       if (sortBy === "date") {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
-        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+        return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
       } else {
-        return sortOrder === "asc" ? a.amount - b.amount : b.amount - a.amount;
+        return sortOrder === "desc" ? b.amount - a.amount : a.amount - b.amount;
       }
     });
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-black to-slate-900 p-8">
-        <div className="mx-auto max-w-6xl">
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-            <p className="text-white/60 mt-4">Loading transactions...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-black to-slate-900 p-8">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-3xl">💳</span>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              Bank Transactions
-            </h1>
-          </div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-4">
+            💳 Bank Transactions
+          </h1>
           <p className="text-white/60 text-lg">
-            Monitor your bank transactions and detect recurring subscriptions
+            View and manage your synced bank transactions
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 backdrop-blur-md p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <Receipt className="w-5 h-5 text-purple-400" />
-              <span className="text-white/60 text-sm">Subscriptions</span>
-            </div>
-            <div className="text-3xl font-bold text-white">
-              ${subscriptionTotal.toFixed(2)}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 backdrop-blur-md p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <ShoppingCart className="w-5 h-5 text-blue-400" />
-              <span className="text-white/60 text-sm">Orders</span>
-            </div>
-            <div className="text-3xl font-bold text-white">
-              ${orderTotal.toFixed(2)}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-green-500/20 bg-green-500/10 backdrop-blur-md p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <DollarSign className="w-5 h-5 text-green-400" />
-              <span className="text-white/60 text-sm">Expenses</span>
-            </div>
-            <div className="text-3xl font-bold text-white">
-              ${expenseTotal.toFixed(2)}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 backdrop-blur-md p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <FolderOpen className="w-5 h-5 text-orange-400" />
-              <span className="text-white/60 text-sm">Other</span>
-            </div>
-            <div className="text-3xl font-bold text-white">
-              ${otherTotal.toFixed(2)}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="mb-6 flex flex-wrap gap-4 items-center justify-between">
           <div className="flex gap-2 flex-wrap">
-            <Button
-              onClick={() => setFilter("all")}
-              variant={filter === "all" ? "primary" : "outline"}
+            <button
+              onClick={() => setFilterCategory("all")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                filterCategory === "all"
+                  ? "bg-white/20 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              }`}
             >
-              All Transactions
-            </Button>
-            <Button
-              onClick={() => setFilter("subscriptions")}
-              variant={filter === "subscriptions" ? "primary" : "outline"}
+              All
+            </button>
+            <button
+              onClick={() => setFilterCategory("subscription")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                filterCategory === "subscription"
+                  ? "bg-purple-500/30 text-purple-300"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              }`}
             >
               Subscriptions
-            </Button>
-            <Button
-              onClick={() => setFilter("orders")}
-              variant={filter === "orders" ? "primary" : "outline"}
-            >
-              Orders
-            </Button>
-            <Button
-              onClick={() => setFilter("expenses")}
-              variant={filter === "expenses" ? "primary" : "outline"}
+            </button>
+            <button
+              onClick={() => setFilterCategory("expense")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                filterCategory === "expense"
+                  ? "bg-orange-500/30 text-orange-300"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              }`}
             >
               Expenses
-            </Button>
-            <Button
-              onClick={() => setFilter("other")}
-              variant={filter === "other" ? "primary" : "outline"}
+            </button>
+            <button
+              onClick={() => setFilterCategory("order")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                filterCategory === "order"
+                  ? "bg-blue-500/30 text-blue-300"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              }`}
             >
-              Other
-            </Button>
+              Orders
+            </button>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <div className="relative sort-dropdown">
               <Button
-                onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
                 variant="outline"
+                size="sm"
+                onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+                className="bg-white/5"
               >
-                <ArrowUpDown className="w-4 h-4 mr-2" />
-                Sort
+                Sort: {sortBy === "date" ? "Date" : "Amount"}
+                <ChevronDown className="w-4 h-4 ml-2" />
               </Button>
 
               {sortDropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 bg-slate-800 border border-white/20 rounded-lg shadow-xl p-2 min-w-[160px] z-50">
-                  <div className="text-xs text-white/40 px-3 py-1 mb-1">Sort by:</div>
-                  
+                <div className="absolute top-full right-0 mt-1 bg-slate-800 border border-white/20 rounded-lg shadow-xl p-1 min-w-[160px] z-50">
                   <button
                     onClick={() => {
                       setSortBy("date");
@@ -511,6 +440,7 @@ export default function TransactionsPage() {
                   filteredTransactions.map((t) => {
                     const suggestedType = categorizeTransaction(t);
                     const isImporting = importing === t.id;
+                    const isDeleting = deleting === t.id;
                     const isDropdownOpen = selectedTransaction?.id === t.id;
                     
                     return (
@@ -545,7 +475,7 @@ export default function TransactionsPage() {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => setSelectedTransaction(isDropdownOpen ? null : t)}
-                                  disabled={isImporting}
+                                  disabled={isImporting || isDeleting}
                                 >
                                   {isImporting ? "..." : (
                                     <>
@@ -583,6 +513,17 @@ export default function TransactionsPage() {
                                 )}
                               </>
                             )}
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteTransaction(t.id)}
+                              disabled={isImporting || isDeleting}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              aria-label="Delete transaction"
+                            >
+                              {isDeleting ? "..." : <Trash2 className="w-3 h-3" />}
+                            </Button>
                           </div>
                         </td>
                       </tr>

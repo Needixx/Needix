@@ -27,7 +27,7 @@ interface InsightsSummary {
   totalOrderValue?: number;
   monthlySubscriptionTotal?: number;
   monthlyExpenseTotal?: number;
-  topCategories: Array<{
+  topCategories?: Array<{
     name: string;
     count: number;
     total: number;
@@ -52,15 +52,21 @@ const getAISettings = () => {
 };
 
 export default function AIInsightsDashboard() {
-  const { isPro } = useSubscriptionLimit();
+  const { isPro, isLoading: proCheckLoading } = useSubscriptionLimit();
   const [insights, setInsights] = useState<AIInsightsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
 
   const fetchInsights = async () => {
+    // Wait for Pro check to complete
+    if (proCheckLoading) {
+      return;
+    }
+
     // PRO CHECK FIRST
     if (!isPro) {
+      console.log('[AI Insights] User is not Pro, showing upgrade message');
       setError("AI Insights is a Pro feature. Upgrade to access!");
       setLoading(false);
       return;
@@ -69,12 +75,14 @@ export default function AIInsightsDashboard() {
     const aiSettings = getAISettings();
     
     if (!aiSettings.allowDataAccess) {
+      console.log('[AI Insights] AI data access is disabled');
       setError("AI analysis is disabled. Enable it in Settings > AI & Privacy to see insights.");
       setLoading(false);
       return;
     }
 
     try {
+      console.log('[AI Insights] Fetching insights data...');
       setLoading(true);
       setError(null);
       
@@ -85,87 +93,108 @@ export default function AIInsightsDashboard() {
         throw new Error(data.error || 'Failed to fetch insights');
       }
       
+      console.log('[AI Insights] Successfully loaded insights');
       setInsights(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('[AI Insights] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load insights');
+      toast('Failed to load AI insights', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchInsights();
-  }, [isPro]);
+    // Only fetch when Pro check is complete
+    if (!proCheckLoading) {
+      console.log('[AI Insights] Pro check complete, isPro:', isPro);
+      fetchInsights();
+    }
+  }, [isPro, proCheckLoading]);
+
+  // Show loading while checking Pro status
+  if (proCheckLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin text-6xl mb-4">⚙️</div>
+          <p className="text-white/60">Checking subscription status...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/15 via-pink-500/10 to-cyan-500/15 backdrop-blur-sm p-8">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="animate-spin text-4xl mb-4">🤖</div>
-            <p className="text-white/70">Analyzing your financial data...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin text-6xl mb-4">🤖</div>
+          <p className="text-white/60">Analyzing your financial data...</p>
         </div>
       </div>
     );
   }
 
   if (error) {
-    const isProError = error.includes("Pro feature");
-    
     return (
-      <div className={`rounded-2xl border backdrop-blur-sm p-8 ${
-        isProError 
-          ? 'border-purple-500/30 bg-gradient-to-br from-purple-500/15 to-cyan-500/10'
-          : 'border-red-500/20 bg-gradient-to-br from-red-500/15 to-pink-500/10'
-      }`}>
+      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm p-8">
         <div className="text-center">
-          <div className="text-4xl mb-4">{isProError ? '🔒' : '⚠️'}</div>
-          <h3 className="text-lg font-semibold text-white mb-2">
-            {isProError ? 'Pro Feature' : 'AI Analysis Unavailable'}
-          </h3>
-          <p className="text-white/70 mb-4">{error}</p>
-          
-          {isProError ? (
-            <div className="space-y-4">
-              <div className="bg-white/5 rounded-xl p-4 mb-4">
-                <h4 className="font-medium text-white mb-2">AI Insights includes:</h4>
-                <ul className="text-sm text-white/70 space-y-1 text-left max-w-md mx-auto">
-                  <li>• Personalized savings recommendations</li>
-                  <li>• Subscription optimization analysis</li>
-                  <li>• Spending pattern detection</li>
-                  <li>• Budget forecasting & alerts</li>
-                </ul>
-              </div>
-              <Link href="/#pricing">
-                <Button className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700">
-                  ⭐ Upgrade to Pro
-                </Button>
-              </Link>
-            </div>
+          <div className="text-6xl mb-4">⚠️</div>
+          <h3 className="text-xl font-semibold text-white mb-2">Unable to Load Insights</h3>
+          <p className="text-white/70 mb-6">{error}</p>
+          {error.includes('Pro feature') ? (
+            <Link href="/pricing">
+              <Button className="bg-gradient-to-r from-purple-500 to-pink-500">
+                Upgrade to Pro
+              </Button>
+            </Link>
+          ) : error.includes('disabled') ? (
+            <Link href="/dashboard/settings">
+              <Button className="bg-gradient-to-r from-purple-500 to-pink-500">
+                Enable AI Analysis
+              </Button>
+            </Link>
           ) : (
-            <button
-              onClick={fetchInsights}
-              className="px-4 py-2 bg-red-500/20 border border-red-500/30 text-white rounded-lg hover:bg-red-500/30 transition-all"
-            >
+            <Button onClick={fetchInsights} className="bg-gradient-to-r from-purple-500 to-pink-500">
               Try Again
-            </button>
+            </Button>
           )}
         </div>
       </div>
     );
   }
 
-  if (!insights) return null;
+  if (!insights) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-8">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🤖</div>
+          <p className="text-white/60">No insights data available</p>
+          <Button onClick={fetchInsights} className="mt-4 bg-gradient-to-r from-purple-500 to-pink-500">
+            Load Insights
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const totalPotentialSavings = insights.insights.reduce((sum, insight) => sum + insight.potentialSavings, 0);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high': return 'border-red-400/30 bg-red-500/10';
-      case 'medium': return 'border-yellow-400/30 bg-yellow-500/10';
-      case 'low': return 'border-green-400/30 bg-green-500/10';
-      default: return 'border-white/20 bg-white/5';
+      case 'medium': return 'border-orange-400/30 bg-orange-500/10';
+      case 'low': return 'border-yellow-400/30 bg-yellow-500/10';
+      default: return 'border-white/10 bg-white/5';
+    }
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'high': return <span className="px-2 py-1 bg-red-500/20 text-red-300 text-xs rounded-full">🔴 High Priority</span>;
+      case 'medium': return <span className="px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded-full">🟡 Medium Priority</span>;
+      case 'low': return <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">🟢 Low Priority</span>;
+      default: return null;
     }
   };
 
@@ -191,6 +220,13 @@ export default function AIInsightsDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Debug info - remove after confirming it works */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-xs text-blue-300">
+          <strong>Debug:</strong> isPro={String(isPro)}, proCheckLoading={String(proCheckLoading)}
+        </div>
+      )}
+
       {/* Summary Header */}
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/15 via-pink-500/10 to-cyan-500/15 backdrop-blur-sm p-6">
         <div className="flex items-center justify-between mb-4">
@@ -211,23 +247,23 @@ export default function AIInsightsDashboard() {
         {/* Enhanced Summary Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">{insights.summary.totalItemCount}</div>
+            <div className="text-2xl font-bold text-white">{insights.summary.totalItemCount || 0}</div>
             <div className="text-xs text-white/60">Total Items</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-300">{insights.summary.subscriptionCount}</div>
+            <div className="text-2xl font-bold text-purple-300">{insights.summary.subscriptionCount || 0}</div>
             <div className="text-xs text-white/60">Subscriptions</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-cyan-300">{insights.summary.orderCount}</div>
+            <div className="text-2xl font-bold text-cyan-300">{insights.summary.orderCount || 0}</div>
             <div className="text-xs text-white/60">Orders</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-300">{insights.summary.expenseCount}</div>
+            <div className="text-2xl font-bold text-green-300">{insights.summary.expenseCount || 0}</div>
             <div className="text-xs text-white/60">Expenses</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">${insights.summary.totalMonthly.toFixed(0)}</div>
+            <div className="text-2xl font-bold text-white">${(insights.summary.totalMonthly || 0).toFixed(0)}</div>
             <div className="text-xs text-white/60">Monthly Recurring</div>
           </div>
           <div className="text-center">
@@ -236,13 +272,13 @@ export default function AIInsightsDashboard() {
           </div>
         </div>
 
-        <p className="text-white/70 text-sm">{insights.summary.message}</p>
+        <p className="text-white/70 text-sm">{insights.summary.message || 'AI analysis complete'}</p>
       </div>
 
       {/* Breakdown by Type */}
       {(insights.summary.monthlySubscriptionTotal || insights.summary.monthlyExpenseTotal || insights.summary.totalOrderValue) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {insights.summary.monthlySubscriptionTotal && (
+          {insights.summary.monthlySubscriptionTotal !== undefined && insights.summary.monthlySubscriptionTotal > 0 && (
             <div className="rounded-xl border border-purple-400/20 bg-purple-500/10 backdrop-blur-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -254,7 +290,7 @@ export default function AIInsightsDashboard() {
             </div>
           )}
           
-          {insights.summary.monthlyExpenseTotal && (
+          {insights.summary.monthlyExpenseTotal !== undefined && insights.summary.monthlyExpenseTotal > 0 && (
             <div className="rounded-xl border border-green-400/20 bg-green-500/10 backdrop-blur-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -266,7 +302,7 @@ export default function AIInsightsDashboard() {
             </div>
           )}
 
-          {insights.summary.totalOrderValue && (
+          {insights.summary.totalOrderValue !== undefined && insights.summary.totalOrderValue > 0 && (
             <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 backdrop-blur-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -281,7 +317,7 @@ export default function AIInsightsDashboard() {
       )}
 
       {/* Top Categories */}
-      {insights.summary.topCategories.length > 0 && (
+      {insights.summary.topCategories && insights.summary.topCategories.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-6">
           <h3 className="text-lg font-semibold text-white mb-4">📊 Top Spending Categories</h3>
           <div className="space-y-3">
@@ -291,7 +327,7 @@ export default function AIInsightsDashboard() {
                   <span className="text-lg">{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '📍'}</span>
                   <div>
                     <span className="text-white font-medium">{category.name}</span>
-                    {category.types && (
+                    {category.types && category.types.length > 0 && (
                       <div className="flex gap-1 mt-1">
                         {category.types.map(type => (
                           <span key={type} className={`text-xs px-2 py-1 rounded-full ${getCategoryColor(type)}`}>
@@ -315,57 +351,40 @@ export default function AIInsightsDashboard() {
       {/* Insights List */}
       {insights.insights.length > 0 ? (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-white">💡 Optimization Opportunities</h3>
+          <h3 className="text-xl font-semibold text-white">💡 Personalized Recommendations</h3>
+          
           {insights.insights.map((insight, index) => (
-            <div
-              key={index}
-              className={`rounded-2xl border backdrop-blur-sm p-6 ${getPriorityColor(insight.priority)}`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{getCategoryIcon(insight.category)}</span>
-                  <div>
-                    <h4 className="text-lg font-semibold text-white">{insight.title}</h4>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        insight.priority === 'high' ? 'bg-red-500/20 text-red-300' :
-                        insight.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
-                        'bg-green-500/20 text-green-300'
-                      }`}>
-                        {insight.priority.toUpperCase()} PRIORITY
-                      </span>
-                      <span className={`text-xs px-2 py-1 rounded-full ${getCategoryColor(insight.category)}`}>
-                        {insight.category.toUpperCase()}
-                      </span>
+            <div key={index} className={`rounded-2xl border backdrop-blur-sm p-6 ${getPriorityColor(insight.priority)}`}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start gap-3 flex-1">
+                  <div className="text-2xl">{getCategoryIcon(insight.category)}</div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="font-semibold text-white">{insight.title}</h4>
+                      {getPriorityBadge(insight.priority)}
+                    </div>
+                    <p className="text-white/70 text-sm mb-3">{insight.description}</p>
+                    <div className="bg-white/5 border border-white/10 rounded-lg p-3">
+                      <p className="text-sm text-white/80">
+                        <span className="font-medium">💡 Action:</span> {insight.action}
+                      </p>
                     </div>
                   </div>
                 </div>
-                {insight.potentialSavings > 0 && (
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-green-400">
-                      ${insight.potentialSavings.toFixed(0)}
-                    </div>
-                    <div className="text-xs text-white/60">potential savings</div>
-                  </div>
-                )}
-              </div>
-              
-              <p className="text-white/80 mb-3">{insight.description}</p>
-              
-              <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                <p className="text-sm text-white/90">
-                  <span className="font-medium">💡 Recommended Action:</span> {insight.action}
-                </p>
+                <div className="text-right ml-4">
+                  <div className="text-2xl font-bold text-green-400">${insight.potentialSavings.toFixed(0)}</div>
+                  <div className="text-xs text-white/60">potential savings</div>
+                </div>
               </div>
             </div>
           ))}
         </div>
       ) : (
         <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-8 text-center">
-          <div className="text-4xl mb-4">✨</div>
-          <h3 className="text-lg font-semibold text-white mb-2">Great Financial Health!</h3>
-          <p className="text-white/70">
-            No optimization opportunities found. Your spending patterns look well-balanced.
+          <div className="text-6xl mb-4">✨</div>
+          <h3 className="text-xl font-semibold text-white mb-2">You're Doing Great!</h3>
+          <p className="text-white/60">
+            No optimization opportunities found at the moment. Your finances are looking good!
           </p>
         </div>
       )}
