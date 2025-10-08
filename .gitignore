@@ -1,22 +1,120 @@
-# Node/Next/Vercel
+# Dependencies
 node_modules/
+node_modules.old/
+
+# Next.js build outputs
 .next/
-.vercel/
+.next.old/
 out/
 dist/
+build/
 
-# OS junk
+# Vercel
+.vercel/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temp folders
+temp-*/
+temp-cleanup/
+temp-api-backup*/
+temp-mobile-build/
+
+# OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Env files
+# Environment files
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .env.*
 !.env.example
 
-# .eslintignore
-node_modules
-.next
-out
-dist
-coverage
-.vercel
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm/
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn
+.yarn-integrity
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Capacitor (mobile)
+ios/App/Pods/
+ios/App/Podfile.lock
+ios/DerivedData/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/release/
+android/.idea/
+android/local.properties
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Large files that shouldn't be in git
+*.mp4
+*.mov
+*.avi
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7znode_modules/
+.next/
+temp-*/
+node_modules/
+.next/
+temp-*/
