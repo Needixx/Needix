@@ -5,7 +5,6 @@ import { useState, useMemo, useEffect } from "react";
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useOrders } from "@/lib/useOrders";
 import { useExpenses } from "@/lib/useExpenses";
-import { isMobileApp } from "@/lib/mobile-auth";
 
 interface CalendarEvent {
   id: string;
@@ -20,6 +19,20 @@ interface DayDetailModalProps {
   date: Date;
   events: CalendarEvent[];
   onClose: () => void;
+}
+
+// Helper function to parse date strings in local timezone
+function parseLocalDate(dateString: string | undefined | null): Date | null {
+  if (!dateString) return null;
+  
+  // If it's just a date string (YYYY-MM-DD), parse it as local time
+  if (dateString.includes('T')) {
+    return new Date(dateString);
+  }
+  
+  // Parse as local date to avoid timezone shift
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
 function DayDetailModal({ date, events, onClose }: DayDetailModalProps) {
@@ -115,7 +128,7 @@ export default function CalendarClient() {
 
   useEffect(() => {
     const checkMobile = () => {
-      const mobile = isMobileApp() || window.innerWidth < 768;
+      const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
     };
     
@@ -135,9 +148,8 @@ export default function CalendarClient() {
       subscriptions?.forEach(sub => {
         if (filters.essentialOnly && !sub.isEssential) return;
         
-        const renewalDate = sub.nextBillingDate ? new Date(sub.nextBillingDate) : null;
+        const renewalDate = parseLocalDate(sub.nextBillingDate);
         
-        // Show ALL items within the displayed month (past, present, and future)
         if (renewalDate && renewalDate >= monthStart && renewalDate <= monthEnd) {
           events.push({
             id: `sub-${sub.id}`,
@@ -153,10 +165,8 @@ export default function CalendarClient() {
 
     if (filters.orders) {
       orders?.forEach(order => {
-        const orderDate = order.scheduledDate ? new Date(order.scheduledDate) : 
-                         order.nextDate ? new Date(order.nextDate) : null;
+        const orderDate = parseLocalDate(order.scheduledDate) || parseLocalDate(order.nextDate);
         
-        // Show ALL items within the displayed month (past, present, and future)
         if (orderDate && orderDate >= monthStart && orderDate <= monthEnd) {
           events.push({
             id: `order-${order.id}`,
@@ -171,10 +181,8 @@ export default function CalendarClient() {
 
     if (filters.expenses) {
       expenses?.forEach(expense => {
-        const expenseDate = expense.nextPaymentDate ? new Date(expense.nextPaymentDate) :
-                           expense.dueDate ? new Date(expense.dueDate) : null;
+        const expenseDate = parseLocalDate(expense.nextPaymentDate) || parseLocalDate(expense.dueDate);
         
-        // Show ALL items within the displayed month (past, present, and future)
         if (expenseDate && expenseDate >= monthStart && expenseDate <= monthEnd) {
           events.push({
             id: `expense-${expense.id}`,
@@ -196,19 +204,17 @@ export default function CalendarClient() {
     today.setHours(0, 0, 0, 0);
     
     const activeSubscriptions = subscriptions?.filter(sub => {
-      const date = sub.nextBillingDate ? new Date(sub.nextBillingDate) : null;
+      const date = parseLocalDate(sub.nextBillingDate);
       return date && date >= today;
     }).length || 0;
     
     const activeOrders = orders?.filter(order => {
-      const date = order.scheduledDate ? new Date(order.scheduledDate) : 
-                   order.nextDate ? new Date(order.nextDate) : null;
+      const date = parseLocalDate(order.scheduledDate) || parseLocalDate(order.nextDate);
       return date && date >= today;
     }).length || 0;
     
     const activeExpenses = expenses?.filter(expense => {
-      const date = expense.nextPaymentDate ? new Date(expense.nextPaymentDate) :
-                   expense.dueDate ? new Date(expense.dueDate) : null;
+      const date = parseLocalDate(expense.nextPaymentDate) || parseLocalDate(expense.dueDate);
       return date && date >= today;
     }).length || 0;
     

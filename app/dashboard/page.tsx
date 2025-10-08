@@ -66,10 +66,7 @@ function FeatureLink({
   gradient: string;
 }) {
   return (
-    <Link
-      href={href}
-      className={`block rounded-xl border border-white/0 bg-gradient-to-br ${gradient} backdrop-blur-xl bg-white/[0.02] p-4 shadow transition-colors hover:bg-white/[0.04]`}
-    >
+    <Link href={href} className={`block rounded-xl border border-white/0 bg-gradient-to-br ${gradient} backdrop-blur-xl bg-white/[0.02] p-4 shadow transition-colors hover:bg-white/[0.04]`}>
       <div className="flex items-center gap-3">
         <span className="text-xl">{icon}</span>
         <div>
@@ -131,20 +128,67 @@ export default function DashboardPage() {
   }, [refreshSubs, refreshOrders, refreshExpenses]);
 
   useEffect(() => {
+    let mounted = true;
+
+    const checkIntegrationsOnMount = async () => {
+      if (!mounted || !isPro) return;
+      
+      // Small delay to ensure routes are ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      try {
+        const googleResponse = await fetch("/api/integrations/google/status", {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+        
+        if (mounted && googleResponse.ok) {
+          const { connected } = await googleResponse.json();
+          setIntegrations(prev => ({ ...prev, googleConnected: connected }));
+        }
+
+        const plaidResponse = await fetch("/api/integrations/plaid/status", {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+        
+        if (mounted && plaidResponse.ok) {
+          const { connected } = await plaidResponse.json();
+          setIntegrations(prev => ({ ...prev, plaidConnected: connected }));
+        }
+      } catch (error) {
+        if (mounted) {
+          console.error("Error checking integrations:", error);
+        }
+      }
+    };
+
     if (isPro) {
-      checkIntegrations();
+      checkIntegrationsOnMount();
     }
+
+    return () => {
+      mounted = false;
+    };
   }, [isPro]);
 
   const checkIntegrations = async () => {
     try {
-      const googleResponse = await fetch("/api/integrations/google/status");
+      const googleResponse = await fetch("/api/integrations/google/status", {
+        cache: 'no-store'
+      });
+      
       if (googleResponse.ok) {
         const { connected } = await googleResponse.json();
         setIntegrations(prev => ({ ...prev, googleConnected: connected }));
       }
 
-      const plaidResponse = await fetch("/api/integrations/plaid/status");
+      const plaidResponse = await fetch("/api/integrations/plaid/status", {
+        cache: 'no-store'
+      });
+      
       if (plaidResponse.ok) {
         const { connected } = await plaidResponse.json();
         setIntegrations(prev => ({ ...prev, plaidConnected: connected }));
@@ -296,7 +340,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-4xl font-bold tracking-tight text-white">Dashboard</h1>
               <p className="mt-2 text-base text-white/60">
-                Welcome back! Here's your financial overview.
+                Welcome back! Here&apos;s your financial overview.
               </p>
             </div>
           </div>
@@ -402,29 +446,17 @@ export default function DashboardPage() {
           {/* Quick Actions */}
           <Panel title="Quick Actions">
             <div className="space-y-3">
-              <Link
-                href="/dashboard/subscriptions"
-                className="block rounded-lg border border-white/0 bg-gradient-to-r from-purple-600/10 to-fuchsia-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
-              >
-                Add Subscription <span className="ml-2 text-white/60">— Track a new recurring service</span>
+              <Link href="/dashboard/subscriptions" className="block rounded-lg border border-white/0 bg-gradient-to-r from-purple-600/10 to-fuchsia-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]">
+                <>Add Subscription <span className="ml-2 text-white/60">— Track a new recurring service</span></>
               </Link>
-              <Link
-                href="/dashboard/expenses"
-                className="block rounded-lg border border-white/0 bg-gradient-to-r from-emerald-600/10 to-green-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
-              >
-                Log Expense <span className="ml-2 text-white/60">— Record a monthly expense</span>
+              <Link href="/dashboard/expenses" className="block rounded-lg border border-white/0 bg-gradient-to-r from-emerald-600/10 to-green-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]">
+                <>Log Expense <span className="ml-2 text-white/60">— Record a monthly expense</span></>
               </Link>
-              <Link
-                href="/dashboard/orders"
-                className="block rounded-lg border border-white/0 bg-gradient-to-r from-sky-600/10 to-blue-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
-              >
-                Track Order <span className="ml-2 text-white/60">— Monitor a scheduled purchase</span>
+              <Link href="/dashboard/orders" className="block rounded-lg border border-white/0 bg-gradient-to-r from-sky-600/10 to-blue-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]">
+                <>Track Order <span className="ml-2 text-white/60">— Monitor a scheduled purchase</span></>
               </Link>
-              <Link
-                href="/dashboard/transactions"
-                className="block rounded-lg border border-white/0 bg-gradient-to-r from-cyan-600/10 to-blue-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]"
-              >
-                View Transactions <span className="ml-2 text-white/60">— Check your bank activity</span>
+              <Link href="/dashboard/transactions" className="block rounded-lg border border-white/0 bg-gradient-to-r from-cyan-600/10 to-blue-600/10 px-4 py-3 text-sm text-white hover:bg-white/[0.05]">
+                <>View Transactions <span className="ml-2 text-white/60">— Check your bank activity</span></>
               </Link>
             </div>
           </Panel>

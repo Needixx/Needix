@@ -184,8 +184,8 @@ export default function GmailScannerDialog({
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Ready to Scan Gmail</h3>
                 <p className="text-white/60 mb-8 max-w-md mx-auto">
-                  We'll scan your Gmail for subscription receipts, order confirmations, and expense records.
-                  You'll be able to review and select which items to import.
+                  We&apos;ll scan your Gmail for subscription receipts, order confirmations, and expense records.
+                  You&apos;ll be able to review and select which items to import.
                 </p>
               </div>
 
@@ -280,7 +280,7 @@ export default function GmailScannerDialog({
                         <div className="flex items-center gap-6 text-sm text-white/70 mb-2">
                           <span className="font-semibold text-white">
                             {item.amount !== null ? (
-                              `${item.currency} $${item.amount.toFixed(2)}`
+                              `${item.currency} ${item.amount.toFixed(2)}`
                             ) : (
                               <span className="text-yellow-400">Price TBD</span>
                             )}
@@ -309,7 +309,7 @@ export default function GmailScannerDialog({
                   <div className="text-6xl mb-4">🤷‍♂️</div>
                   <h3 className="text-xl font-semibold text-white mb-3">No Items Found</h3>
                   <p className="text-white/60 max-w-md mx-auto">
-                    We didn't find any subscription receipts, orders, or expenses in your recent Gmail.
+                    We didn&apos;t find any subscription receipts, orders, or expenses in your recent Gmail.
                   </p>
                 </div>
               )}

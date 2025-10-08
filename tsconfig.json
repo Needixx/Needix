@@ -37,12 +37,14 @@
   ],
   "exclude": [
     "node_modules",
+    "node_modules.old",
     ".next",
+    ".next.old",
     "out",
     "dist",
     "build",
     "ios",
     "android",
-    "temp-cleanup" // ⬅️ exclude the archive
+    "temp-cleanup"
   ]
 }
