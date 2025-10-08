@@ -97,7 +97,7 @@ if (!isGoogleConfigured) {
 // Safe Buffer helper (never crashes in edge)
 const getNodeBuffer = () => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const { Buffer: NodeBuffer } = require("buffer");
     return NodeBuffer as typeof Buffer;
   } catch {

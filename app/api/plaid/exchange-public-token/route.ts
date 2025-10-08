@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     });
 
     let institutionName = 'Unknown';
-    let institutionId = itemResponse.data.item.institution_id || '';
+    const institutionId = itemResponse.data.item.institution_id || '';
 
     if (institutionId) {
       try {

@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     });
 
     const institutionId = itemResponse.data.item.institution_id;
-    let institutionName = metadata?.institution?.name || "Unknown Bank";
+    const institutionName = metadata?.institution?.name || "Unknown Bank";
 
     // Get accounts
     const accountsResponse = await plaidClient.accountsGet({

@@ -170,7 +170,7 @@ async function dispatchReminders() {
 
     const now = Date.now();
     const windowMs = 5 * 60_000; // 5-minute window
-    let sent = 0;
+    const sent = 0;
     const errors: string[] = [];
     const warnings: string[] = [];
 
