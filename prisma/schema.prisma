@@ -14,6 +14,8 @@ model WebhookEvent {
   id         String   @id
   type       String
   receivedAt DateTime @default(now())
+  
+  @@index([receivedAt])
 }
 
 model User {
