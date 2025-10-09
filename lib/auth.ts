@@ -9,6 +9,14 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { debug } from "@/lib/debug";
 
+// ---- Minimal critical fix #1: stable secret fallback (AUTH_SECRET or NEXTAUTH_SECRET) ----
+const AUTH_SECRET =
+  process.env.AUTH_SECRET ??
+  process.env.NEXTAUTH_SECRET ??
+  (() => {
+    throw new Error("Missing AUTH_SECRET (or NEXTAUTH_SECRET). Set one in Vercel env.");
+  })();
+
 // Check if Google OAuth is configured
 const isGoogleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
@@ -71,7 +79,7 @@ const credentialsProvider = Credentials({
   },
 });
 
-// Define Google provider conditionally
+// Define Google provider conditionally (kept exactly as you had it)
 const googleProvider = isGoogleConfigured
   ? Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -97,7 +105,6 @@ if (!isGoogleConfigured) {
 // Safe Buffer helper (never crashes in edge)
 const getNodeBuffer = () => {
   try {
-     
     const { Buffer: NodeBuffer } = require("buffer");
     return NodeBuffer as typeof Buffer;
   } catch {
@@ -111,11 +118,11 @@ export const {
   signOut,
   handlers: { GET, POST },
 } = NextAuth({
-  // Provide a stable secret (prevents CSRF/session churn)
-  secret: process.env.AUTH_SECRET,
+  // ---- Minimal critical fix #1 applied here ----
+  secret: AUTH_SECRET,
 
-  // Respect env for trustHost
-  trustHost: process.env.AUTH_TRUST_HOST === "true",
+  // ---- Minimal critical fix #2: force trustHost on Vercel/App Router ----
+  trustHost: true,
 
   // Keep JWT sessions while you debug (DB not required for /session)
   session: { strategy: "jwt" },
@@ -281,6 +288,7 @@ export const {
 
     async session({ session, token }) {
       if (session?.user && token?.sub) {
+        
         session.user.id = token.sub;
       }
       return session;
