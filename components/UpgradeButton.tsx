@@ -25,7 +25,7 @@ export default function UpgradeButton({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          priceId: "price_1S4Ut40WmSMb2aa0kCC1Bcdb",
+          priceId: "price_1SG6W11zIzAXTnpAFatK7mG3",
           mode: "subscription",
         }),
       });
