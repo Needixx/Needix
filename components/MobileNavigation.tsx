@@ -17,6 +17,14 @@ declare global {
 export default function MobileNavigation() {
   const router = useRouter();
   const pathname = usePathname();
+  const [shouldShow, setShouldShow] = useState(false);
+
+  useEffect(() => {
+    // Hide mobile nav on public pages where footer links must be visible
+    const publicRoutes = ["/", "/signin", "/how-it-works", "/privacy", "/terms"];
+    const isPublicRoute = publicRoutes.includes(pathname);
+    setShouldShow(!isPublicRoute);
+  }, [pathname]);
 
   useEffect(() => {
     // Set status bar for mobile
@@ -33,6 +41,11 @@ export default function MobileNavigation() {
       }
     }
   }, []);
+
+  // Don't render if we're on a public route
+  if (!shouldShow) {
+    return null;
+  }
 
   const navItems = [
     { path: "/dashboard", label: "Dashboard", icon: "🏠" },

@@ -55,6 +55,20 @@ export async function PUT(request: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    // ✅ Check if user exists in database
+    const userExists = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true },
+    });
+
+    if (!userExists) {
+      console.error(`User ${session.user.id} not found in database. Session user ID doesn't match any database record.`);
+      return NextResponse.json(
+        { error: "User not found. Please sign in again." },
+        { status: 404 }
+      );
+    }
+
     const updates = (await request.json()) as Partial<ReminderSettings>;
 
     const dbData: Record<string, string | boolean | number> = {};
@@ -106,6 +120,19 @@ export async function DELETE() {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // ✅ Check if user exists
+    const userExists = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true },
+    });
+
+    if (!userExists) {
+      return NextResponse.json(
+        { error: "User not found. Please sign in again." },
+        { status: 404 }
+      );
+    }
 
     await prisma.notificationSettings.upsert({
       where: { userId: session.user.id },
