@@ -3,10 +3,8 @@
 
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
-import AddSubscriptionDialog, {
-  EditSubscriptionDialog,
-  type SubscriptionFormData,
-} from "@/components/AddSubscriptionDialog";
+import AddSubscriptionDialog, { type SubscriptionFormData } from "@/components/AddSubscriptionDialog";
+import EditSubscriptionDialog from "@/components/EditSubscriptionDialog";
 import SubscriptionTable from "@/components/SubscriptionTable";
 import AIInsightsDashboard from "@/components/AIInsightsDashboard";
 import UpgradeButton from "@/components/UpgradeButton";
