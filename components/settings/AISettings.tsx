@@ -71,7 +71,7 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
         <div
           className={[
             "relative w-12 h-6 rounded-full overflow-hidden transition-all duration-300",
-            checked ? "ui-toggle-on" : "ui-toggle-off", // <-- force the fill via !important
+            checked ? "ui-toggle-on" : "ui-toggle-off",
             checked
               ? "border border-white/20 shadow-[0_0_10px_2px_rgba(147,51,234,0.4),0_0_16px_3px_rgba(34,211,238,0.35)]"
               : "border border-white/25 shadow-none",
@@ -91,9 +91,16 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
   };
 
   return (
-    <div className="space-y-8">
+    <section
+      id="ai-privacy"
+      data-section="ai-privacy"
+      aria-label="AI & Privacy"
+      className="space-y-8 scroll-mt-24"
+    >
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white mb-2">🤖 AI & Privacy</h2>
+        <h2 id="ai-privacy-heading" className="text-2xl font-bold text-white mb-2">
+          🤖 AI & Privacy
+        </h2>
         <p className="text-white/60">Control how AI features use your data and enhance your experience</p>
       </div>
 
@@ -198,6 +205,6 @@ export default function AISettings({ aiSettings, setAISettings }: AISettingsProp
           Disable All AI Features
         </button>
       </div>
-    </div>
+    </section>
   );
 }

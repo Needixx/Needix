@@ -77,7 +77,7 @@ const SECTION_KEYS: readonly SectionKey[] = [
   "account",
 ] as const;
 
-/** Safely normalize an unknown id to a string to satisfy no-base-to-string (no unbound methods) */
+/** Safely normalize an unknown id to a string */
 function normalizeId(idLike: unknown): string {
   if (typeof idLike === "string") return idLike;
   if (typeof idLike === "number" && Number.isFinite(idLike)) return String(idLike);
@@ -92,11 +92,29 @@ function normalizeId(idLike: unknown): string {
   return String(idLike || "");
 }
 
+/** Normalize query/hash values into one of our section keys */
+function mapQueryToSection(q: string | null | undefined, hash: string | null | undefined): SectionKey | null {
+  const val = (q || "").toLowerCase().trim();
+  const h = (hash || "").replace(/^#/, "").toLowerCase().trim();
+
+  // Anything "ai", "ai-privacy", "privacy", etc → ai
+  const aiAliases = new Set(["ai", "ai-privacy", "privacy", "ai_settings", "ai&privacy", "ai-privacy-section"]);
+  if (aiAliases.has(val) || aiAliases.has(h)) return "ai";
+
+  // If val is already a valid section key, use it
+  if (SECTION_KEYS.includes(val as SectionKey)) return val as SectionKey;
+
+  // Hash could be a valid key too
+  if (SECTION_KEYS.includes(h as SectionKey)) return h as SectionKey;
+
+  return null;
+}
+
 export default function SettingsLayout({ user }: SettingsLayoutProps) {
   const [activeSection, setActiveSection] = useState<SectionKey>("notifications");
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  
+
   // Settings state
   const [notifications, setNotifications] = useState<NotificationSettings>(DEFAULT_NOTIFICATIONS);
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
@@ -109,22 +127,55 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
   const { items: orders } = useOrders();
   const { isPro } = useSubscriptionLimit();
 
+  // --- NEW: pick the initial section from query/hash & react to back/forward ---
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const applyFromUrl = () => {
+      const url = new URL(window.location.href);
+      const section = mapQueryToSection(
+        url.searchParams.get("tab") || url.searchParams.get("section"),
+        url.hash
+      );
+      if (section) setActiveSection(section);
+    };
+
+    // initial
+    applyFromUrl();
+
+    // respond to history changes
+    const onPop = () => applyFromUrl();
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // --- NEW: when AI section becomes active, scroll to its anchor if present ---
+  useEffect(() => {
+    if (activeSection !== "ai") return;
+    // Let the AISettings render first
+    const t = setTimeout(() => {
+      const el = document.getElementById("ai-privacy");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+    return () => clearTimeout(t);
+  }, [activeSection]);
+
   // Check if mobile
   useEffect(() => {
     const checkMobile = () => {
       const mobile = isMobileApp() || window.innerWidth < 768;
       setIsMobile(mobile);
-      if (!mobile) setShowSidebar(false); // Close sidebar when going to desktop
+      if (!mobile) setShowSidebar(false);
     };
-    
+
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   // Transform data for child components
   const billingSubscriptions: BillingBasicSubscription[] =
-    subscriptions?.map(sub => ({
+    subscriptions?.map((sub) => ({
       id: normalizeId(sub.id),
       name: sub.name,
       price: typeof sub.price === "number" ? sub.price : 0,
@@ -134,7 +185,7 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
     })) || [];
 
   const billingOrders: BillingBasicOrder[] =
-    orders?.map(order => ({
+    orders?.map((order) => ({
       id: normalizeId(order.id),
       name: order.name,
       date: order.scheduledDate || order.nextDate || order.createdAt,
@@ -143,7 +194,7 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
     })) || [];
 
   const orderExports: OrderExport[] =
-    orders?.map(order => ({
+    orders?.map((order) => ({
       id: normalizeId(order.id),
       name: order.name,
       amount: order.amount || 0,
@@ -175,26 +226,26 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
 
       if (stored.billing) {
         const parsed = JSON.parse(stored.billing);
-        setBilling(prev => ({ ...prev, ...parsed }));
+        setBilling((prev) => ({ ...prev, ...parsed }));
       }
 
       if (stored.security) {
         const parsed = JSON.parse(stored.security);
-        setSecurity(prev => ({ ...prev, ...parsed }));
+        setSecurity((prev) => ({ ...prev, ...parsed }));
       }
 
       if (stored.ai) {
         const parsed = JSON.parse(stored.ai);
-        setAISettings(prev => ({ ...prev, ...parsed }));
+        setAISettings((prev) => ({ ...prev, ...parsed }));
       }
 
       if (stored.integrations) {
         const parsed = JSON.parse(stored.integrations);
-        setIntegrations(prev => ({ ...prev, ...parsed }));
+        setIntegrations((prev) => ({ ...prev, ...parsed }));
       }
 
       // Update billing info dynamically
-      setBilling(prev => ({
+      setBilling((prev) => ({
         ...prev,
         plan: isPro ? "pro" : "free",
         status: "active",
@@ -203,7 +254,7 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
       }));
 
       if ("Notification" in window && "serviceWorker" in navigator) {
-        setIntegrations(prev => ({ ...prev, webPushSupported: true }));
+        setIntegrations((prev) => ({ ...prev, webPushSupported: true }));
       }
     } catch {
       // fall back to defaults on any parsing error
@@ -213,9 +264,20 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
   const handleSectionChange = (section: string) => {
     if ((SECTION_KEYS as readonly string[]).includes(section)) {
       setActiveSection(section as SectionKey);
-      if (isMobile) {
-        setShowSidebar(false); // Close sidebar on mobile after selecting
+
+      // Keep URL in sync (nice-to-have)
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", section);
+        // keep hash for AI
+        if (section === "ai") url.hash = "ai-privacy";
+        else url.hash = "";
+        window.history.pushState({}, "", url.toString());
+      } catch {
+        // ignore
       }
+
+      if (isMobile) setShowSidebar(false);
     }
   };
 
@@ -250,17 +312,18 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
   };
 
   const getSectionTitle = () => {
-    const section = {
-      notifications: "🔔 Notifications",
-      preferences: "⚙️ Preferences", 
-      billing: "💳 Billing",
-      security: "🔒 Security",
-      ai: "🤖 AI & Privacy",
-      integrations: "🔗 Integrations",
-      data: "📊 Data",
-      account: "👤 Account",
-    }[activeSection];
-    return section || "Settings";
+    const section =
+      {
+        notifications: "🔔 Notifications",
+        preferences: "⚙️ Preferences",
+        billing: "💳 Billing",
+        security: "🔒 Security",
+        ai: "🤖 AI & Privacy",
+        integrations: "🔗 Integrations",
+        data: "📊 Data",
+        account: "👤 Account",
+      }[activeSection] || "Settings";
+    return section;
   };
 
   if (isMobile) {
@@ -286,15 +349,15 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
             <div className="absolute right-0 top-0 h-full w-80 max-w-[85vw] bg-neutral-900 border-l border-white/10 p-4 overflow-auto pt-safe-top">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-white">Settings Menu</h3>
-                <button 
+                <button
                   onClick={() => setShowSidebar(false)}
                   className="rounded px-2 py-1 text-white/80 hover:bg-white/10 mobile-touch-target"
                 >
                   ✕
                 </button>
               </div>
-              <SettingsSidebar 
-                activeSection={activeSection} 
+              <SettingsSidebar
+                activeSection={activeSection}
                 onSectionChange={handleSectionChange}
                 isMobile={true}
               />
@@ -303,9 +366,7 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
         )}
 
         {/* Mobile Content */}
-        <div className="px-4">
-          {renderActiveSection()}
-        </div>
+        <div className="px-4">{renderActiveSection()}</div>
       </div>
     );
   }
@@ -313,11 +374,7 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
   // Desktop Layout
   return (
     <div className="flex gap-8">
-      <SettingsSidebar 
-        activeSection={activeSection} 
-        onSectionChange={handleSectionChange}
-        isMobile={false}
-      />
+      <SettingsSidebar activeSection={activeSection} onSectionChange={handleSectionChange} isMobile={false} />
       <div className="flex-1 max-w-4xl">{renderActiveSection()}</div>
     </div>
   );

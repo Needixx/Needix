@@ -7,6 +7,9 @@ import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
+/** Update this if your settings path is different */
+const AI_PRIVACY_SETTINGS_PATH = "/settings?tab=ai&section=ai-privacy#ai-privacy";
+
 /**
  * Server-provided insight types (unchanged)
  */
@@ -87,7 +90,7 @@ interface AIInsightsData {
 const getAISettings = () => {
   try {
     const stored = localStorage.getItem("needix_ai");
-    return stored ? JSON.parse(stored) as { allowDataAccess?: boolean } : { allowDataAccess: false };
+    return stored ? (JSON.parse(stored) as { allowDataAccess?: boolean }) : { allowDataAccess: false };
   } catch {
     return { allowDataAccess: false };
   }
@@ -111,7 +114,6 @@ function sum(numbers: number[]): number {
 }
 
 function monthKey(iso: string): string {
-  // yyyy-mm key for grouping monthly duplicates
   const d = new Date(iso);
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -125,13 +127,10 @@ function priorityForSavings(s: number): "high" | "medium" | "low" {
 }
 
 /**
- * Create “duplicate subs” insights:
- * - Group active subs by normalized name
- * - If group size > 1, propose keeping the cheapest, cancel others
- * - Savings = sum(others) per interval (we present monthly estimate)
+ * Create “duplicate subs” insights
  */
 function findDuplicateSubscriptions(subs: RawSubscription[]): Insight[] {
-  const active = subs.filter(s => (s.status ?? "active") === "active");
+  const active = subs.filter((s) => (s.status ?? "active") === "active");
   const byName = new Map<string, RawSubscription[]>();
   for (const s of active) {
     const key = normalizeName(s.name);
@@ -143,17 +142,20 @@ function findDuplicateSubscriptions(subs: RawSubscription[]): Insight[] {
   for (const [key, group] of byName.entries()) {
     if (group.length < 2) continue;
 
-    // normalize to monthly cost for fair comparison
     const toMonthly = (amount: number, interval?: RawSubscription["interval"]) => {
       switch (interval) {
-        case "year": return amount / 12;
-        case "week": return (amount * 52) / 12;
-        case "day": return (amount * 365) / 12;
-        default: return amount; // month or undefined
+        case "year":
+          return amount / 12;
+        case "week":
+          return (amount * 52) / 12;
+        case "day":
+          return (amount * 365) / 12;
+        default:
+          return amount; // month or undefined
       }
     };
 
-    const monthlyCosts = group.map(g => ({
+    const monthlyCosts = group.map((g) => ({
       id: g.id,
       name: g.name,
       rawAmount: g.amount,
@@ -163,15 +165,14 @@ function findDuplicateSubscriptions(subs: RawSubscription[]): Insight[] {
     monthlyCosts.sort((a, b) => a.monthly - b.monthly);
     const keep = monthlyCosts[0];
     const cancel = monthlyCosts.slice(1);
-    const savings = sum(cancel.map(c => c.monthly));
+    const savings = sum(cancel.map((c) => c.monthly));
 
     if (savings > 0.01) {
       const title = `Possible duplicate subscriptions: “${group[0].name}”`;
       const description =
         `We found ${group.length} active subscriptions that appear to be the same service (${key}). ` +
         `Keeping the cheapest (${keep.name} at ~$${keep.monthly.toFixed(2)}/mo) and cancelling the rest could reduce spend.`;
-      const action =
-        `Review ${group.length} similar subs and cancel ${cancel.length} higher-priced duplicates.`;
+      const action = `Review ${group.length} similar subs and cancel ${cancel.length} higher-priced duplicates.`;
       results.push({
         type: "duplicates:subscriptions",
         priority: priorityForSavings(savings),
@@ -188,9 +189,6 @@ function findDuplicateSubscriptions(subs: RawSubscription[]): Insight[] {
 
 /**
  * Multiple similar charges in the same month (orders + expenses)
- * - Group by merchant/title normalized within each month
- * - If more than 1 charge in same month and not obviously a single large order,
- *   suggest consolidating or cancelling extras.
  */
 function findMonthlyDuplicateCharges(orders: RawOrder[], expenses: RawExpense[]): Insight[] {
   const byMonthName = new Map<string, number[]>();
@@ -213,11 +211,9 @@ function findMonthlyDuplicateCharges(orders: RawOrder[], expenses: RawExpense[])
   const results: Insight[] = [];
   for (const [k, amounts] of byMonthName.entries()) {
     if (amounts.length < 2) continue;
-    // If there are multiple separate charges to the same merchant in the same month,
-    // savings estimate: assume at least the smallest one could be avoided.
     const sorted = [...amounts].sort((a, b) => a - b);
     const avoidable = sum(sorted.slice(0, Math.max(1, Math.floor(sorted.length / 2))));
-    if (avoidable < 5) continue; // ignore tiny stuff here; handled below
+    if (avoidable < 5) continue;
 
     const [month, norm] = k.split("::");
     results.push({
@@ -227,7 +223,7 @@ function findMonthlyDuplicateCharges(orders: RawOrder[], expenses: RawExpense[])
       description:
         `We detected ${amounts.length} separate charges from the same merchant/title in ${month}. ` +
         `Consider consolidating or cancelling extras.`,
-      action: "Review these transactions in Orders/Expenses and consolidate or cancel duplicates.",
+      action: "Open recent Orders and Expenses, filter by amount < $3, and cancel/disable add-ons.",
       potentialSavings: Math.round(avoidable),
       category: "expenses",
     });
@@ -236,28 +232,14 @@ function findMonthlyDuplicateCharges(orders: RawOrder[], expenses: RawExpense[])
 }
 
 /**
- * Price hike detector for subscriptions (simple, safe):
- * - If lastPaymentDate exists and last known amount < current monthly amount by > 10%, flag it.
- * Note: we require an optional field `amount` to be “current”.
+ * Price hike detector for subscriptions (placeholder)
  */
-function findSubscriptionPriceHikes(subs: RawSubscription[]): Insight[] {
-  // Without historical amounts we can't be perfect; this only fires when backend fills lastPaymentDate
-  // AND updates amount to a new price (common pattern after a renewal).
-  // We’ll just surface the hint to review.
-  const results: Insight[] = [];
-  for (const s of subs) {
-    // We can't know previous amount; skip unless tags indicate hike or interval changed
-    // (Keep a very conservative check: if yearly vs monthly conversion implies >10% change in effective monthly)
-    if (!s.interval) continue;
-    // nothing robust without prior amount; leaving placeholder for future backend enrichment
-    // Returning empty by default; safe for now.
-  }
-  return results;
+function findSubscriptionPriceHikes(_subs: RawSubscription[]): Insight[] {
+  return [];
 }
 
 /**
- * Nuisance micro-charges:
- * - Any non-subscription charge under threshold (default $3)
+ * Nuisance micro-charges
  */
 function findMicroCharges(orders: RawOrder[], expenses: RawExpense[], threshold = 3): Insight[] {
   const amounts: number[] = [];
@@ -293,8 +275,7 @@ function findMicroCharges(orders: RawOrder[], expenses: RawExpense[], threshold 
 }
 
 /**
- * Merge & dedupe insights:
- * - Preferred uniqueness key: type + normalized title
+ * Merge & dedupe insights
  */
 function mergeInsights(server: Insight[], local: Insight[]): Insight[] {
   const key = (i: Insight) => `${i.type}::${normalizeName(i.title)}`;
@@ -304,10 +285,8 @@ function mergeInsights(server: Insight[], local: Insight[]): Insight[] {
     const k = key(l);
     if (!map.has(k)) map.set(k, l);
     else {
-      // combine savings if same finding appears twice
       const existing = map.get(k)!;
       existing.potentialSavings = Math.max(existing.potentialSavings, l.potentialSavings);
-      // bump priority if local is higher
       const order: Record<Insight["priority"], number> = { high: 3, medium: 2, low: 1 };
       if (order[l.priority] > order[existing.priority]) existing.priority = l.priority;
     }
@@ -344,7 +323,6 @@ export default function AIInsightsDashboard() {
     try {
       setLoading(true);
       setError(null);
-      // ask the API for raw data if it supports it; harmless if ignored
       const response = await fetch("/api/ai/insights?includeRaw=1");
       const data: AIInsightsData = await response.json();
       if (!response.ok) {
@@ -368,7 +346,6 @@ export default function AIInsightsDashboard() {
     const expenses = insights.rawExpenses ?? [];
 
     if (subs.length === 0 && orders.length === 0 && expenses.length === 0) {
-      // nothing raw available — skip quietly
       setDeepScanCount(0);
       return;
     }
@@ -448,7 +425,7 @@ export default function AIInsightsDashboard() {
               <Button className="bg-gradient-to-r from-purple-500 to-pink-500">Upgrade to Pro</Button>
             </Link>
           ) : error.includes("disabled") ? (
-            <Link href="/dashboard/settings">
+            <Link href={AI_PRIVACY_SETTINGS_PATH}>
               <Button className="bg-gradient-to-r from-purple-500 to-pink-500">Enable AI Analysis</Button>
             </Link>
           ) : (
@@ -491,19 +468,13 @@ export default function AIInsightsDashboard() {
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case "high":
-        return (
-          <span className="px-2 py-1 bg-red-500/20 text-red-300 text-xs rounded-full">🔴 High Priority</span>
-        );
+        return <span className="px-2 py-1 bg-red-500/20 text-red-300 text-xs rounded-full">🔴 High Priority</span>;
       case "medium":
         return (
-          <span className="px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded-full">
-            🟡 Medium Priority
-          </span>
+          <span className="px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded-full">🟡 Medium Priority</span>
         );
       case "low":
-        return (
-          <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">🟢 Low Priority</span>
-        );
+        return <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">🟢 Low Priority</span>;
       default:
         return null;
     }
@@ -576,9 +547,7 @@ export default function AIInsightsDashboard() {
             <div className="text-xs text-white/60">Total Items</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-300">
-              {insights.summary.subscriptionCount || 0}
-            </div>
+            <div className="text-2xl font-bold text-purple-300">{insights.summary.subscriptionCount || 0}</div>
             <div className="text-xs text-white/60">Subscriptions</div>
           </div>
           <div className="text-center">
@@ -586,15 +555,11 @@ export default function AIInsightsDashboard() {
             <div className="text-xs text-white/60">Orders</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-300">
-              {insights.summary.expenseCount || 0}
-            </div>
+            <div className="text-2xl font-bold text-green-300">{insights.summary.expenseCount || 0}</div>
             <div className="text-xs text-white/60">Expenses</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">
-              ${(insights.summary.totalMonthly || 0).toFixed(0)}
-            </div>
+            <div className="text-2xl font-bold text-white">${(insights.summary.totalMonthly || 0).toFixed(0)}</div>
             <div className="text-xs text-white/60">Monthly Recurring</div>
           </div>
           <div className="text-center">
@@ -646,9 +611,7 @@ export default function AIInsightsDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-cyan-300">Total Order Value</p>
-                  <p className="text-2xl font-bold text-white">
-                    ${insights.summary.totalOrderValue.toFixed(0)}
-                  </p>
+                  <p className="text-2xl font-bold text-white">${insights.summary.totalOrderValue.toFixed(0)}</p>
                 </div>
                 <div className="text-2xl">📦</div>
               </div>
