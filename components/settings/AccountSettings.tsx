@@ -12,7 +12,6 @@ import { Eye, EyeOff, Mail, CheckCircle } from "lucide-react";
 type ToastFn = (message: string, variant?: "success" | "error" | "info") => void;
 
 // NOTE: We keep the prop for backward-compat, but we prefer session data.
-// If you can, stop passing this prop entirely and rely on useSession().
 interface AccountSettingsProps {
   user?: User;
 }
@@ -46,6 +45,11 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  // 👁️ Show/hide toggles for password inputs
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Reset email form
   const [resetEmail, setResetEmail] = useState(effectiveEmail);
@@ -94,14 +98,9 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
         return;
       }
 
-      // 1) Update the NextAuth session in-memory so every client that reads session sees the new name
       await update({ name: trimmed });
-
-      // 2) Close edit UI & notify
       setEditingName(false);
       toast("Name updated successfully", "success");
-
-      // 3) Refresh route so server components (that call auth()) pick up the new session token
       router.refresh();
     } catch (error) {
       console.error("Update name error:", error);
@@ -140,6 +139,9 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
         setOldPassword("");
         setNewPassword("");
         setConfirmPassword("");
+        setShowOldPassword(false);
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
       } else {
         toast(data?.error || "Failed to change password", "error");
       }
@@ -291,72 +293,89 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
         </div>
       </div>
 
-      {/* Modals (unchanged below, trimmed for brevity) */}
+      {/* Change Password Modal */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-white/20 rounded-xl p-6 max-w-md w-full">
             <h3 className="text-xl font-bold text-white mb-4">🔒 Change Password</h3>
             <div className="space-y-4">
+              {/* Current Password */}
               <div>
-                <label className="block text-sm font-medium text-white/70 mb-1">Current Password</label>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Current Password
+                </label>
                 <div className="relative">
                   <input
-                    type={"password"}
+                    type={showOldPassword ? "text" : "password"}
                     value={oldPassword}
                     onChange={(e) => setOldPassword(e.target.value)}
                     className="w-full p-3 pr-12 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple/50"
                     placeholder="Enter current password"
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
-                    onClick={() => {}}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80"
-                    aria-hidden
-                    tabIndex={-1}
+                    onClick={() => setShowOldPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+                    aria-label={showOldPassword ? "Hide current password" : "Show current password"}
+                    aria-pressed={showOldPassword}
+                    title={showOldPassword ? "Hide" : "Show"}
                   >
-                    <Eye className="w-5 h-5 opacity-0 pointer-events-none" />
+                    {showOldPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
+
+              {/* New Password */}
               <div>
-                <label className="block text-sm font-medium text-white/70 mb-1">New Password</label>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  New Password
+                </label>
                 <div className="relative">
                   <input
-                    type={"password"}
+                    type={showNewPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="w-full p-3 pr-12 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple/50"
                     placeholder="Enter new password (min 6 characters)"
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"
-                    onClick={() => {}}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80"
-                    aria-hidden
-                    tabIndex={-1}
+                    onClick={() => setShowNewPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+                    aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                    aria-pressed={showNewPassword}
+                    title={showNewPassword ? "Hide" : "Show"}
                   >
-                    <Eye className="w-5 h-5 opacity-0 pointer-events-none" />
+                    {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
+
+              {/* Confirm New Password */}
               <div>
-                <label className="block text-sm font-medium text-white/70 mb-1">Confirm New Password</label>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Confirm New Password
+                </label>
                 <div className="relative">
                   <input
-                    type={"password"}
+                    type={showConfirmPassword ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="w-full p-3 pr-12 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple/50"
                     placeholder="Confirm new password"
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"
-                    onClick={() => {}}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80"
-                    aria-hidden
-                    tabIndex={-1}
+                    onClick={() => setShowConfirmPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                    aria-pressed={showConfirmPassword}
+                    title={showConfirmPassword ? "Hide" : "Show"}
                   >
-                    <Eye className="w-5 h-5 opacity-0 pointer-events-none" />
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
@@ -382,6 +401,9 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
                   setOldPassword("");
                   setNewPassword("");
                   setConfirmPassword("");
+                  setShowOldPassword(false);
+                  setShowNewPassword(false);
+                  setShowConfirmPassword(false);
                 }}
                 variant="secondary"
                 disabled={isLoading}
@@ -393,6 +415,7 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
         </div>
       )}
 
+      {/* Forgot Password Modal */}
       {showForgotPasswordModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-white/20 rounded-xl p-6 max-w-md w-full">
@@ -404,7 +427,9 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-white/70 mb-1">Email Address</label>
+                    <label className="block text-sm font-medium text-white/70 mb-1">
+                      Email Address
+                    </label>
                     <input
                       type="email"
                       value={resetEmail}
@@ -415,7 +440,11 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
                   </div>
                 </div>
                 <div className="flex gap-3 mt-6">
-                  <Button onClick={handleForgotPassword} disabled={isLoading} className="flex-1 bg-gradient-to-r from-purple to-cyan">
+                  <Button
+                    onClick={handleForgotPassword}
+                    disabled={isLoading}
+                    className="flex-1 bg-gradient-to-r from-purple to-cyan"
+                  >
                     {isLoading ? "Sending..." : "Send Reset Link"}
                   </Button>
                   <Button onClick={closeForgotPasswordModal} variant="secondary" disabled={isLoading}>
@@ -464,6 +493,7 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
         </div>
       )}
 
+      {/* Sign Out Confirmation Modal */}
       {showSignOutModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-white/20 rounded-xl p-6 max-w-md w-full">
@@ -481,6 +511,7 @@ export default function AccountSettings({ user }: AccountSettingsProps) {
         </div>
       )}
 
+      {/* Delete Account Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-red-500/30 rounded-xl p-6 max-w-md w-full">
