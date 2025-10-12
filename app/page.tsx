@@ -16,7 +16,6 @@ export default function HomePage() {
       <CompareTable />
       <PricingTable />
       <FAQ />
-      <CTA />
     </main>
   );
 }
