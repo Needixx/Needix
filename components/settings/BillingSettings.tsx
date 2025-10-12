@@ -149,35 +149,6 @@ export default function BillingSettings({ billing, isPro, orders }: BillingSetti
           </div>
         )}
       </div>
-
-      {/* Usage Statistics */}
-      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">📊 Account Activity</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg text-center">
-            <div className="text-2xl mb-2">📋</div>
-            <div className="text-xl font-bold text-white">{billing.usageCount}</div>
-            <div className="text-xs text-white/60">Subscriptions</div>
-          </div>
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg text-center">
-            <div className="text-2xl mb-2">🛍️</div>
-            <div className="text-xl font-bold text-white">{orders.length}</div>
-            <div className="text-xs text-white/60">Orders</div>
-          </div>
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg text-center">
-            <div className="text-2xl mb-2">💰</div>
-            <div className="text-xl font-bold text-white">
-              ${orders.reduce((sum, order) => sum + order.total, 0).toFixed(2)}
-            </div>
-            <div className="text-xs text-white/60">Total Orders</div>
-          </div>
-          <div className="p-4 bg-white/5 border border-white/10 rounded-lg text-center">
-            <div className="text-2xl mb-2">⚡</div>
-            <div className="text-xl font-bold text-white">{isPro ? "Pro" : "Free"}</div>
-            <div className="text-xs text-white/60">Plan Type</div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

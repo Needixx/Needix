@@ -249,7 +249,7 @@ export const {
         try {
           const urlObj = new URL(url, baseUrl);
           const callbackUrl = urlObj.searchParams.get("callbackUrl");
-          if (callbackUrl) {
+        if (callbackUrl) {
             return decodeURIComponent(callbackUrl);
           }
         } catch {
@@ -286,20 +286,33 @@ export const {
       return baseUrl + "/dashboard";
     },
 
+    // ---- Minimal critical fix #3: propagate name through JWT <-> session so client update() works
     async session({ session, token }) {
       if (session?.user && token?.sub) {
-        
         session.user.id = token.sub;
+      }
+      // reflect updated name from token into session
+      if (session?.user && typeof token?.name === "string") {
+        session.user.name = token.name;
       }
       return session;
     },
 
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger, session }) {
       // token is typed (augmented) as our JWT
       const t = token as JWT;
 
       if (user) {
         t.sub = user.id;
+        // on initial sign-in, ensure token.name mirrors db user name
+        if (user.name) {
+          t.name = user.name;
+        }
+      }
+
+      // When client calls useSession().update({ name: "..." })
+      if (trigger === "update" && session && typeof (session as { name?: unknown }).name === "string") {
+        t.name = (session as { name: string }).name;
       }
 
       // Store the access token and refresh token for Gmail API access

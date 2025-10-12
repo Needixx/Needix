@@ -119,6 +119,10 @@
     -webkit-touch-callout: none;
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* ====== Toggle track overrides (win against any background rules) ====== */
+  .ui-toggle-on { background: linear-gradient(90deg, #8b5cf6 0%, #06b6d4 100%) !important; }
+  .ui-toggle-off { background: rgba(255,255,255,0.15) !important; }
 }
 
 /* -------------------- EXTRAS -------------------- */
