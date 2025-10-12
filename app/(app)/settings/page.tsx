@@ -1,71 +1,22 @@
 // app/(app)/settings/page.tsx
 "use client";
 
+import { Suspense, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import SettingsClient from "@/components/SettingsClient";
 
-export default function SettingsPage() {
+function SettingsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
-  // Auth gate
+  // Redirect if not signed in
   useEffect(() => {
     if (status === "loading") return;
-    if (!session?.user) router.push("/signin");
-  }, [session, status, router]);
-
-  // Read once into stable strings so we can safely use in deps
-  const tab = useMemo(() => (searchParams?.get("tab") || "").toLowerCase().trim(), [searchParams]);
-  const section = useMemo(() => (searchParams?.get("section") || "").toLowerCase().trim(), [searchParams]);
-
-  // Deep-link to AI & Privacy section
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // Map common query values to the element id used on the page
-    const mapToId = (key: string): string | null => {
-      if (!key) return null;
-      if (["ai", "privacy", "ai-privacy", "ai_privacy", "aiandprivacy"].includes(key)) {
-        return "ai-privacy"; // <-- change if your section uses a different id
-      }
-      return key; // allow direct ids like ?section=billing
-    };
-
-    const targetId =
-      mapToId(tab) ||
-      mapToId(section) ||
-      (window.location.hash ? window.location.hash.slice(1) : null);
-
-    if (!targetId) return;
-
-    // Try a few likely ids if the primary one isn't found
-    const candidates = [
-      targetId,
-      // fallback guesses if your SettingsClient uses different anchors
-      "ai-privacy",
-      "ai_privacy",
-      "ai",
-      "privacy",
-      "ai-settings",
-      "aiSettings",
-    ];
-
-    // Update the URL hash (keeps query params intact)
-    const url = new URL(window.location.href);
-    url.hash = `#${targetId}`;
-    window.history.replaceState(null, "", url.toString());
-
-    // Scroll after paint
-    requestAnimationFrame(() => {
-      const el = candidates
-        .map((id) => document.getElementById(id))
-        .find((node): node is HTMLElement => Boolean(node));
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, [tab, section]);
+    if (!session?.user) {
+      router.push("/signin");
+    }
+  }, [status, session?.user, router]);
 
   if (status === "loading") {
     return (
@@ -98,5 +49,23 @@ export default function SettingsPage() {
       {/* Settings Content */}
       <SettingsClient user={session.user} />
     </main>
+  );
+}
+
+export default function SettingsPage() {
+  // Wrap in Suspense to satisfy Next 15 when client code reads search/hash
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-6xl px-4 py-10 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span>Loading settings…</span>
+          </div>
+        </main>
+      }
+    >
+      <SettingsContent />
+    </Suspense>
   );
 }
