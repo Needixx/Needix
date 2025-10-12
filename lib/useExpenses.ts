@@ -1,4 +1,4 @@
-// lib/useExpenses.ts - FIXED TYPE ERRORS (lines 52, 230, 280)
+// lib/useExpenses.ts
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -136,6 +136,8 @@ export function useExpenses() {
 
   const addExpense = async (expense: Omit<Expense, "id" | "createdAt" | "updatedAt">) => {
     try {
+      // Prefer nextPaymentDate (recurring) then dueDate (one-time)
+      const dateStr = expense.nextPaymentDate ?? expense.dueDate;
       const response = await fetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,7 +145,7 @@ export function useExpenses() {
           description: expense.name,
           amount: expense.amount,
           currency: expense.currency,
-          date: expense.dueDate ? new Date(expense.dueDate).toISOString() : new Date().toISOString(),
+          date: dateStr ? new Date(dateStr).toISOString() : new Date().toISOString(),
           merchant: expense.notes,
           category: expense.category,
           recurrence: mapFrequencyToRecurrence(expense.frequency),
@@ -181,25 +183,34 @@ export function useExpenses() {
 
   const updateExpense = async (id: string, patch: Partial<Expense>) => {
     try {
+      // Build payload in backend's expected shape
+      const payload: any = {
+        description: patch.name,
+        amount: patch.amount,
+        currency: patch.currency,
+        merchant: patch.notes,
+        category: patch.category,
+        recurrence: patch.frequency ? mapFrequencyToRecurrence(patch.frequency) : undefined,
+        isEssential: patch.isEssential,
+      };
+
+      // Prefer nextPaymentDate (recurring) then dueDate (one-time)
+      const dateStr = patch.nextPaymentDate ?? patch.dueDate;
+      if (dateStr) {
+        payload.date = new Date(dateStr).toISOString();
+      }
+
       const response = await fetch(`/api/expenses/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: patch.name,
-          amount: patch.amount,
-          currency: patch.currency,
-          date: patch.dueDate ? new Date(patch.dueDate).toISOString() : undefined,
-          merchant: patch.notes,
-          category: patch.category,
-          recurrence: patch.frequency ? mapFrequencyToRecurrence(patch.frequency) : undefined,
-          isEssential: patch.isEssential,
-        })
+        body: JSON.stringify(payload)
       });
       if (!response.ok) console.error('Failed to update expense in backend');
     } catch (error) {
       console.error('Error updating expense:', error);
     }
 
+    // Optimistic local update
     const next = items.map((expense): Expense =>
       expense.id === id ? { ...expense, ...patch, updatedAt: new Date().toISOString() } : expense
     );
@@ -254,7 +265,7 @@ export function useExpenses() {
   return { items, totals, addExpense, updateExpense, deleteExpense, loading, refresh };
 }
 
-// Helper functions to map between frontend and backend formats
+// ---------------- helpers ----------------
 function mapFrequencyFromRecurrence(recurrence: string): ExpenseFrequency {
   switch (recurrence) {
     case 'weekly': return 'weekly';
@@ -270,8 +281,8 @@ function mapFrequencyToRecurrence(frequency: ExpenseFrequency): string {
     case 'weekly': return 'weekly';
     case 'monthly': return 'monthly';
     case 'yearly': return 'yearly';
-    case 'quarterly': return 'monthly'; // Map quarterly to monthly for backend
-    case 'bi-weekly': return 'weekly'; // Map bi-weekly to weekly for backend
+    case 'quarterly': return 'monthly'; // best-effort mapping
+    case 'bi-weekly': return 'weekly';  // best-effort mapping
     case 'one-time': return 'none';
     default: return 'monthly';
   }
@@ -279,11 +290,11 @@ function mapFrequencyToRecurrence(frequency: ExpenseFrequency): string {
 
 function mapCategoryFromApi(category: string | null | undefined): ExpenseCategory {
   const validCategories: ExpenseCategory[] = [
-    'Housing', 'Transportation', 'Utilities', 'Insurance', 
+    'Housing', 'Transportation', 'Utilities', 'Insurance',
     'Food & Groceries', 'Healthcare', 'Debt Payments', 'Childcare',
     'Education', 'Personal Care', 'Entertainment', 'Savings & Investments', 'Other'
   ];
-  
+
   if (category && validCategories.includes(category as ExpenseCategory)) {
     return category as ExpenseCategory;
   }

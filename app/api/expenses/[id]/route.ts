@@ -1,96 +1,154 @@
-// app/api/expenses/[id]/route.ts - TYPE SAFE VERSION
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
-import { Recurrence } from '@prisma/client';
+// app/api/expenses/[id]/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
-interface UpdateExpenseBody {
-  description?: string;
-  amount?: number;
-  currency?: string;
-  date?: string;
-  merchant?: string | null;
-  category?: string | null;
-  recurrence?: string;
-  isEssential?: boolean;
+type Recurrence = "none" | "weekly" | "monthly" | "yearly";
+
+function normalizeRecurrence(value: unknown): Recurrence | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.toLowerCase() as Recurrence;
+  return v === "none" || v === "weekly" || v === "monthly" || v === "yearly"
+    ? v
+    : undefined;
 }
 
-function getId(req: NextRequest): string | null {
-  const pathname = req.nextUrl.pathname;
-  const segments = pathname.split('/');
-  const id = segments[segments.length - 1];
-  return id && id !== 'route.ts' ? id : null;
-}
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-export const PATCH = async (req: NextRequest) => {
+  const id = params.id;
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  // Ownership check
+  const existing = await prisma.expense.findUnique({ where: { id } });
+  if (!existing || existing.userId !== session.user.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const body = await req.json();
+
+  // Support both `description` and legacy `name`
+  const description =
+    (typeof body.description === "string" ? body.description : undefined) ??
+    (typeof body.name === "string" ? body.name : undefined);
+
+  const data: Prisma.ExpenseUpdateInput = {};
+
+  if (description !== undefined) data.description = description;
+
+  if (
+    body.amount !== undefined &&
+    body.amount !== null &&
+    !Number.isNaN(Number(body.amount))
+  ) {
+    data.amount = new Prisma.Decimal(body.amount);
+  }
+
+  if (typeof body.currency === "string") {
+    data.currency = body.currency;
+  }
+
+  // category/merchant might be nullable in your schema; if they are NOT nullable,
+  // just drop the "?? null" and assign strings only.
+  if ("category" in body) {
+    data.category =
+      body.category === null || body.category === undefined
+        ? // if nullable in Prisma schema:
+          // { set: null }
+          // if NOT nullable, omit the update by not setting anything:
+          undefined
+        : { set: String(body.category) };
+  }
+
+  if ("merchant" in body) {
+    data.merchant =
+      body.merchant === null || body.merchant === undefined
+        ? // if nullable in Prisma schema:
+          // { set: null }
+          // if NOT nullable, omit the update by not setting anything:
+          undefined
+        : { set: String(body.merchant) };
+  }
+
+  // IMPORTANT: your Prisma type shows `date` is NOT nullable.
+  // Only update when we have a valid date; never set null.
+  if ("date" in body) {
+    const d = new Date(body.date);
+    if (!isNaN(d.getTime())) {
+      data.date = d; // ok for non-nullable DateTime
+    }
+    // else: ignore invalid/null and do not update date
+  }
+
+  const rec = normalizeRecurrence(body.recurrence);
+  if (rec !== undefined) data.recurrence = rec;
+
+  if (typeof body.isEssential === "boolean") {
+    data.isEssential = body.isEssential;
+  }
+
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const id = getId(req);
-    if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-
-    // Ensure it belongs to the user
-    const existing = await prisma.expense.findUnique({
-      where: { id },
-      select: { userId: true },
-    });
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (existing.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const payload = (await req.json()) as UpdateExpenseBody;
-    const data: Prisma.ExpenseUpdateInput = {};
-
-    if (payload.description !== undefined) data.description = String(payload.description);
-    if (payload.amount !== undefined) data.amount = Number(payload.amount);
-    if (payload.currency !== undefined) data.currency = String(payload.currency);
-    if (payload.date !== undefined) data.date = payload.date ? new Date(payload.date) : new Date();
-    if (payload.merchant !== undefined) data.merchant = payload.merchant ? String(payload.merchant) : null;
-    if (payload.category !== undefined) data.category = payload.category ? String(payload.category) : null;
-    if (payload.recurrence !== undefined) data.recurrence = payload.recurrence as Prisma.EnumRecurrenceFieldUpdateOperationsInput | Recurrence;
-    if (payload.isEssential !== undefined) data.isEssential = Boolean(payload.isEssential);
-
-    const expense = await prisma.expense.update({
-      where: { id },
+    const updated = await prisma.expense.update({
+      where: { id, userId: session.user.id },
       data,
     });
 
-    return NextResponse.json(expense);
-  } catch (err) {
-    console.error('Error updating expense:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-};
-
-export const DELETE = async (req: NextRequest) => {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const id = getId(req);
-    if (!id) return NextResponse.json({ error: 'Bad request' }, { status: 400 });
-
-    // Ensure it belongs to the user
-    const existing = await prisma.expense.findUnique({
-      where: { id },
-      select: { userId: true },
+    // Respond in the shape your hook expects
+    return NextResponse.json({
+      id: updated.id,
+      description: updated.description,
+      amount: Number(updated.amount),
+      currency: updated.currency,
+      date: updated.date ? updated.date.toISOString() : null, // frontend tolerates null-ish
+      merchant: updated.merchant ?? null,
+      category: updated.category ?? null,
+      recurrence: updated.recurrence as Recurrence,
+      isEssential: updated.isEssential,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
     });
-    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (existing.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+  } catch (err) {
+    console.error("PATCH /api/expenses/[id] error:", err);
+    return NextResponse.json(
+      { error: "Failed to update expense" },
+      { status: 500 }
+    );
+  }
+}
 
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const id = params.id;
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  // Enforce ownership
+  const existing = await prisma.expense.findUnique({ where: { id } });
+  if (!existing || existing.userId !== session.user.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  try {
     await prisma.expense.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error('Error deleting expense:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("DELETE /api/expenses/[id] error:", err);
+    return NextResponse.json(
+      { error: "Failed to delete expense" },
+      { status: 500 }
+    );
   }
-};
+}

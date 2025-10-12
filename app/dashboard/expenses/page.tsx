@@ -6,6 +6,7 @@ import { useExpenses } from "@/lib/useExpenses";
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import ExpenseTable from "@/components/ExpenseTable";
 import AddExpenseDialog from "@/components/AddExpenseDialog";
+import EditExpenseDialog from "@/components/EditExpenseDialog";
 import UpgradeButton from "@/components/UpgradeButton";
 import { Button } from "@/components/ui/Button";
 import { fmtCurrency } from "@/lib/format";
@@ -35,35 +36,30 @@ function StatCard({
 
 export default function ExpensesPage() {
   const { items, totals, addExpense, updateExpense, deleteExpense } = useExpenses();
-  const limitData = useSubscriptionLimit();
+  const { isPro } = useSubscriptionLimit();
+
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
-  const isPro = limitData.isPro;
-
-  // Check if user can add more expenses
+  // Free-plan gating (matches your subs behavior)
   const canAddExpense = isPro || items.length < 2;
   const expenseLimit = isPro ? Infinity : 2;
 
-  const handleAddExpense = (
-    expense: Omit<Expense, "id" | "createdAt" | "updatedAt">
-  ) => {
+  /* ------- handlers ------- */
+  const handleAddExpense = (expense: Omit<Expense, "id" | "createdAt" | "updatedAt">) => {
     void addExpense(expense);
     setIsAddingExpense(false);
   };
 
-  const handleUpdateExpense = (
-    expense: Omit<Expense, "id" | "createdAt" | "updatedAt">
-  ) => {
-    if (editingExpense) {
-      void updateExpense(editingExpense.id, expense);
-      setEditingExpense(null);
-    }
+  // Edit dialog returns a partial patch plus id
+  const handleUpdateExpense = (patch: Partial<Expense> & { id: string }) => {
+    void updateExpense(patch.id, patch);
+    setEditingExpense(null);
   };
 
   return (
     <div className="relative min-h-screen">
-      {/* Futuristic Green/Emerald Background - Toned Down */}
+      {/* Background */}
       <div className="fixed inset-0 bg-black -z-10" />
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-black to-slate-900 -z-10" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-green-500/8 via-transparent to-transparent -z-10" />
@@ -172,15 +168,23 @@ export default function ExpensesPage() {
           />
         </div>
 
-        {/* Add/Edit Expense Dialog */}
-        {(isAddingExpense || editingExpense) && (
+        {/* Add Expense Dialog */}
+        {isAddingExpense && (
           <AddExpenseDialog
-            expense={editingExpense}
-            onSave={editingExpense ? handleUpdateExpense : handleAddExpense}
-            onCancel={() => {
-              setIsAddingExpense(false);
-              setEditingExpense(null);
+            onSave={handleAddExpense}
+            onCancel={() => setIsAddingExpense(false)}
+          />
+        )}
+
+        {/* Edit Expense Dialog */}
+        {editingExpense && (
+          <EditExpenseDialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setEditingExpense(null);
             }}
+            initial={editingExpense}
+            onUpdate={handleUpdateExpense}
           />
         )}
       </main>

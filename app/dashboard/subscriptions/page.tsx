@@ -5,13 +5,13 @@ import { useState } from "react";
 import { useSubscriptions } from "@/lib/useSubscriptions";
 import { useSubscriptionLimit } from "@/lib/useSubscriptionLimit";
 import AddSubscriptionDialog, {
-  EditSubscriptionDialog,
   type SubscriptionFormData,
 } from "@/components/AddSubscriptionDialog";
 import SubscriptionTable from "@/components/SubscriptionTable";
 import UpgradeButton from "@/components/UpgradeButton";
 import { Button } from "@/components/ui/Button";
 import { fmtCurrency } from "@/lib/format";
+import { EditSubscriptionDialog } from "@/components/EditSubscriptionDialog";
 import { useToast } from "@/components/ui/Toast";
 import type { Subscription } from "@/lib/types";
 

@@ -1,7 +1,8 @@
 // components/EditSubscriptionDialog.tsx
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import type { BillingPeriod } from "@/lib/types";
 
@@ -27,22 +28,56 @@ interface EditSubscriptionDialogProps {
 }
 
 const CATEGORIES = [
-  'Entertainment', 'Software', 'AI Tools', 'Development', 'Storage', 
-  'Shopping', 'Productivity', 'Communication', 'Design', 'Other'
+  "Entertainment",
+  "Software",
+  "AI Tools",
+  "Development",
+  "Storage",
+  "Shopping",
+  "Productivity",
+  "Communication",
+  "Design",
+  "Other",
 ] as const;
+
+function symbolForCurrency(code: string): string {
+  try {
+    const parts = new Intl.NumberFormat(undefined, { style: "currency", currency: code }).formatToParts(0);
+    return parts.find((p) => p.type === "currency")?.value ?? code;
+  } catch {
+    return code;
+  }
+}
 
 export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }: EditSubscriptionDialogProps) {
   const toast = useToast();
-  
+
+  // Mounted flag for portal (avoid SSR mismatch)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Form state
   const [name, setName] = useState(initial?.name || "");
   const [price, setPrice] = useState(initial?.price?.toString() || "");
   const [currency, setCurrency] = useState(initial?.currency || "USD");
-  const [category, setCategory] = useState<string>(initial?.category || 'Other');
-  const [period, setPeriod] = useState<BillingPeriod>(initial?.period || 'monthly');
+  const [category, setCategory] = useState<string>(initial?.category || "Other");
+  const [period, setPeriod] = useState<BillingPeriod>(initial?.period || "monthly");
   const [notes, setNotes] = useState(initial?.notes || "");
   const [link, setLink] = useState(initial?.link || "");
   const [isEssential, setIsEssential] = useState(initial?.isEssential || false);
+
+  // Keep form in sync if a different item is opened
+  useEffect(() => {
+    if (!initial) return;
+    setName(initial.name || "");
+    setPrice(initial.price != null ? String(initial.price) : "");
+    setCurrency(initial.currency || "USD");
+    setCategory(initial.category || "Other");
+    setPeriod(initial.period || "monthly");
+    setNotes(initial.notes || "");
+    setLink(initial.link || "");
+    setIsEssential(!!initial.isEssential);
+  }, [initial]);
 
   // Calendar state
   const now = useMemo(() => new Date(), []);
@@ -52,29 +87,21 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
   const [calMonth, setCalMonth] = useState<number>(minMonth);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  // Initialize form with initial data
+  // Initialize calendar from initial date
   useEffect(() => {
-    if (initial) {
-      setName(initial.name || "");
-      setPrice(initial.price?.toString() || "");
-      setCurrency(initial.currency || "USD");
-      setCategory(initial.category || 'Other');
-      setPeriod(initial.period || 'monthly');
-      setNotes(initial.notes || "");
-      setLink(initial.link || "");
-      setIsEssential(initial.isEssential || false);
-
-      // Initialize calendar with existing date
-      if (initial.nextBillingDate) {
-        const d = new Date(`${initial.nextBillingDate}T00:00:00`);
-        if (d >= now) {
-          setCalYear(d.getFullYear());
-          setCalMonth(d.getMonth());
-          setSelectedDay(d.getDate());
-        }
+    if (initial?.nextBillingDate) {
+      const d = new Date(`${initial.nextBillingDate}T00:00:00`);
+      if (!Number.isNaN(d.getTime()) && d >= now) {
+        setCalYear(d.getFullYear());
+        setCalMonth(d.getMonth());
+        setSelectedDay(d.getDate());
       }
+    } else {
+      setCalYear(minYear);
+      setCalMonth(minMonth);
+      setSelectedDay(null);
     }
-  }, [initial, now]);
+  }, [initial, now, minYear, minMonth]);
 
   const monthLabel = useMemo(
     () =>
@@ -93,15 +120,15 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
 
   const isDisabled = (day: number) => {
     const date = new Date(calYear, calMonth, day);
-    return date < now;
+    return date < new Date(now.getFullYear(), now.getMonth(), now.getDate());
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    let nextBillingDate: string | undefined = undefined;
+
+    let nextBillingDate: string | undefined;
     if (selectedDay) {
-      nextBillingDate = new Date(calYear, calMonth, selectedDay).toISOString().split('T')[0];
+      nextBillingDate = new Date(calYear, calMonth, selectedDay).toISOString().split("T")[0];
     }
 
     onUpdate({
@@ -111,25 +138,55 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
       currency,
       period,
       nextBillingDate,
-      category: category,
+      category,
       notes,
       link,
       isEssential,
     });
   };
 
-  const onClose = () => {
-    onOpenChange(false);
+  const onClose = () => onOpenChange(false);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Backdrop click
+  const onBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
   };
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="mb-6 text-2xl font-bold text-white">
-          Edit Subscription
-        </h2>
+  const currencySymbol = symbolForCurrency(currency);
+
+  const dialog = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={onBackdropClick}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="relative w-full max-w-md rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {/* Close (X) */}
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-3 top-3 rounded-full px-2 py-1 text-white/70 hover:bg-white/10 hover:text-white transition"
+        >
+          ×
+        </button>
+
+        <h2 className="mb-6 text-2xl font-bold text-white">Edit Subscription</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name */}
@@ -145,11 +202,13 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
             />
           </label>
 
-          {/* Price */}
+          {/* Price with currency symbol */}
           <label className="block">
             <div className="mb-2 text-sm font-medium text-white/80">💰 Price</div>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/70" aria-hidden>
+                {currencySymbol}
+              </span>
               <input
                 type="number"
                 step="0.01"
@@ -186,27 +245,29 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
               ))}
             </select>
           </label>
 
-          {/* Next Billing Date Calendar */}
+          {/* Next Billing Date */}
           <div className="space-y-3">
             <div className="text-sm font-medium text-white/80">📅 Next Billing Date (Optional)</div>
-            
-            {/* Month Navigation */}
+
             <div className="flex items-center justify-between">
               <button
                 type="button"
                 disabled={!canGoPrevMonth}
                 onClick={() => {
+                  if (!canGoPrevMonth) return;
                   if (calMonth === 0) {
                     setCalMonth(11);
-                    setCalYear(calYear - 1);
+                    setCalYear((y) => y - 1);
                   } else {
-                    setCalMonth(calMonth - 1);
+                    setCalMonth((m) => m - 1);
                   }
                 }}
                 className="p-2 text-white/70 hover:text-white disabled:opacity-30"
@@ -218,11 +279,12 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
                 type="button"
                 disabled={!canGoNextMonth}
                 onClick={() => {
+                  if (!canGoNextMonth) return;
                   if (calMonth === 11) {
                     setCalMonth(0);
-                    setCalYear(calYear + 1);
+                    setCalYear((y) => y + 1);
                   } else {
-                    setCalMonth(calMonth + 1);
+                    setCalMonth((m) => m + 1);
                   }
                 }}
                 className="p-2 text-white/70 hover:text-white disabled:opacity-30"
@@ -231,37 +293,37 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
               </button>
             </div>
 
-            {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-1 text-center text-sm">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-                <div key={day} className="p-2 text-white/50 font-medium">
-                  {day}
+              {/* Use FULL weekday names + index to guarantee unique keys */}
+              {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, i) => (
+                <div key={`hdr-${i}-${day}`} className="p-2 text-white/50 font-medium text-xs">
+                  {day.slice(0, 3)}
                 </div>
               ))}
-              
-              {/* Empty cells for padding */}
+
+              {/* Empty cells to align first day */}
               {Array.from({ length: start }, (_, i) => (
                 <div key={`empty-${i}`} />
               ))}
-              
+
               {/* Calendar days */}
               {Array.from({ length: totalDays }, (_, i) => {
                 const day = i + 1;
                 const disabled = isDisabled(day);
                 const selected = selectedDay === day;
-                
+
                 return (
                   <button
-                    key={day}
+                    key={`day-${day}`}
                     type="button"
                     disabled={disabled}
                     onClick={() => setSelectedDay(selected ? null : day)}
                     className={`p-2 rounded-lg transition-colors ${
                       disabled
-                        ? 'text-white/20 cursor-not-allowed'
+                        ? "text-white/20 cursor-not-allowed"
                         : selected
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
-                        : 'text-white/70 hover:bg-white/10 hover:text-white'
+                        ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
                     }`}
                   >
                     {day}
@@ -326,4 +388,9 @@ export function EditSubscriptionDialog({ open, onOpenChange, initial, onUpdate }
       </div>
     </div>
   );
+
+  // Render above everything else to escape navbar stacking contexts
+  return createPortal(dialog, document.body);
 }
+
+export default EditSubscriptionDialog;

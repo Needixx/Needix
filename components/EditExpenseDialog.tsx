@@ -1,9 +1,10 @@
-// components/AddExpenseDialog.tsx
+// components/EditExpenseDialog.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Expense, ExpenseCategory, ExpenseFrequency } from "@/lib/types/expenses";
 
+/* ---------- constants ---------- */
 const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   "Housing",
   "Transportation",
@@ -29,11 +30,33 @@ const EXPENSE_FREQUENCIES: ExpenseFrequency[] = [
   "one-time",
 ];
 
-/* Calendar helper functions */
-const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
-const startWeekday = (y: number, m: number) => new Date(y, m, 1).getDay(); // 0=Sun..6=Sat
+/* ---------- helpers ---------- */
+type Preferences = { currency?: string };
 
-// Format a Date as local YYYY-MM-DD without UTC conversion
+function getSavedCurrency(fallback: string | undefined): string {
+  try {
+    const prefs = localStorage.getItem("needix_prefs");
+    if (prefs) {
+      const json: Preferences = JSON.parse(prefs);
+      if (json?.currency && typeof json.currency === "string") return json.currency;
+    }
+  } catch {}
+  return fallback || "USD";
+}
+
+function symbolForCurrency(code: string): string {
+  try {
+    const parts = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: code,
+    }).formatToParts(0);
+    return parts.find((p) => p.type === "currency")?.value ?? "$";
+  } catch {
+    return "$";
+  }
+}
+
+// Format a Date as local YYYY-MM-DD without UTC shifting
 function toLocalYMD(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -41,51 +64,34 @@ function toLocalYMD(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function getSavedCurrency(): string {
-  try {
-    const prefs = localStorage.getItem("needix_prefs");
-    if (prefs) {
-      const json = JSON.parse(prefs);
-      if (json?.currency && typeof json.currency === "string") return json.currency;
-    }
-    const loose = localStorage.getItem("needix_currency");
-    if (loose) return loose;
-  } catch {}
-  return "USD";
+/* ---------- props ---------- */
+interface EditExpenseDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initial: Expense; // expects full Expense (id required)
+  onUpdate: (patch: Partial<Expense> & { id: string }) => void;
 }
 
-function symbolForCurrency(code: string): string {
-  try {
-    const parts = new Intl.NumberFormat(undefined, { style: "currency", currency: code })
-      .formatToParts(0);
-    return parts.find(p => p.type === "currency")?.value ?? "$";
-  } catch {
-    return "$";
-  }
-}
+/* ---------- component ---------- */
+export default function EditExpenseDialog({
+  open,
+  onOpenChange,
+  initial,
+  onUpdate,
+}: EditExpenseDialogProps) {
+  // form state
+  const [name, setName] = useState(initial?.name ?? "");
+  const [amount, setAmount] = useState<string>(initial?.amount?.toString() ?? "");
+  const [currency, setCurrency] = useState<string>(initial?.currency ?? "USD");
+  const [category, setCategory] = useState<ExpenseCategory>(initial?.category ?? "Other");
+  const [frequency, setFrequency] = useState<ExpenseFrequency>(initial?.frequency ?? "monthly");
+  const [isRecurring, setIsRecurring] = useState<boolean>(
+    initial?.isRecurring ?? frequency !== "one-time"
+  );
+  const [isEssential, setIsEssential] = useState<boolean>(initial?.isEssential ?? true);
+  const [notes, setNotes] = useState<string>(initial?.notes ?? "");
 
-export default function AddExpenseDialog({
-  expense,
-  onSave,
-  onCancel,
-}: {
-  expense?: Expense | null;
-  onSave: (expense: Omit<Expense, "id" | "createdAt" | "updatedAt">) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [category, setCategory] = useState<ExpenseCategory>("Other");
-  const [frequency, setFrequency] = useState<ExpenseFrequency>("monthly");
-  const [isRecurring, setIsRecurring] = useState(true);
-  const [isEssential, setIsEssential] = useState(true);
-  const [notes, setNotes] = useState("");
-
-  // currency symbol derived from currency code
-  const currencySymbol = useMemo(() => symbolForCurrency(currency), [currency]);
-
-  // Calendar state
+  // calendar state
   const now = useMemo(() => new Date(), []);
   const minYear = now.getFullYear();
   const minMonth = now.getMonth();
@@ -94,34 +100,38 @@ export default function AddExpenseDialog({
   const [calMonth, setCalMonth] = useState<number>(minMonth);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
-  // Initialize from settings and/or editing record
+  // hydrate when opening / when initial changes
   useEffect(() => {
-    setCurrency(getSavedCurrency());
-  }, []);
+    if (!open) return;
 
-  // Populate form if editing existing expense
-  useEffect(() => {
-    if (expense) {
-      setName(expense.name);
-      setAmount(expense.amount.toString());
-      setCurrency(expense.currency || getSavedCurrency());
-      setCategory(expense.category);
-      setFrequency(expense.frequency);
-      setIsRecurring(expense.isRecurring);
-      setIsEssential(expense.isEssential);
-      setNotes(expense.notes || "");
+    setName(initial?.name ?? "");
+    setAmount(initial?.amount != null ? String(initial.amount) : "");
+    setCurrency(getSavedCurrency(initial?.currency));
+    setCategory((initial?.category as ExpenseCategory) ?? "Other");
+    setFrequency(initial?.frequency ?? "monthly");
+    setIsRecurring(initial?.isRecurring ?? (initial?.frequency !== "one-time"));
+    setIsEssential(Boolean(initial?.isEssential));
+    setNotes(initial?.notes ?? "");
 
-      // Set up calendar date
-      if (expense.nextPaymentDate) {
-        const d = new Date(`${expense.nextPaymentDate}T00:00:00`);
-        const base = d < now ? now : d;
-        setCalYear(base.getFullYear());
-        setCalMonth(base.getMonth());
-        setSelectedDay(d.getDate());
-      }
+    // calendar init from due/next date (favor nextPaymentDate if recurring)
+    const iso = isRecurring
+      ? initial?.nextPaymentDate
+      : initial?.dueDate ?? initial?.nextPaymentDate;
+
+    if (iso) {
+      const d = new Date(`${iso}T00:00:00`);
+      const base = d < now ? now : d;
+      setCalYear(base.getFullYear());
+      setCalMonth(base.getMonth());
+      setSelectedDay(d.getDate());
+    } else {
+      setCalYear(minYear);
+      setCalMonth(minMonth);
+      setSelectedDay(null);
     }
-  }, [expense, now]);
+  }, [open, initial, now, isRecurring, minMonth, minYear]);
 
+  // derived
   const monthLabel = useMemo(
     () =>
       new Date(calYear, calMonth, 1).toLocaleString(undefined, {
@@ -131,8 +141,20 @@ export default function AddExpenseDialog({
     [calYear, calMonth]
   );
 
-  const canGoPrevMonth = calYear > minYear || (calYear === minYear && calMonth > minMonth);
+  const totalDays = useMemo(() => new Date(calYear, calMonth + 1, 0).getDate(), [calYear, calMonth]);
+  const start = useMemo(() => new Date(calYear, calMonth, 1).getDay(), [calYear, calMonth]);
+  const canGoPrevMonth =
+    calYear > minYear || (calYear === minYear && calMonth > minMonth);
 
+  const isDisabled = (day: number) => {
+    const date = new Date(calYear, calMonth, day);
+    // disallow past days
+    return date < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  };
+
+  const currencySymbol = useMemo(() => symbolForCurrency(currency), [currency]);
+
+  // handlers
   const goPrevMonth = () => {
     if (!canGoPrevMonth) return;
     const d = new Date(calYear, calMonth, 1);
@@ -150,59 +172,53 @@ export default function AddExpenseDialog({
     setSelectedDay(null);
   };
 
-  const totalDays = daysInMonth(calYear, calMonth);
-  const start = startWeekday(calYear, calMonth);
-  const todayY = now.getFullYear();
-  const todayM = now.getMonth();
-  const todayD = now.getDate();
-
-  function isDisabled(day: number) {
-    if (calYear < todayY) return true;
-    if (calYear === todayY && calMonth < todayM) return true;
-    if (calYear === todayY && calMonth === todayM && day < todayD) return true;
-    return false;
-  }
+  const onClose = () => onOpenChange(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!initial?.id) return;
 
-    if (!name.trim() || !amount.trim()) return;
-
-    let nextPaymentDate: string | undefined;
+    let chosenDate: string | undefined;
     if (selectedDay) {
-      nextPaymentDate = toLocalYMD(new Date(calYear, calMonth, selectedDay));
+      chosenDate = toLocalYMD(new Date(calYear, calMonth, selectedDay));
     }
 
-    const expenseData = {
+    // Patch matches your useExpenses.updateExpense expectations
+    const patch: Partial<Expense> & { id: string } = {
+      id: initial.id,
       name: name.trim(),
-      amount: parseFloat(amount),
+      amount: amount ? parseFloat(amount) : undefined,
       currency,
       category,
-      frequency,
-      nextPaymentDate,
+      frequency: isRecurring ? frequency : ("one-time" as ExpenseFrequency),
       isRecurring,
       isEssential,
       notes: notes.trim() || undefined,
+      // For one-time, map chosen date to dueDate; for recurring, to nextPaymentDate
+      ...(isRecurring
+        ? { nextPaymentDate: chosenDate }
+        : { dueDate: chosenDate }),
     };
 
-    onSave(expenseData);
+    onUpdate(patch);
+    onOpenChange(false);
   };
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4">
       <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Close (X) */}
         <button
-          onClick={onCancel}
+          onClick={onClose}
           aria-label="Close"
           className="absolute right-3 top-3 rounded-full px-2 py-1 text-white/70 hover:bg-white/10 hover:text-white transition"
         >
           ×
         </button>
 
-        <h2 className="mb-6 text-2xl font-bold text-white">
-          {expense ? "Edit Expense" : "Add New Expense"}
-        </h2>
+        <h2 className="mb-6 text-2xl font-bold text-white">Edit Expense</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name */}
@@ -218,7 +234,7 @@ export default function AddExpenseDialog({
             />
           </label>
 
-          {/* Amount */}
+          {/* Amount w/ currency symbol */}
           <label className="block">
             <div className="mb-2 text-sm font-medium text-white/80">💵 Amount</div>
             <div className="relative">
@@ -257,20 +273,26 @@ export default function AddExpenseDialog({
             </select>
           </label>
 
-          {/* Recurring Toggle */}
+          {/* Recurring toggle */}
           <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-neutral-800/50">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsRecurring(checked);
+                  // if turning off recurring, set frequency to one-time in UI, but preserve previous choice in state if re-enabled
+                  if (!checked) setFrequency("one-time");
+                  else if (checked && frequency === "one-time") setFrequency("monthly");
+                }}
                 className="w-4 h-4 rounded border-white/20 bg-neutral-700 text-green-500 focus:ring-green-500/50"
               />
               <span className="text-white/80">🔄 Recurring expense</span>
             </label>
           </div>
 
-          {/* Frequency (only for recurring) */}
+          {/* Frequency (only when recurring) */}
           {isRecurring && (
             <label className="block">
               <div className="mb-2 text-sm font-medium text-white/80">📅 Frequency</div>
@@ -288,7 +310,7 @@ export default function AddExpenseDialog({
             </label>
           )}
 
-          {/* Calendar Section */}
+          {/* Calendar */}
           <div className="space-y-3">
             <div className="text-sm font-medium text-white/80">
               📅 {isRecurring ? "Next Payment Date" : "Due Date"} (optional)
@@ -301,7 +323,9 @@ export default function AddExpenseDialog({
                 onClick={goPrevMonth}
                 disabled={!canGoPrevMonth}
                 className={`rounded-lg px-3 py-2 text-sm ${
-                  canGoPrevMonth ? "text-white hover:bg-white/10" : "text-white/30 cursor-not-allowed"
+                  canGoPrevMonth
+                    ? "text-white hover:bg-white/10"
+                    : "text-white/30 cursor-not-allowed"
                 }`}
               >
                 ←
@@ -316,31 +340,32 @@ export default function AddExpenseDialog({
               </button>
             </div>
 
-            {/* Calendar grid */}
+            {/* Grid */}
             <div className="grid grid-cols-7 gap-1 text-center text-sm">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                <div key={d} className="py-2 text-white/60 font-medium">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+                <div key={`hdr-${i}`} className="py-2 text-white/60 font-medium">
                   {d}
                 </div>
               ))}
 
               {Array.from({ length: start }, (_, i) => (
-                <div key={`empty-${i}`} />
+                <div key={`pad-${i}`} />
               ))}
 
               {Array.from({ length: totalDays }, (_, i) => {
                 const day = i + 1;
                 const selected = day === selectedDay;
                 const disabled = isDisabled(day);
-
                 return (
                   <button
-                    key={day}
+                    key={`day-${day}`}
                     type="button"
                     onClick={() => setSelectedDay(disabled ? null : day)}
                     className={[
                       "aspect-square rounded-lg text-sm transition-colors",
-                      disabled ? "cursor-not-allowed text-white/30" : "text-white hover:bg:white/10",
+                      disabled
+                        ? "cursor-not-allowed text-white/30"
+                        : "text-white hover:bg-white/10",
                       selected ? "bg-green-500/20 ring-1 ring-green-400/50" : "",
                     ].join(" ")}
                     disabled={disabled}
@@ -362,7 +387,7 @@ export default function AddExpenseDialog({
             </div>
           </div>
 
-          {/* Essential Toggle */}
+          {/* Essential toggle */}
           <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-neutral-800/50">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -391,7 +416,7 @@ export default function AddExpenseDialog({
           <div className="flex gap-3 pt-4">
             <button
               type="button"
-              onClick={onCancel}
+              onClick={onClose}
               className="flex-1 rounded-xl border border-white/10 py-3 text-white/80 hover:bg-white/5 transition-colors"
             >
               Cancel
@@ -400,7 +425,7 @@ export default function AddExpenseDialog({
               type="submit"
               className="flex-1 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 py-3 font-semibold text-white hover:from-green-700 hover:to-emerald-700 transition-all transform hover:scale-105"
             >
-              {expense ? "Update" : "Add"} Expense
+              Update Expense
             </button>
           </div>
         </form>
