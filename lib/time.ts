@@ -1,5 +1,6 @@
 // lib/time.ts
-import { DateTime } from "luxon";
+import { DateTime, Settings } from 'luxon';
+
 
 /** Safe parser for "HH:MM" -> {h, m} */
 function parseHHMM(hhmm: string): { h: number; m: number } {

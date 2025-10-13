@@ -20,17 +20,14 @@ if has_secret 're_[0-9A-Za-z]{20,}'; then
 fi
 
 echo "✅ No secrets found."
-
-# Run lint check
 echo "🔍 Running ESLint..."
-npm run lint --silent || {
+pnpm exec eslint app components lib pages prisma scripts --ext .js,.jsx,.ts,.tsx --max-warnings=0 || {
   echo "❌ ESLint failed. Fix issues before committing."
   exit 1
 }
 
-# Run TypeScript check
 echo "🔍 Running TypeScript..."
-npx tsc --noEmit || {
+pnpm exec tsc --noEmit || {
   echo "❌ TypeScript errors found. Fix them before committing."
   exit 1
 }

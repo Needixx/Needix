@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Resend } from 'resend';
 import { dateAndTimeInZoneToUTCISO } from '@/lib/time'; // uses Luxon under the hood
-import { DateTime } from 'luxon';
+import { DateTime, Settings } from 'luxon';
 import { getEffectiveZone } from '@/lib/effectiveZone';
 
 export const runtime = 'nodejs';
