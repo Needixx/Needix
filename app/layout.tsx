@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import { ToastProvider } from "@/components/ui/Toast";
 import ClientLayoutWrapper from "@/components/ClientLayoutWrapper";
+import TimezoneBootstrap from "@/components/TimezoneBootstrap"; // ⬅️ added
 import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
@@ -14,7 +15,6 @@ export const metadata: Metadata = {
   description:
     'Smart subscription tracking with price alerts and cancellation management',
   icons: { icon: '/favicon.ico' },
-  // ❌ no `viewport` here
 };
 
 export const viewport: Viewport = {
@@ -23,11 +23,9 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  // optional but nice for mobile status bar color:
-  // themeColor: '#000000',
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="ios-viewport-fix">
       <head>
@@ -40,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <SessionProvider>
           <ToastProvider>
             <ClientLayoutWrapper>
+              <TimezoneBootstrap /> {/* ⬅️ runs once to persist IANA zone */}
               <div className="flex flex-col min-h-screen ios-viewport-fix">
                 <OfflineIndicator />
                 <Navbar />

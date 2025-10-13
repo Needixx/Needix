@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { Decimal } from '@prisma/client/runtime/library';
+import { dateAndTimeInZoneToUTCISO, nowUTCISO } from '@/lib/time';
 
-// Configure for static export compatibility
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -20,13 +20,15 @@ interface SubscriptionData {
 interface SchedulingTestResult {
   leadDaysConfigured: number[];
   timeOfDay: string;
+  timeZoneUsed: string;
   totalRemindersScheduled: number;
   upcomingReminders: Array<{
     subscriptionId: string;
     subscriptionName: string;
     billingDate: string;
     leadDays: number;
-    scheduledFor: string;
+    scheduledFor: string; // UTC ISO
+    localLabel: string;   // Pretty string in user zone
     isUpcoming: boolean;
   }>;
   allReminders: Array<{
@@ -34,7 +36,8 @@ interface SchedulingTestResult {
     subscriptionName: string;
     billingDate: string;
     leadDays: number;
-    scheduledFor: string;
+    scheduledFor: string; // UTC ISO
+    localLabel: string;
     isUpcoming: boolean;
   }>;
 }
@@ -51,6 +54,11 @@ interface UpcomingSubscription {
 interface VerificationResponse {
   userId: string;
   timestamp: string;
+  timeZone: {
+    userField: string | null;
+    cookie: string | null;
+    effective: string; // which one we used
+  };
   notificationSettings: {
     exists: boolean;
     enabled: boolean;
@@ -106,12 +114,26 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const checkScheduling = searchParams.get('checkScheduling') === 'true';
 
-    // Get user's notification settings
+    // Load user to get timezone
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, timezone: true },
+    });
+
+    // Cookie tz (for SSR/guest fallback)
+    const cookieTz = request.cookies.get('tz')?.value ?? null;
+
+    // Effective zone preference: user.timezone -> cookie -> UTC as last resort
+    const effectiveZone = (user?.timezone && user.timezone.includes('/'))
+      ? user.timezone
+      : (cookieTz && cookieTz.includes('/'))
+        ? cookieTz
+        : 'UTC';
+
     const notificationSettings = await prisma.notificationSettings.findUnique({
       where: { userId: session.user.id },
     });
 
-    // Get user's subscriptions with proper type handling
     const subscriptions = await prisma.subscription.findMany({
       where: { userId: session.user.id },
       select: {
@@ -124,7 +146,6 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Check for reminder snapshots
     const reminderSnapshots = await prisma.reminderSnapshot.findMany({
       where: { 
         userId: session.user.id,
@@ -134,14 +155,12 @@ export async function GET(request: NextRequest) {
       take: 5
     });
 
-    // Check notification logs
     const recentNotifications = await prisma.notificationLog.findMany({
       where: { userId: session.user.id },
       orderBy: { sentAt: 'desc' },
       take: 10
     });
 
-    // Helper function to convert billing date to string
     const getBillingDateString = (sub: SubscriptionData): string | null => {
       if (sub.nextBillingDate) return sub.nextBillingDate;
       if (sub.nextBillingAt) return sub.nextBillingAt.toISOString().slice(0, 10);
@@ -151,8 +170,11 @@ export async function GET(request: NextRequest) {
     const verification: VerificationResponse = {
       userId: session.user.id,
       timestamp: new Date().toISOString(),
-      
-      // Notification settings status
+      timeZone: {
+        userField: user?.timezone ?? null,
+        cookie: cookieTz,
+        effective: effectiveZone,
+      },
       notificationSettings: {
         exists: !!notificationSettings,
         enabled: notificationSettings?.enabled || false,
@@ -162,8 +184,6 @@ export async function GET(request: NextRequest) {
         channels: notificationSettings?.channels ? 
           notificationSettings.channels.split(',') : [],
       },
-
-      // Subscription data
       subscriptions: {
         total: subscriptions.length,
         withBillingDates: subscriptions.filter(s => s.nextBillingDate || s.nextBillingAt).length,
@@ -174,7 +194,7 @@ export async function GET(request: NextRequest) {
           const now = new Date();
           const diffTime = date.getTime() - now.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          return diffDays >= 0 && diffDays <= 30; // Next 30 days
+          return diffDays >= 0 && diffDays <= 30;
         }).map(s => {
           const billingDate = getBillingDateString(s);
           const daysUntilRenewal = billingDate ? (() => {
@@ -194,8 +214,6 @@ export async function GET(request: NextRequest) {
           };
         })
       },
-
-      // Reminder system status
       reminders: {
         snapshotsExist: reminderSnapshots.length > 0,
         latestSnapshot: reminderSnapshots[0] ? {
@@ -207,8 +225,6 @@ export async function GET(request: NextRequest) {
         } : null,
         totalSnapshots: reminderSnapshots.length
       },
-
-      // Recent notification activity
       notifications: {
         recentCount: recentNotifications.length,
         recent: recentNotifications.map(n => ({
@@ -218,15 +234,11 @@ export async function GET(request: NextRequest) {
           status: n.status
         }))
       },
-
-      // System capabilities
       capabilities: {
         webPush: !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
         email: !!(process.env.RESEND_API_KEY && process.env.RESEND_FROM),
-        database: true, // If we got this far, DB is working
+        database: true,
       },
-
-      // Environment check
       environment: {
         vapidPublicKey: process.env.VAPID_PUBLIC_KEY ? 'Configured' : 'Missing',
         vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ? 'Configured' : 'Missing',
@@ -235,12 +247,12 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    // If requested, also check scheduling logic
     if (checkScheduling && notificationSettings?.enabled) {
       const schedulingTest = await testSchedulingLogic(
-        session.user.id, 
+        session.user.id,
         notificationSettings,
-        subscriptions
+        subscriptions,
+        effectiveZone
       );
       verification.schedulingTest = schedulingTest;
     }
@@ -260,60 +272,67 @@ export async function GET(request: NextRequest) {
 }
 
 async function testSchedulingLogic(
-  userId: string,
+  _userId: string,
   settings: any,
-  subscriptions: SubscriptionData[]
+  subscriptions: SubscriptionData[],
+  zone: string
 ): Promise<SchedulingTestResult | { error: string; details: string }> {
   try {
     const leadDays = settings.leadDays ? 
       settings.leadDays.split(',').map((d: string) => parseInt(d.trim(), 10)) : [];
     const timeOfDay = settings.timeOfDay || '09:00';
-    const tzOffsetMinutes = 0; // Assume UTC for now
 
     const scheduledReminders: Array<{
       subscriptionId: string;
       subscriptionName: string;
       billingDate: string;
       leadDays: number;
-      scheduledFor: string;
+      scheduledFor: string; // UTC ISO
+      localLabel: string;
       isUpcoming: boolean;
     }> = [];
 
-    // Helper function to get billing date string
     const getBillingDateString = (sub: SubscriptionData): string | null => {
       if (sub.nextBillingDate) return sub.nextBillingDate;
       if (sub.nextBillingAt) return sub.nextBillingAt.toISOString().slice(0, 10);
       return null;
     };
 
+    const nowUTC = new Date(nowUTCISO()).getTime();
+
     for (const sub of subscriptions) {
       const billingDate = getBillingDateString(sub);
       if (!billingDate) continue;
 
-      const billing = new Date(billingDate);
-      const now = new Date();
-
-      if (billing <= now) continue; // Skip past dates
-
+      // For each lead day, compute scheduled UTC from local wall-clock in the user's zone
       for (const lead of [0, ...leadDays]) {
-        const reminderDate = new Date(billing);
-        reminderDate.setDate(reminderDate.getDate() - lead);
-        
-        // Set time of day
-        const [hours, minutes] = timeOfDay.split(':');
-        reminderDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+        // billingDate minus 'lead' days (still in calendar space; we just subtract by Date)
+        const billing = new Date(billingDate + "T00:00:00");
+        const reminderLocalDate = new Date(billing);
+        reminderLocalDate.setDate(reminderLocalDate.getDate() - lead);
+        const yyyy = reminderLocalDate.toISOString().slice(0, 10);
 
-        // Adjust for timezone
-        const scheduledUtc = new Date(reminderDate.getTime() - (tzOffsetMinutes * 60 * 1000));
+        let scheduledUTCISO: string;
+        try {
+          scheduledUTCISO = dateAndTimeInZoneToUTCISO(yyyy, timeOfDay, zone);
+        } catch {
+          // If zone invalid somehow, fall back to UTC same HH:MM
+          scheduledUTCISO = `${yyyy}T${timeOfDay}:00.000Z`;
+        }
 
-        if (scheduledUtc > now) {
+        const scheduledMillis = new Date(scheduledUTCISO).getTime();
+        if (scheduledMillis > nowUTC) {
+          const localLabel = `${yyyy} ${timeOfDay} (${zone})`;
+          const isUpcoming = (scheduledMillis - nowUTC) < (7 * 24 * 60 * 60 * 1000);
+
           scheduledReminders.push({
             subscriptionId: sub.id,
             subscriptionName: sub.name,
-            billingDate: billingDate,
+            billingDate,
             leadDays: lead,
-            scheduledFor: scheduledUtc.toISOString(),
-            isUpcoming: (scheduledUtc.getTime() - now.getTime()) < (7 * 24 * 60 * 60 * 1000) // Next 7 days
+            scheduledFor: scheduledUTCISO,
+            localLabel,
+            isUpcoming,
           });
         }
       }
@@ -322,9 +341,10 @@ async function testSchedulingLogic(
     return {
       leadDaysConfigured: leadDays,
       timeOfDay,
+      timeZoneUsed: zone,
       totalRemindersScheduled: scheduledReminders.length,
       upcomingReminders: scheduledReminders.filter(r => r.isUpcoming),
-      allReminders: scheduledReminders.slice(0, 10) // Limit to first 10 for response size
+      allReminders: scheduledReminders.slice(0, 10),
     };
 
   } catch (error) {
@@ -335,7 +355,6 @@ async function testSchedulingLogic(
   }
 }
 
-// Also create a simple test endpoint
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -346,28 +365,26 @@ export async function POST(request: NextRequest) {
     const { testType } = await request.json();
 
     switch (testType) {
-      case 'schedule_test_reminder':
-        // Create a test reminder for immediate dispatch
+      case 'schedule_test_reminder': {
         const testDate = new Date();
-        testDate.setMinutes(testDate.getMinutes() + 2); // 2 minutes from now
+        testDate.setMinutes(testDate.getMinutes() + 2);
 
         const testSnapshot = {
           userId: session.user.id,
           settings: {
             enabled: true,
             leadDays: [0],
-            timeOfDay: testDate.toTimeString().slice(0, 5), // HH:MM format
+            timeOfDay: testDate.toTimeString().slice(0, 5),
             channels: ['web', 'email']
           },
           items: [{
             id: 'test-sub-' + Date.now(),
             name: 'Test Subscription',
-            nextBillingDate: testDate.toISOString().slice(0, 10), // YYYY-MM-DD
+            nextBillingDate: testDate.toISOString().slice(0, 10),
           }],
           tzOffsetMinutes: 0
         };
 
-        // Save test snapshot
         await prisma.reminderSnapshot.create({
           data: {
             userId: session.user.id,
@@ -384,6 +401,7 @@ export async function POST(request: NextRequest) {
           scheduledFor: testDate.toISOString(),
           note: 'This test reminder should trigger within 2 minutes if the cron job is running'
         });
+      }
 
       default:
         return NextResponse.json(

@@ -1,72 +1,66 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DIRECT_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model WebhookEvent {
   id         String   @id
   type       String
   receivedAt DateTime @default(now())
-  
+
   @@index([receivedAt])
 }
 
 model User {
-  id                       String         @id @default(cuid())
+  id                       String                  @id @default(cuid())
   name                     String?
-  email                    String?        @unique
+  email                    String?                 @unique
   emailVerified            DateTime?
   image                    String?
   password                 String?
-  passwordResetToken       String?        @unique
+  passwordResetToken       String?                 @unique
   passwordResetTokenExpiry DateTime?
-  createdAt                DateTime       @default(now())
-  updatedAt                DateTime       @updatedAt
-  isPro                    Boolean        @default(false)
-  stripeCustomerId         String?        @unique
-  stripeSubscriptionId     String?        @unique
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  isPro                    Boolean                 @default(false)
+  stripeCustomerId         String?                 @unique
+  stripeSubscriptionId     String?                 @unique
   planStatus               PlanStatus?
   currentPeriodEnd         DateTime?
-  cancelAtPeriodEnd        Boolean?       @default(false)
-  
-  // 2FA Fields
-  twoFactorEnabled         Boolean        @default(false)
-  
+  cancelAtPeriodEnd        Boolean?                @default(false)
+  twoFactorEnabled         Boolean                 @default(false)
+
   // Relations
   accounts                 Account[]
+  bankAccounts             BankAccount[]
+  chatMessages             ChatMessage[]
   expenses                 Expense[]
   orders                   Order[]
   sessions                 Session[]
   subscriptions            Subscription[]
-  verificationCodes        VerificationCode[]
-  chatMessages             ChatMessage[]
-
-  // Notification-related relations
-  pushSubscription         PushSubscription?
-  notificationSettings     NotificationSettings?
-  notificationLogs         NotificationLog[]
-  reminderSnapshots        ReminderSnapshot[]
-  scheduledNotifications   ScheduledNotification[]
-
-  // AI-related relations
+  transactions             Transaction[]
   aiRecommendationLogs     AIRecommendationLog[]
-  savingsGoals             SavingsGoal[]
-  reminders                Reminder[]
   aiSettings               AIUserSettings?
   marketDataCache          MarketDataCache[]
-  usageTracking            UsageTracking[]
-
-  // Plaid/Bank integration relations
-  bankAccounts             BankAccount[]
-  transactions             Transaction[]
+  notificationLogs         NotificationLog[]
+  notificationSettings     NotificationSettings?
   plaidItems               PlaidItem[]
+  pushSubscription         PushSubscription?
+  reminderSnapshots        ReminderSnapshot[]
+  reminders                Reminder[]
+  savingsGoals             SavingsGoal[]
+  scheduledNotifications   ScheduledNotification[]
+  usageTracking            UsageTracking[]
+  verificationCodes        VerificationCode[]
+
+  // New: user’s IANA timezone
+  timezone                 String?                 @db.VarChar(64)
 
   @@index([email])
   @@index([stripeCustomerId])
@@ -119,9 +113,8 @@ model VerificationCode {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([expiresAt])
   @@index([used])
@@ -132,13 +125,12 @@ model VerificationCode {
 model ChatMessage {
   id        String   @id @default(cuid())
   userId    String
-  role      String   // "user" or "assistant"
+  role      String
   content   String
-  context   String?  // Optional context data
+  context   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([createdAt])
@@ -172,24 +164,22 @@ model UserActivity {
 }
 
 model Subscription {
-  id              String             @id @default(cuid())
-  userId          String
-  name            String
-  amount          Decimal            @db.Decimal(12, 2)
-  currency        String             @default("USD")
-  interval        Recurrence         @default(monthly)
-  nextBillingAt   DateTime?
-  nextBillingDate String?            // String version for compatibility
-  notes           String?
-  category        String?
-  vendorUrl       String?
-  status          SubscriptionStatus @default(active)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  isEssential     Boolean            @default(false)
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Plaid integration - transactions detected as this subscription
+  id                   String             @id @default(cuid())
+  userId               String
+  name                 String
+  amount               Decimal            @db.Decimal(12, 2)
+  currency             String             @default("USD")
+  interval             Recurrence         @default(monthly)
+  nextBillingAt        DateTime?
+  nextBillingDate      String?
+  notes                String?
+  category             String?
+  vendorUrl            String?
+  status               SubscriptionStatus @default(active)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  isEssential          Boolean            @default(false)
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   detectedTransactions Transaction[]
 
   @@index([userId])
@@ -260,29 +250,26 @@ model Expense {
   @@index([userId, date])
 }
 
-// PLAID / BANK INTEGRATION MODELS
-
 model BankAccount {
-  id                  String   @id @default(cuid())
-  userId              String
-  plaidAccessToken    String   // Encrypted in production
-  plaidItemId         String   @unique
-  plaidInstitutionId  String?
-  institutionName     String?
-  accountName         String?
-  accountType         String?  // checking, savings, credit card, etc.
-  accountSubtype      String?
-  mask                String?  // Last 4 digits
-  availableBalance    Decimal? @db.Decimal(12, 2)
-  currentBalance      Decimal? @db.Decimal(12, 2)
-  currency            String   @default("USD")
-  lastSyncedAt        DateTime?
-  isActive            Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions        Transaction[]
+  id                 String        @id @default(cuid())
+  userId             String
+  plaidAccessToken   String
+  plaidItemId        String        @unique
+  plaidInstitutionId String?
+  institutionName    String?
+  accountName        String?
+  accountType        String?
+  accountSubtype     String?
+  mask               String?
+  availableBalance   Decimal?      @db.Decimal(12, 2)
+  currentBalance     Decimal?      @db.Decimal(12, 2)
+  currency           String        @default("USD")
+  lastSyncedAt       DateTime?
+  isActive           Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions       Transaction[]
 
   @@index([userId])
   @@index([plaidItemId])
@@ -290,28 +277,27 @@ model BankAccount {
 }
 
 model Transaction {
-  id                    String   @id @default(cuid())
-  userId                String
-  bankAccountId         String
-  plaidTransactionId    String   @unique
-  amount                Decimal  @db.Decimal(12, 2)
-  currency              String   @default("USD")
-  date                  DateTime
-  authorizedDate        DateTime?
-  merchantName          String?
-  category              String[]  // Plaid returns array of categories
-  categoryId            String?
-  pending               Boolean  @default(false)
-  paymentChannel        String?  // online, in store, etc.
-  isRecurring           Boolean  @default(false)
+  id                     String        @id @default(cuid())
+  userId                 String
+  bankAccountId          String
+  plaidTransactionId     String        @unique
+  amount                 Decimal       @db.Decimal(12, 2)
+  currency               String        @default("USD")
+  date                   DateTime
+  authorizedDate         DateTime?
+  merchantName           String?
+  category               String[]
+  categoryId             String?
+  pending                Boolean       @default(false)
+  paymentChannel         String?
+  isRecurring            Boolean       @default(false)
   detectedSubscriptionId String?
-  mcc                   String?  // Merchant Category Code
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bankAccount           BankAccount  @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
-  detectedSubscription  Subscription? @relation(fields: [detectedSubscriptionId], references: [id])
+  mcc                    String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  bankAccount            BankAccount   @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  detectedSubscription   Subscription? @relation(fields: [detectedSubscriptionId], references: [id])
+  user                   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([bankAccountId])
@@ -322,8 +308,6 @@ model Transaction {
   @@index([userId, isRecurring])
 }
 
-// NOTIFICATION MODELS
-
 model PushSubscription {
   id        String   @id @default(cuid())
   userId    String   @unique
@@ -332,9 +316,8 @@ model PushSubscription {
   auth      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("push_subscriptions")
 }
 
@@ -345,34 +328,32 @@ model NotificationSettings {
   renewalReminders     Boolean  @default(true)
   priceChangeAlerts    Boolean  @default(true)
   weeklyDigest         Boolean  @default(false)
-  digestDay           String   @default("monday") // monday, tuesday, etc.
-  digestTime          String   @default("09:00") // HH:MM format
-  leadDays            String   @default("7,3,1") // Comma-separated list of days
-  timeOfDay           String   @default("09:00") // HH:MM format
-  channels            String   @default("web,mobile") // Comma-separated channels
-  priceChangeThreshold Int     @default(5) // Percentage threshold for price alerts
-  renewalLeadDays     Int      @default(3) // Legacy field for compatibility
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  digestDay            String   @default("monday")
+  digestTime           String   @default("09:00")
+  leadDays             String   @default("7,3,1")
+  timeOfDay            String   @default("09:00")
+  channels             String   @default("web,mobile")
+  priceChangeThreshold Int      @default(5)
+  renewalLeadDays      Int      @default(3)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("notification_settings")
 }
 
 model NotificationLog {
   id        String   @id @default(cuid())
   userId    String
-  type      String   // "push", "email", "local"
+  type      String
   title     String
   body      String
-  status    String   @default("sent") // "sent", "failed", "pending"
+  status    String   @default("sent")
   sentAt    DateTime
-  data      Json?    // Additional notification data
+  data      Json?
   createdAt DateTime @default(now())
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([sentAt])
   @@index([status])
@@ -381,17 +362,16 @@ model NotificationLog {
 }
 
 model ReminderSnapshot {
-  id               String   @id @default(cuid())
-  userId           String
-  settings         Json     // Serialized reminder settings
-  subscriptions    Json     // Snapshot of user's subscriptions at time of creation
-  tzOffsetMinutes  Int      @default(0) // User's timezone offset
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id              String   @id @default(cuid())
+  userId          String
+  settings        Json
+  subscriptions   Json
+  tzOffsetMinutes Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([isActive])
   @@index([createdAt])
@@ -399,50 +379,46 @@ model ReminderSnapshot {
 }
 
 model ScheduledNotification {
-  id            String   @id @default(cuid())
-  userId        String
+  id             String    @id @default(cuid())
+  userId         String
   subscriptionId String?
-  title         String
-  body          String
-  scheduledFor  DateTime
-  payload       Json     // Full notification payload
-  status        String   @default("pending") // "pending", "sent", "failed", "cancelled"
-  attempts      Int      @default(0)
-  lastAttempt   DateTime?
-  errorMessage  String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  title          String
+  body           String
+  scheduledFor   DateTime
+  payload        Json
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  lastAttempt    DateTime?
+  errorMessage   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([scheduledFor])
   @@index([status])
   @@index([subscriptionId])
-  @@index([scheduledFor, status]) // Compound index for cron jobs
+  @@index([scheduledFor, status])
   @@map("scheduled_notifications")
 }
 
-// AI ENHANCED MODELS
-
 model AIRecommendationLog {
-  id                 String   @id @default(cuid())
+  id                 String                 @id @default(cuid())
   userId             String
-  recommendationType String   // "bundle_optimization", "negotiation", "rotation", etc.
-  insightId          String   // Reference to the specific insight that was applied
-  title              String   // Human-readable title of the recommendation
-  description        String?  // Detailed description of what was applied
-  potentialSavings   Decimal? @db.Decimal(10, 2) // Expected savings amount
-  actualSavings      Decimal? @db.Decimal(10, 2) // Actual savings (if measurable)
+  recommendationType String
+  insightId          String
+  title              String
+  description        String?
+  potentialSavings   Decimal?               @db.Decimal(10, 2)
+  actualSavings      Decimal?               @db.Decimal(10, 2)
   status             AIRecommendationStatus @default(applied)
-  appliedAt          DateTime @default(now())
-  completedAt        DateTime? // When the recommendation was fully executed
-  metadata           Json?    // Additional data about the recommendation
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  appliedAt          DateTime               @default(now())
+  completedAt        DateTime?
+  metadata           Json?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([recommendationType])
   @@index([status])
@@ -452,24 +428,23 @@ model AIRecommendationLog {
 }
 
 model SavingsGoal {
-  id              String   @id @default(cuid())
+  id              String            @id @default(cuid())
   userId          String
-  title           String   @default("AI Savings Goal")
-  description     String?  // Optional description of the goal
-  targetAmount    Decimal  @db.Decimal(10, 2) // Target savings amount
-  timeframeMonths Int      // Number of months to achieve the goal
-  monthlyTarget   Decimal  @db.Decimal(10, 2) // Monthly savings target
-  currentProgress Decimal  @db.Decimal(10, 2) @default(0) // Current savings achieved
-  category        String?  // "subscriptions", "general", etc.
+  title           String            @default("AI Savings Goal")
+  description     String?
+  targetAmount    Decimal           @db.Decimal(10, 2)
+  timeframeMonths Int
+  monthlyTarget   Decimal           @db.Decimal(10, 2)
+  currentProgress Decimal           @default(0) @db.Decimal(10, 2)
+  category        String?
   status          SavingsGoalStatus @default(active)
-  startDate       DateTime @default(now())
-  targetDate      DateTime // Calculated end date
-  achievedAt      DateTime? // When the goal was completed
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  startDate       DateTime          @default(now())
+  targetDate      DateTime
+  achievedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([status])
   @@index([targetDate])
@@ -478,25 +453,24 @@ model SavingsGoal {
 }
 
 model Reminder {
-  id           String        @id @default(cuid())
-  userId       String
-  title        String
-  description  String?
-  dueDate      DateTime
-  type         ReminderType
-  relatedId    String?       // ID of related subscription, order, etc.
-  priority     ReminderPriority @default(medium)
-  completed    Boolean       @default(false)
-  completedAt  DateTime?
-  snoozeUntil  DateTime?     // For snoozing reminders
-  recurring    Boolean       @default(false)
-  recurringPattern String?   // "monthly", "weekly", etc.
-  metadata     Json?         // Additional reminder data
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id               String           @id @default(cuid())
+  userId           String
+  title            String
+  description      String?
+  dueDate          DateTime
+  type             ReminderType
+  relatedId        String?
+  priority         ReminderPriority @default(medium)
+  completed        Boolean          @default(false)
+  completedAt      DateTime?
+  snoozeUntil      DateTime?
+  recurring        Boolean          @default(false)
+  recurringPattern String?
+  metadata         Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([dueDate])
   @@index([type])
@@ -508,86 +482,70 @@ model Reminder {
 }
 
 model AIUserSettings {
-  id                      String   @id @default(cuid())
-  userId                  String   @unique
-  
-  // Core AI permissions
-  allowDataAccess         Boolean  @default(false)
-  enableAutomatedActions  Boolean  @default(false)
-  
-  // Subscription intelligence features
-  enableBundleAnalysis    Boolean  @default(true)
-  enableRotationPlanning  Boolean  @default(true)
-  enableTrialTracking     Boolean  @default(true)
-  enableCostPerUse        Boolean  @default(true)
-  
-  // Commerce optimization features
-  enableNegotiationAssist Boolean  @default(true)
-  enablePaymentOptimization Boolean @default(true)
-  enableLateFeePrevention Boolean  @default(true)
-  enableMarketComparison  Boolean  @default(true)
-  
-  // Behavioral analysis features
-  enableSpendingAlerts    Boolean  @default(true)
-  enableGoalBasedPlanning Boolean  @default(true)
-  enableSeasonalOptimization Boolean @default(true)
-  
-  // AI configuration
-  confidenceThreshold     Int      @default(70) // Percentage (50-95)
-  analysisFrequency       AIAnalysisFrequency @default(weekly)
-  savingsGoalAmount       Decimal? @db.Decimal(10, 2) // Monthly savings target
-  autoApplyLowRisk        Boolean  @default(false) // Auto-apply low-risk recommendations
-  
-  // Privacy and data retention
-  retainAnalysisHistory   Boolean  @default(true)
-  dataRetentionDays       Int      @default(90)
-  shareAnonymousInsights  Boolean  @default(false)
-  
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id                         String              @id @default(cuid())
+  userId                     String              @unique
+  allowDataAccess            Boolean             @default(false)
+  enableAutomatedActions     Boolean             @default(false)
+  enableBundleAnalysis       Boolean             @default(true)
+  enableRotationPlanning     Boolean             @default(true)
+  enableTrialTracking        Boolean             @default(true)
+  enableCostPerUse           Boolean             @default(true)
+  enableNegotiationAssist    Boolean             @default(true)
+  enablePaymentOptimization  Boolean             @default(true)
+  enableLateFeePrevention    Boolean             @default(true)
+  enableMarketComparison     Boolean             @default(true)
+  enableSpendingAlerts       Boolean             @default(true)
+  enableGoalBasedPlanning    Boolean             @default(true)
+  enableSeasonalOptimization Boolean             @default(true)
+  confidenceThreshold        Int                 @default(70)
+  analysisFrequency          AIAnalysisFrequency @default(weekly)
+  savingsGoalAmount          Decimal?            @db.Decimal(10, 2)
+  autoApplyLowRisk           Boolean             @default(false)
+  retainAnalysisHistory      Boolean             @default(true)
+  dataRetentionDays          Int                 @default(90)
+  shareAnonymousInsights     Boolean             @default(false)
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  user                       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("ai_user_settings")
 }
 
 model MarketDataCache {
   id              String   @id @default(cuid())
-  userId          String?  // Null for global market data
-  serviceCategory String   // "streaming", "internet", "phone", etc.
-  serviceName     String?  // Specific service name
+  userId          String?
+  serviceCategory String
+  serviceName     String?
   averagePrice    Decimal  @db.Decimal(10, 2)
   currency        String   @default("USD")
   region          String   @default("US")
-  dataSource      String   // "api", "scraping", "user_reported"
-  sampleSize      Int?     // Number of data points used
+  dataSource      String
+  sampleSize      Int?
   lastUpdated     DateTime @default(now())
-  expiresAt       DateTime // When this cache entry expires
-  metadata        Json?    // Additional market data
-  
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  expiresAt       DateTime
+  metadata        Json?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceCategory, serviceName, region])
   @@index([serviceCategory])
   @@index([serviceName])
   @@index([expiresAt])
   @@index([region])
   @@index([userId])
-  @@unique([serviceCategory, serviceName, region]) // Prevent duplicates
   @@map("market_data_cache")
 }
 
 model UsageTracking {
   id             String   @id @default(cuid())
   userId         String
-  subscriptionId String?  // Reference to subscription if applicable
+  subscriptionId String?
   serviceName    String
   usageDate      DateTime @default(now())
-  usageType      String   // "login", "view", "download", "stream", etc.
+  usageType      String
   usageCount     Int      @default(1)
-  metadata       Json?    // Additional usage metadata
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  metadata       Json?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([subscriptionId])
   @@index([serviceName])
@@ -596,7 +554,64 @@ model UsageTracking {
   @@map("usage_tracking")
 }
 
-// ENUMS
+model PlaidItem {
+  id              String             @id @default(cuid())
+  userId          String
+  accessToken     String
+  itemId          String             @unique
+  institutionId   String?
+  institutionName String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  accounts        PlaidAccount[]
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    PlaidTransaction[]
+
+  @@map("plaid_items")
+}
+
+model PlaidAccount {
+  id           String             @id @default(cuid())
+  plaidItemId  String
+  accountId    String             @unique
+  name         String
+  type         String
+  subtype      String?
+  mask         String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  plaidItem    PlaidItem          @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+  transactions PlaidTransaction[]
+
+  @@map("plaid_accounts")
+}
+
+model PlaidTransaction {
+  id             String       @id @default(cuid())
+  plaidItemId    String
+  plaidAccountId String
+  transactionId  String       @unique
+  amount         Float
+  date           DateTime
+  name           String
+  merchantName   String?
+  category       String[]
+  subcategory    String?
+  isSubscription Boolean      @default(false)
+  confidence     Float?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  plaidAccount   PlaidAccount @relation(fields: [plaidAccountId], references: [id], onDelete: Cascade)
+  plaidItem      PlaidItem    @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+
+  @@map("plaid_transactions")
+}
+
+model playing_with_neon {
+  id    Int    @id @default(autoincrement())
+  name  String
+  value Float? @db.Real
+}
 
 /// Stripe subscription lifecycle states we care about.
 /// Mirrors Stripe's status strings for easy mapping.
@@ -638,40 +653,40 @@ enum OrderStatus {
 
 /// AI recommendation status tracking
 enum AIRecommendationStatus {
-  applied      // Recommendation was applied
-  pending      // Waiting for user action
-  completed    // Recommendation was fully executed
-  failed       // Recommendation failed to apply
-  dismissed    // User dismissed the recommendation
-  expired      // Recommendation expired
+  applied
+  pending
+  completed
+  failed
+  dismissed
+  expired
 }
 
 /// Savings goal status
 enum SavingsGoalStatus {
-  active       // Goal is currently being pursued
-  completed    // Goal was achieved
-  paused       // Goal is temporarily paused
-  cancelled    // Goal was cancelled
-  expired      // Goal deadline passed without completion
+  active
+  completed
+  paused
+  cancelled
+  expired
 }
 
 /// Types of reminders the AI can create
 enum ReminderType {
-  subscription_renewal    // Upcoming subscription renewal
-  payment_optimization   // Switch payment method
-  late_fee_prevention   // Check balance before renewal
-  category_alert        // Spending category limit
-  savings_milestone     // Monthly savings goal check
-  streaming_rotation    // Rotate streaming services
-  negotiation_call      // Call to negotiate price
-  trial_opportunity     // Available trial or discount
-  bundle_switch         // Switch to bundle offer
-  warranty_review       // Review warranty coverage
-  seasonal_pause        // Pause seasonal service
-  price_change_alert    // Service price increased
-  unused_service        // Service not being used
-  duplicate_service     // Duplicate service detected
-  goal_check           // Check progress on savings goal
+  subscription_renewal
+  payment_optimization
+  late_fee_prevention
+  category_alert
+  savings_milestone
+  streaming_rotation
+  negotiation_call
+  trial_opportunity
+  bundle_switch
+  warranty_review
+  seasonal_pause
+  price_change_alert
+  unused_service
+  duplicate_service
+  goal_check
 }
 
 /// Priority levels for reminders
@@ -687,60 +702,4 @@ enum AIAnalysisFrequency {
   daily
   weekly
   monthly
-}
-
-model PlaidItem {
-  id              String        @id @default(cuid())
-  userId          String
-  accessToken     String        // Encrypted in production
-  itemId          String        @unique
-  institutionId   String?
-  institutionName String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accounts        PlaidAccount[]
-  transactions    PlaidTransaction[]
-  
-  @@map("plaid_items")
-}
-
-model PlaidAccount {
-  id          String     @id @default(cuid())
-  plaidItemId String
-  accountId   String     @unique
-  name        String
-  type        String
-  subtype     String?
-  mask        String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  
-  plaidItem   PlaidItem  @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
-  transactions PlaidTransaction[]
-  
-  @@map("plaid_accounts")
-}
-
-model PlaidTransaction {
-  id              String       @id @default(cuid())
-  plaidItemId     String
-  plaidAccountId  String
-  transactionId   String       @unique
-  amount          Float
-  date            DateTime
-  name            String
-  merchantName    String?
-  category        String[]
-  subcategory     String?
-  isSubscription  Boolean      @default(false)
-  confidence      Float?       // Confidence that this is a subscription
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  
-  plaidItem       PlaidItem    @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
-  plaidAccount    PlaidAccount @relation(fields: [plaidAccountId], references: [id], onDelete: Cascade)
-  
-  @@map("plaid_transactions")
 }

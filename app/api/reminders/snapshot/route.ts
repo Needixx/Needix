@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { saveSnapshot } from '@/lib/serverStore';
+import { getEffectiveZone } from '@/lib/effectiveZone';
 
 // Configure for static export compatibility
 export const runtime = 'nodejs';
@@ -23,11 +24,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save snapshot for cron processing
+    // ⬇️ Get the effective IANA timezone now and store it with the snapshot
+    const zone = await getEffectiveZone(session.user.id);
+
+    // Persist snapshot for cron processing. We keep your existing shape,
+    // but add "zone" into settings so cron uses the same zone later.
     await saveSnapshot(session.user.id, {
       items,
-      settings,
-      tzOffsetMinutes: tzOffsetMinutes || 0,
+      settings: { ...settings, zone },
+      tzOffsetMinutes: tzOffsetMinutes || 0, // legacy field you were already persisting
     });
 
     return NextResponse.json({
@@ -50,8 +55,7 @@ export async function DELETE() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Note: You might want to implement snapshot deletion in serverStore
-    // For now, just return success
+    // Implement actual deletion in serverStore if/when needed
     return NextResponse.json({
       success: true,
       message: 'Reminder snapshot removed successfully',
