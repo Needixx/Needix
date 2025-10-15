@@ -13,11 +13,8 @@ import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
   title: 'Needix - Track Everything. Waste Nothing.',
-  description:
-    'Smart subscription tracking with price alerts and cancellation management',
-  icons: {
-    icon: "/favicon.ico",
-  },
+  description: 'Smart subscription tracking with price alerts and cancellation management',
+  icons: { icon: "/favicon.ico" },
 };
 
 export const viewport: Viewport = {
@@ -51,17 +48,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
               <div className="ios-viewport-fix flex min-h-screen flex-col">
                 <Navbar />
-                {/* EXTRA bottom padding so footer can scroll above Safari toolbar */}
-                <main className="mobile-scroll flex-1 pb-[calc(env(safe-area-inset-bottom)+96px)] md:pb-0">
+                {/* Keep a modest safe bottom padding for regular pages */}
+                <main className="mobile-scroll flex-1 pb-safe-bottom">
                   {children}
                 </main>
                 <Footer />
               </div>
-
-              {/* Keep a little extra scroll room at very bottom on mobile */}
-              <div className="block sm:hidden h-[96px]" aria-hidden />
-
-              {/* <StickyCTA /> */}
             </ClientLayoutWrapper>
           </ToastProvider>
         </SessionProvider>
