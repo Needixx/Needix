@@ -5,7 +5,7 @@ export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-white/10">
+    <footer className="border-t border-white/10 pb-safe-bottom">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 md:flex-row">
         <p className="text-white/60">© {year} Needix</p>
 

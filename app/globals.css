@@ -13,7 +13,6 @@
     --safe-area-inset-right: env(safe-area-inset-right);
   }
 
-  /* Ensure the viewport can scroll on iOS (WKWebView) */
   html,
   body {
     min-height: 100%;
@@ -21,22 +20,18 @@
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-text-size-adjust: 100%;
-    /* Let vertical pan gestures scroll; prevents accidental locking */
     touch-action: pan-y;
   }
 
   body {
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* So pull-to-refresh doesn’t yank the whole page but scrolling still works */
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Helpful defaults that prevent unexpected layout overflow */
   *, *::before, *::after { min-width: 0; }
   img, video { max-width: 100%; height: auto; }
 
-  /* If you add this class from native (optional), don’t lock the page */
   body.mobile-app {
     position: static;
     height: auto;
@@ -47,7 +42,7 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Inputs at 16px to avoid Safari zoom on focus */
+  /* Keep inputs at 16px to avoid Safari zoom on focus */
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -63,7 +58,6 @@
     transform: translateZ(0);
   }
 
-  /* Some modal libs toggle body.overflow-hidden; don’t brick scroll */
   body.overflow-hidden { overflow-y: auto !important; }
 }
 
@@ -120,7 +114,7 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* ====== Toggle track overrides (win against any background rules) ====== */
+  /* Toggle track overrides */
   .ui-toggle-on { background: linear-gradient(90deg, #8b5cf6 0%, #06b6d4 100%) !important; }
   .ui-toggle-off { background: rgba(255,255,255,0.15) !important; }
 }

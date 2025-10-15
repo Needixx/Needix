@@ -19,6 +19,7 @@ export const metadata: Metadata = {
     icon: "/favicon.ico",
   },
 };
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -44,14 +45,24 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <ToastProvider>
             <ClientLayoutWrapper>
               <TimezoneBootstrap />
+
+              {/* Top safe-area spacer for iOS status bar on small screens */}
+              <div className="block sm:hidden h-safe-top" aria-hidden />
+
               <div className="ios-viewport-fix flex min-h-screen flex-col">
-                
                 <Navbar />
-                <main className="mobile-scroll flex-1">{children}</main>
+                {/* Add bottom safe padding so footer content can scroll above iOS Safari toolbar */}
+                <main className="mobile-scroll flex-1 pb-safe-bottom">
+                  {children}
+                </main>
                 <Footer />
               </div>
+
+              {/* Bottom safe-area spacer ensures you can overscroll just enough to reveal footer above Safari bar */}
+              <div className="block sm:hidden h-safe-bottom" aria-hidden />
+
               {/* Subtle sticky CTA to improve conversion */}
-              {/*<StickyCTA />*/}
+              {/* <StickyCTA /> */}
             </ClientLayoutWrapper>
           </ToastProvider>
         </SessionProvider>
