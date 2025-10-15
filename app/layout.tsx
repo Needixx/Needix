@@ -46,18 +46,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
               <div className="ios-viewport-fix flex min-h-screen flex-col">
                 <Navbar />
-
-                {/* Hefty bottom padding so the page can always scroll footer above Safari’s toolbar */}
-                <main className="mobile-scroll flex-1 pb-[calc(env(safe-area-inset-bottom)+160px)] md:pb-0">
+                {/* Regular safe-bottom padding for scrolling comfort, no extra bumpers */}
+                <main className="mobile-scroll flex-1 pb-safe-bottom">
                   {children}
                 </main>
-
                 <Footer />
               </div>
-
-              {/* MOBILE-ONLY BUMPER AFTER THE FOOTER.
-                  This pushes the document’s hard-stop *below* the footer no matter what. */}
-              <div className="block sm:hidden h-[200px]" aria-hidden />
             </ClientLayoutWrapper>
           </ToastProvider>
         </SessionProvider>
