@@ -46,22 +46,21 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <ClientLayoutWrapper>
               <TimezoneBootstrap />
 
-              {/* Top safe-area spacer for iOS status bar on small screens */}
+              {/* iOS status bar spacer on small screens */}
               <div className="block sm:hidden h-safe-top" aria-hidden />
 
               <div className="ios-viewport-fix flex min-h-screen flex-col">
                 <Navbar />
-                {/* Add bottom safe padding so footer content can scroll above iOS Safari toolbar */}
-                <main className="mobile-scroll flex-1 pb-safe-bottom">
+                {/* EXTRA bottom padding so footer can scroll above Safari toolbar */}
+                <main className="mobile-scroll flex-1 pb-[calc(env(safe-area-inset-bottom)+96px)] md:pb-0">
                   {children}
                 </main>
                 <Footer />
               </div>
 
-              {/* Bottom safe-area spacer ensures you can overscroll just enough to reveal footer above Safari bar */}
-              <div className="block sm:hidden h-safe-bottom" aria-hidden />
+              {/* Keep a little extra scroll room at very bottom on mobile */}
+              <div className="block sm:hidden h-[96px]" aria-hidden />
 
-              {/* Subtle sticky CTA to improve conversion */}
               {/* <StickyCTA /> */}
             </ClientLayoutWrapper>
           </ToastProvider>
