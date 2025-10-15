@@ -5,13 +5,7 @@ export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    /**
-     * Mobile behavior:
-     *  - pb-safe-bottom: comfortable tap area _inside_ footer
-     *  - mb-[calc(...+96px)]: adds extra space _after_ footer so the page’s
-     *    "hard stop" is lower than the footer → footer sits higher and stays visible
-     */
-    <footer className="border-t border-white/10 pb-safe-bottom md:pb-8 mb-[calc(env(safe-area-inset-bottom)+120px)] md:mb-0">
+    <footer className="border-t border-white/10 pb-safe-bottom">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 md:flex-row">
         <p className="text-white/60">© {year} Needix</p>
 

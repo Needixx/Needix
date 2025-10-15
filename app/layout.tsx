@@ -4,17 +4,15 @@ import './globals.css';
 import SessionProvider from '@/components/SessionProvider';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import OfflineIndicator from '@/components/OfflineIndicator';
 import { ToastProvider } from '@/components/ui/Toast';
 import ClientLayoutWrapper from '@/components/ClientLayoutWrapper';
 import TimezoneBootstrap from '@/components/TimezoneBootstrap';
-import StickyCTA from '@/components/StickyCTA';
 import type { Metadata, Viewport } from 'next';
 
 export const metadata: Metadata = {
   title: 'Needix - Track Everything. Waste Nothing.',
   description: 'Smart subscription tracking with price alerts and cancellation management',
-  icons: { icon: "/favicon.ico" },
+  icons: { icon: '/favicon.ico' },
 };
 
 export const viewport: Viewport = {
@@ -43,17 +41,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <ClientLayoutWrapper>
               <TimezoneBootstrap />
 
-              {/* iOS status bar spacer on small screens */}
+              {/* Clear the notch on small screens */}
               <div className="block sm:hidden h-safe-top" aria-hidden />
 
               <div className="ios-viewport-fix flex min-h-screen flex-col">
                 <Navbar />
-                {/* Keep a modest safe bottom padding for regular pages */}
-                <main className="mobile-scroll flex-1 pb-safe-bottom">
+
+                {/* Hefty bottom padding so the page can always scroll footer above Safari’s toolbar */}
+                <main className="mobile-scroll flex-1 pb-[calc(env(safe-area-inset-bottom)+160px)] md:pb-0">
                   {children}
                 </main>
+
                 <Footer />
               </div>
+
+              {/* MOBILE-ONLY BUMPER AFTER THE FOOTER.
+                  This pushes the document’s hard-stop *below* the footer no matter what. */}
+              <div className="block sm:hidden h-[200px]" aria-hidden />
             </ClientLayoutWrapper>
           </ToastProvider>
         </SessionProvider>
