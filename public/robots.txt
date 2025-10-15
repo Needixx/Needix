@@ -2,4 +2,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://needix.vercel.app/sitemap.xml
+Sitemap: https://needixai.com/sitemap.xml

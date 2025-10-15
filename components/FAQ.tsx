@@ -1,144 +1,164 @@
-// File location: components/FAQ.tsx
-// Action: Replace entire file
-
+// components/FAQ.tsx
 'use client';
+
 import { useState } from 'react';
 import Section from '@/components/ui/Section';
+
+type FAQItem = {
+  q: string;
+  a: string;
+  bullets?: string[];
+  icon?: string;
+};
 
 export default function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
-  const faqs = [
+  const faqs: FAQItem[] = [
     {
       q: 'How does Needix help me save money on subscriptions?',
-      a: 'Needix prevents costly subscription mistakes through:',
+      a: 'We stop “oops, it renewed” charges and surface overlaps.',
       bullets: [
-        'Smart alerts before renewals so you can cancel unwanted services',
-        'Instant notifications when prices increase',
-        'Clear spending overview to identify redundant subscriptions',
-        'Organized dashboard that prevents forgotten subscriptions'
+        'Smart alerts before renewals so you can cancel on time',
+        'Instant notifications when vendors raise prices',
+        'Clear totals by vendor/category to spot redundancies',
+        'A single dashboard so nothing slips through',
       ],
-      icon: '💰'
+      icon: '💰',
     },
     {
       q: 'Do I need to connect my bank account?',
-      a: 'No, bank connection is completely optional:',
+      a: 'No. You can start fully manual and add a bank later (optional).',
       bullets: [
-        'Start by manually adding subscriptions in seconds',
-        'Full functionality available without any financial connections',
-        'Optional bank sync available later for automatic detection',
-        'Your privacy and security are our top priorities'
+        'Add subscriptions in seconds — no connections required',
+        'Optional Plaid sync later for auto-detection',
+        'All features work without bank access',
+        'Your privacy and security come first',
       ],
-      icon: '🔒'
+      icon: '🔒',
     },
     {
       q: 'What makes Needix different from other finance apps?',
-      a: 'Needix is laser-focused on subscription management:',
+      a: 'It’s laser-focused, fast, and not bloated.',
       bullets: [
-        'Clean, simple interface designed specifically for subscriptions',
-        'No bloated features or complicated budgeting tools',
-        'Affordable pricing starting free, Pro at just $5/month',
-        'Lightning-fast setup - add subscriptions in under 30 seconds'
+        'Purpose-built for subscriptions and recurring spends',
+        'No complicated budgets to maintain',
+        'Pro is just $5/month — priced to pay for itself',
+        'Add your first subscription in under 30 seconds',
       ],
-      icon: '⚡'
+      icon: '⚡',
     },
     {
       q: 'How accurate are the renewal reminders?',
-      a: 'Our reminder system is designed for reliability:',
+      a: 'Designed for reliability across channels.',
       bullets: [
-        'Multiple notification channels (email, browser, mobile)',
-        'Customizable reminder timing (1-30 days before renewal)',
-        'Smart detection of billing cycles and renewal patterns',
-        '99.9% delivery rate with backup notification systems'
+        'Email + browser + mobile notifications',
+        'Custom timing (1–30 days before)',
+        'Cycle detection for monthly/annual/irregular',
+        'Redundant delivery paths for 99.9% success',
       ],
-      icon: '🎯'
+      icon: '🎯',
     },
     {
       q: 'Can I track annual subscriptions and irregular billing?',
-      a: 'Yes, Needix handles all subscription types:',
+      a: 'Yes — monthly, yearly, custom cycles, and one-offs.',
       bullets: [
-        'Monthly, yearly, weekly, and custom billing periods',
-        'One-time purchases and irregular renewals',
-        'Automatic calculation of monthly cost equivalents',
-        'Flexible date management for any billing schedule'
+        'Custom periods and anchor dates',
+        'Automatic monthly equivalent cost',
+        'Flexible rescheduling for any billing pattern',
       ],
-      icon: '📅'
+      icon: '📅',
     },
     {
       q: 'What happens if I cancel my Pro subscription?',
-      a: 'Your data remains safe with flexible options:',
+      a: 'You keep your data. We just reduce limits.',
       bullets: [
-        'Account automatically downgrades to free plan',
-        'Keep access to 2 subscriptions on free tier',
-        'Full data export available anytime (CSV, PDF)',
-        'Reactivate Pro anytime with all data intact'
+        'Downgrades to Free plan automatically',
+        'Keep access to 2 subscriptions on Free',
+        'Export all data anytime (CSV)',
+        'Reactivate Pro and pick up where you left off',
       ],
-      icon: '🔄'
+      icon: '🔄',
     },
     {
-      q: 'Is my financial data secure?',
-      a: 'Security is built into everything we do:',
+      q: 'Is my data secure?',
+      a: 'Security is built in, not bolted on.',
       bullets: [
-        'Bank-grade 256-bit SSL encryption for all data',
-        'Optional bank connections through trusted Plaid integration',
-        'No storage of sensitive payment information',
-        'Regular security audits and compliance monitoring'
+        'TLS (SSL) everywhere, at rest encryption in our DB',
+        'Optional bank links via trusted Plaid',
+        'We never store your bank password',
+        'Regular reviews and monitoring',
       ],
-      icon: '🛡️'
+      icon: '🛡️',
     },
     {
-      q: 'How quickly can I get started?',
-      a: 'Getting started with Needix is incredibly fast:',
+      q: 'How fast can I get value?',
+      a: 'Most users set up in minutes and cancel something in the first month.',
       bullets: [
-        'Sign up with Google in under 10 seconds',
-        'Add your first subscription in 30 seconds',
-        'Full dashboard setup typically takes under 5 minutes',
-        'Import existing subscriptions via CSV for bulk setup'
+        'Google sign-in in seconds',
+        'Add first subscription in ~30 seconds',
+        'Bulk import via CSV if you have many',
       ],
-      icon: '🚀'
-    }
+      icon: '🚀',
+    },
   ];
 
   return (
-    <Section id="faq" title="Frequently asked questions" subtitle="Everything you need to know about managing subscriptions with Needix.">
+    <Section
+      id="faq"
+      title="Frequently asked questions"
+      subtitle="Everything you need to know about managing subscriptions with Needix."
+    >
       <div className="mx-auto max-w-4xl space-y-4">
-        {faqs.map((faq, index) => (
-          <div 
-            key={index}
-            className="glass rounded-2xl border border-white/10 overflow-hidden animate-float"
-            style={{ animationDelay: `${index * 0.05}s` }}
+        {faqs.map((faq, i) => (
+          <div
+            key={faq.q}
+            className="overflow-hidden rounded-2xl border border-white/10 bg-white/5"
           >
             <button
-              onClick={() => setOpenIndex(openIndex === index ? null : index)}
-              className="w-full px-6 py-5 text-left focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:ring-inset transition-all duration-300 hover:bg-white/5"
+              onClick={() => setOpenIndex(openIndex === i ? null : i)}
+              className="w-full px-6 py-5 text-left outline-none transition-colors hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-cyan-500/50"
+              aria-expanded={openIndex === i}
+              aria-controls={`faq-panel-${i}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <span className="text-2xl">{faq.icon}</span>
-                  <h3 className="text-lg font-semibold text-white pr-4">{faq.q}</h3>
+                  <h3 className="pr-4 text-lg font-semibold text-white">{faq.q}</h3>
                 </div>
-                <div className={`transition-transform duration-300 ${
-                  openIndex === index ? 'rotate-180' : 'rotate-0'
-                }`}>
-                  <svg className="h-5 w-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+                <svg
+                  className={`h-5 w-5 text-cyan-400 transition-transform ${
+                    openIndex === i ? 'rotate-180' : ''
+                  }`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M19 9l-7 7-7-7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </div>
             </button>
-            
-            {openIndex === index && (
-              <div className="px-6 pb-6 animate-float">
-                <div className="pl-12 space-y-4">
-                  <p className="text-white/80 font-medium">{faq.a}</p>
-                  <ul className="space-y-2">
-                    {faq.bullets.map((bullet, bulletIndex) => (
-                      <li key={bulletIndex} className="flex items-start gap-3">
-                        <div className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-400 flex-shrink-0" />
-                        <span className="text-white/70 leading-relaxed">{bullet}</span>
-                      </li>
-                    ))}
-                  </ul>
+
+            {openIndex === i && (
+              <div id={`faq-panel-${i}`} className="px-6 pb-6">
+                <div className="space-y-4 pl-12">
+                  <p className="font-medium text-white/85">{faq.a}</p>
+                  {!!faq.bullets?.length && (
+                    <ul className="space-y-2">
+                      {faq.bullets.map((b) => (
+                        <li key={b} className="flex items-start gap-3">
+                          <span className="mt-2 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-cyan-400" />
+                          <span className="leading-relaxed text-white/75">{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             )}
@@ -148,21 +168,19 @@ export default function FAQ() {
 
       {/* Bottom CTA */}
       <div className="mt-16 text-center">
-        <div className="glass-strong rounded-3xl p-8 max-w-2xl mx-auto">
-          <h3 className="text-2xl font-bold text-white mb-4">Still have questions?</h3>
-          <p className="text-white/70 mb-6">
-            Our team is here to help you get the most out of Needix.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a 
+        <div className="mx-auto max-w-2xl rounded-3xl border border-white/10 bg-white/5 p-8">
+          <h3 className="mb-3 text-2xl font-bold text-white">Still have questions?</h3>
+          <p className="mb-6 text-white/70">We’ll help you get the most out of Needix.</p>
+          <div className="flex flex-col justify-center gap-4 sm:flex-row">
+            <a
               href="mailto:support@needix.com"
-              className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-6 py-3 font-semibold text-cyan-200 hover:bg-cyan-400/20 transition-all duration-300"
+              className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-6 py-3 font-semibold text-cyan-200 transition hover:bg-cyan-400/20"
             >
               📧 Email Support
             </a>
-            <a 
+            <a
               href="/app"
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-3 font-semibold text-white hover:opacity-90 transition-all duration-300"
+              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 px-6 py-3 font-semibold text-white transition hover:opacity-90"
             >
               🚀 Try It Free
             </a>

@@ -4,46 +4,34 @@ import { Button } from '@/components/ui/Button';
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden px-4 py-24 text-center">
-      {/* Background elements */}
-      <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-purple-500/10 blur-3xl" />
-      <div className="absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
-      
-      <div className="relative mx-auto max-w-4xl">
-        {/* Main headline */}
-        <h1 className="mb-6 text-5xl font-bold leading-tight md:text-6xl lg:text-7xl">
-          <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
+    <section className="relative overflow-hidden px-4 py-24 text-center md:py-28">
+      {/* Ambient blobs */}
+      <div className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-purple-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
+
+      <div className="relative mx-auto max-w-5xl">
+        <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/70">
+          <span>🔔</span> Renewal alerts • Price change notifications • CSV import
+        </span>
+
+        <h1 className="mb-6 text-4xl font-extrabold leading-tight md:text-6xl lg:text-7xl">
+          <span className="bg-gradient-to-r from-purple-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent">
             Track Everything.
           </span>
           <br />
           <span className="text-white">Waste Nothing.</span>
         </h1>
 
-        {/* Subtitle */}
-        <p className="mx-auto mb-8 max-w-2xl text-xl leading-relaxed text-white/80 md:text-2xl">
-          Your complete financial command center. Track subscriptions, manage orders, and monitor expenses—all in one beautiful dashboard.
+        <p className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed text-white/75 md:text-xl">
+          Needix is your financial command center. See every subscription, smart reorder, and expense — with reminders before you get charged again.
         </p>
 
-        {/* Feature highlights */}
-        <div className="mb-10 flex flex-wrap justify-center gap-6 text-white/70">
-          <div className="flex items-center gap-2">
-            <span className="rounded-lg bg-purple-500/20 p-2 text-purple-300">📺</span>
-            <span>Subscription tracking</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-lg bg-cyan-500/20 p-2 text-cyan-300">📦</span>
-            <span>Smart orders</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-lg bg-green-500/20 p-2 text-green-300">💰</span>
-            <span>Expense management</span>
-          </div>
-        </div>
-
-        {/* CTA buttons */}
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
           <Link href="/dashboard">
-            <Button size="lg" className="bg-gradient-to-r from-purple-600 to-pink-600 px-8 py-4 text-lg font-semibold hover:from-purple-700 hover:to-pink-700">
+            <Button
+              size="lg"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 px-8 py-4 text-lg font-semibold hover:from-purple-700 hover:to-pink-700"
+            >
               Start Free Today
             </Button>
           </Link>
@@ -55,8 +43,10 @@ export default function Hero() {
         </div>
 
         {/* Trust indicators */}
-        <div className="mt-12 text-sm text-white/50">
-          <p>✓ No credit card required • ✓ 30-day money back guarantee • ✓ Cancel anytime</p>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm text-white/60">
+          <span>✓ No credit card required</span>
+          <span className="text-white/25">•</span>
+          <span>✓ Cancel anytime</span>
         </div>
       </div>
     </section>
