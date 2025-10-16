@@ -1,6 +1,8 @@
 {
   "name": "needix-fresh-starter",
   "private": true,
+  "packageManager": "pnpm@10.18.0",
+
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
