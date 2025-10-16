@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: 'Needix - Track Everything. Waste Nothing.',
   description: 'Smart subscription tracking with price alerts and cancellation management',
   icons: { icon: '/favicon.ico' },
+  verification: {
+    google: 'kS5FwvPRZNH7e1AcSfKoZ3pDQfoD2vU_igY08peask4',
+  },
 };
 
 export const viewport: Viewport = {
